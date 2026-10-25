@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>EduTrack - Student Information System</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<!-- ============ LOGIN SCREEN ============ -->
+<div id="loginScreen" class="landing-page">
+  
+  <!-- TOP NAVBAR -->
+  <header class="landing-nav">
+    <div class="logo-area">
+      <img src="logo.png" alt="EduTrack Logo" style="height: 40px; width: auto;">
+      <!-- Maroon to White Gradient Text -->
+      <h1 style="font-size: 24px; font-weight: 800; margin: 0; margin-left: 10px; background: linear-gradient(90deg, #ffcccc, #ffffff); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">
+        EduTrack
+      </h1>
+    </div>
+  </header>
+
+  <!-- MAIN CONTENT SPLIT (White Background) -->
+  <main class="landing-content">
+    
+    <!-- LEFT SIDE: Title -->
+    <div class="landing-left">
+      <h1 class="hero-title">
+        <span style="color: #111;">Student</span><br>
+        <span style="color: #5c0000;">Information<br>System</span>
+      </h1>
+    </div>
+
+    <!-- RIGHT SIDE: The Login Box -->
+    <div class="landing-right">
+      <div class="login-box-modern">
+        
+        <!-- Role Toggle -->
+        <div style="display:flex; gap:10px; margin-bottom: 25px;">
+          <button id="btn-role-faculty" class="btn tab-btn active" onclick="setLoginRole('Faculty')" style="flex:1;">Faculty</button>
+          <button id="btn-role-student" class="btn tab-btn" onclick="setLoginRole('Student')" style="flex:1;">Student</button>
+        </div>
+
+        <!-- Inputs -->
+        <div class="field" style="margin-bottom: 15px;">
+            <label style="font-weight: 600; font-size: 13px; color: #444;">Username</label>
+            <input id="loginUser" type="text" placeholder="Enter username" style="padding: 12px; font-size: 15px; width: 100%; border: 1px solid #ccc; border-radius: 6px;">
+        </div>
+        
+        <div class="field" style="margin-bottom: 25px;">
+            <label style="font-weight: 600; font-size: 13px; color: #444;">Password</label>
+            <input id="loginPass" type="password" placeholder="Enter password" style="padding: 12px; font-size: 15px; width: 100%; border: 1px solid #ccc; border-radius: 6px;">
+        </div>
+
+        <!-- Log In Button -->
+        <button class="btn" onclick="doLogin()" style="width: 100%; padding: 14px; font-size: 16px; border-radius: 8px; background: #5c0000; font-weight: 700;">Log In →</button>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<!-- ============ APP SHELL ============ -->
+<div id="appScreen">
+  <header class="topbar">
+    <div style="display: flex; align-items: center; gap: 12px;">
+      <img src="logo.png" alt="EduTrack Logo" style="height: 35px; width: auto;">
+      <h1 style="font-size: 18px; font-weight: bold; margin: 0;">EduTrack</h1>
+    </div>
+    <div class="userbox">
+      <span id="whoami"></span>
+      <button class="btn small secondary" onclick="doLogout()">Logout</button>
+    </div>
+  </header>
+  
+  <div class="layout">
+    <nav class="sidebar" id="sidebar"></nav>
+    <main class="content" id="content"></main>
+  </div>
+</div>
+
+<script src="script.js"></script>
+</body>
+</html>
