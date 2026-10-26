@@ -14,8 +14,88 @@ app.use(express.static(__dirname));
 
 const dbPath = path.join(__dirname, 'database.db');
 const db = new sqlite3.Database(dbPath, (err) => {
-    if (err) console.error("Error opening database:", err.message);
-    else console.log("Connected to SQLite database at:", dbPath);
+    if (err) {
+        console.error("Error opening database:", err.message);
+    } else {
+        console.log("Connected to SQLite database at:", dbPath);
+        
+        // AUTO-SEED LOGIC: Kung walang 'users' table, gagawin nito ang lahat.
+        db.get("SELECT name FROM sqlite_master WHERE type='table' AND name='users'", (err, row) => {
+            if (!row) {
+                console.log("Database is empty. Starting auto-seed...");
+                
+                db.serialize(() => {
+                    // 1. Create Tables
+                    db.run(`CREATE TABLE IF NOT EXISTS users (username TEXT PRIMARY KEY, password TEXT, name TEXT, role TEXT, section TEXT)`);
+                    db.run(`CREATE TABLE IF NOT EXISTS students (id TEXT PRIMARY KEY, last TEXT, first TEXT, mi TEXT, address TEXT, course TEXT, yr TEXT, status TEXT, enrol TEXT, username TEXT, password TEXT, birthday TEXT)`);
+                    db.run(`CREATE TABLE IF NOT EXISTS courses (code TEXT PRIMARY KEY, name TEXT, gradeLevel TEXT, section TEXT, capacity INTEGER, adviser TEXT, status TEXT)`);
+                    db.run(`CREATE TABLE IF NOT EXISTS enrollments (id INTEGER PRIMARY KEY AUTOINCREMENT, studentId TEXT, courseCode TEXT, section TEXT, term TEXT)`);
+                    db.run(`CREATE TABLE IF NOT EXISTS grades (id INTEGER PRIMARY KEY AUTOINCREMENT, studentId TEXT, courseCode TEXT, courseName TEXT, units INTEGER, grade REAL, term TEXT)`);
+                    db.run(`CREATE TABLE IF NOT EXISTS billing (id INTEGER PRIMARY KEY AUTOINCREMENT, studentId TEXT, term TEXT, totalAmount REAL, dueDate TEXT, status TEXT DEFAULT 'Unpaid')`);
+                    db.run(`CREATE TABLE IF NOT EXISTS payments (id INTEGER PRIMARY KEY AUTOINCREMENT, studentId TEXT, billingId INTEGER, amount REAL, paymentMethod TEXT, referenceNo TEXT, receiptImage TEXT, status TEXT DEFAULT 'Pending', datePaid TEXT)`);
+
+                    // 2. Insert Users
+                    const insertUser = db.prepare(`INSERT INTO users (username, password, name, role, section) VALUES (?, ?, ?, ?, ?)`);
+                    const users = [
+                        ['admin', 'admin123', 'Admin User', 'Admin', ''],
+                        ['tmary', 'mary123', 'T. Mary C. Poppins', 'Faculty', 'Kinder'],
+                        ['tjohn', 'john123', 'T. John Emmanuel S.', 'Faculty', 'Grade 1'],
+                        ['tjane', 'jane123', 'T. Jane C. Villa', 'Faculty', 'Grade 7 & 11'],
+                        ['tsmith', 'smith123', 'T. Smith V. Cruz', 'Faculty', 'Grade 11'],
+                        ['talan', 'alan123', 'T. Alan Turing', 'Faculty', 'Math Dept'],
+                        ['temily', 'emily123', 'T. Emily Bronte', 'Faculty', 'English Dept'],
+                        ['tmarie', 'marie123', 'T. Marie Curie', 'Faculty', 'Science Dept'],
+                        ['twarren', 'warren123', 'T. Warren Buffet', 'Faculty', 'Business Dept'],
+                        ['taral', 'aral123', 'T. Andres Bonifacio', 'Faculty', 'Araling Panlipunan Dept'],
+                        ['tmapeh', 'mapeh123', 'T. Francisco Balagtas', 'Faculty', 'MAPEH Dept'],
+                        ['ttle', 'tle123', 'T. Gabriela Silang', 'Faculty', 'TLE Dept'],
+                        ['tfil1', 'fil123', 'T. Liza Soberano', 'Faculty', 'Filipino Dept'],
+                        ['tfil2', 'fil123', 'T. Enrique Gil', 'Faculty', 'Filipino Dept'],
+                        ['tfil3', 'fil123', 'T. Kathryn Bernardo', 'Faculty', 'Filipino Dept'],
+                        ['tfil4', 'fil123', 'T. Daniel Padilla', 'Faculty', 'Filipino Dept'],
+                        ['tfil5', 'fil123', 'T. Angel Locsin', 'Faculty', 'Filipino Dept'],
+                        ['tfil6', 'fil123', 'T. Coco Martin', 'Faculty', 'Filipino Dept'],
+                        ['juandc', 'juan123', 'Juan Dela Cruz', 'Student', 'Grade 4'],
+                        ['mariar', 'maria123', 'Maria Reyes', 'Student', 'Grade 11 - STEM - 1st Sem'],
+                        ['pedros', 'pedro123', 'Pedro Santos', 'Student', 'Kindergarten'],
+                        ['katiemaer', 'katie123', 'Katie Mae Reyes', 'Student', 'Grade 7'],
+                        ['alexandram', 'alexandra123', 'Alexandra Manuel', 'Student', 'Grade 12 - STEM - 1st Sem'],
+                        ['justinec', 'justine123', 'Justine Cruz', 'Student', 'Grade 2'],
+                        ['leahb', 'leah123', 'Leah Braine', 'Student', 'Grade 4'],
+                        ['chrisjohnm', 'chris123', 'Chris John Marquez', 'Student', 'Grade 12 - STEM - 1st Sem']
+                    ];
+                    users.forEach(u => insertUser.run(u));
+                    insertUser.finalize();
+
+                    // 3. Insert Students
+                    const insertStudent = db.prepare(`INSERT INTO students (id, last, first, mi, address, course, yr, status, enrol, username, password, birthday) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
+                    const students = [
+                        ['2023-0006', 'Dela Cruz', 'Juan', 'A', 'Mariveles, Bataan', 'Elem', 'Grade 4', 'Active', 'Enrolled', 'juandc', 'juan123', '2017-05-14'],
+                        ['2026-01523', 'Reyes', 'Maria', 'B', 'Limay, Bataan', 'SHS', 'Grade 11 - STEM - 1st Sem', 'Active', 'Enrolled', 'mariar', 'maria123', '2010-08-22'],
+                        ['2026-0163', 'Santos', 'Pedro', 'C', 'Mariveles, Bataan', 'Kinder', 'Kindergarten', 'Active', 'Enrolled', 'pedros', 'pedro123', '2021-02-10'],
+                        ['2026', 'Reyes', 'Katie Mae', '', 'Mariveles, Bataan', 'High School', 'Grade 7', 'Inactive', 'Enrolled', 'katiemaer', 'katie123', '2014-11-05'],
+                        ['2026-0011', 'Manuel', 'Alexandra', 'B.', 'Mariveles, Bataan', 'SHS', 'Grade 12 - STEM - 1st Sem', 'Active', 'Enrolled', 'alexandram', 'alexandra123', '2009-03-30'],
+                        ['2024-2235', 'Cruz', 'Justine', 'D.', 'Mariveles, Bataan', 'Elem', 'Grade 2', 'Active', 'Enrolled', 'justinec', 'justine123', '2019-07-12'],
+                        ['2023-0391', 'Braine', 'Leah', 'H.', 'Limay, Bataan', 'Elem', 'Grade 4', 'Active', 'Enrolled', 'leahb', 'leah123', '2017-09-21'],
+                        ['2022-0212', 'Marquez', 'Chris John', 'N.', 'Mariveles, Bataan', 'SHS', 'Grade 12 - STEM - 1st Sem', 'Archived', 'Enrolled', 'chrisjohnm', 'chris123', '2009-01-18']
+                    ];
+                    students.forEach(s => insertStudent.run(s));
+                    insertStudent.finalize();
+
+                    // 4. Insert Billing Base (Optional, pero nilagay na rin natin)
+                    const insertBilling = db.prepare(`INSERT INTO billing (studentId, term, totalAmount, dueDate) VALUES (?, ?, ?, ?)`);
+                    insertBilling.run('2023-0006', '1st Sem 2026-2027', 9500.00, '2026-11-15');
+                    insertBilling.run('2026-01523', '1st Sem 2026-2027', 14500.00, '2026-11-15');
+                    insertBilling.run('2026-0011', '1st Sem 2026-2027', 14500.00, '2026-11-15');
+                    insertBilling.run('2026-0163', '1st Sem 2026-2027', 6500.00, '2026-11-15');
+                    insertBilling.run('2024-2235', '1st Sem 2026-2027', 9500.00, '2026-11-15');
+                    insertBilling.finalize();
+
+                    console.log("Auto-seed complete! Database is ready.");
+                });
+            }
+        });
+    }
 });
 
 // ==========================================
