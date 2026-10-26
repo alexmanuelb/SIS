@@ -114,7 +114,7 @@ const db = new sqlite3.Database(dbPath, (err) => {
 });
 
 // ==========================================
-// API ROUTES (Same as before)
+// API ROUTES
 // ==========================================
 app.post('/api/login', (req, res) => {
     const { username, password, roleAttempt } = req.body;

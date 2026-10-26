@@ -1,9 +1,9 @@
 /* =========================================================
-   EduTrack SIS - Logic & Data
+   EduTrack SIS - Logic & Data (WITH BILLING & INSTALLMENTS)
    ========================================================= */
 
 let db = {
-  students: [], courses: [], users: [], grades: [], enrollments: []
+  students: [], courses: [], users: [], grades: [], enrollments: [], billing: [], payments: []
 };
 
 let session = null;
@@ -14,8 +14,36 @@ const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt
 /* ---------- LOGIN & LOGOUT ---------- */
 function setLoginRole(role) {
     currentLoginRole = role;
-    document.getElementById('btn-role-faculty').className = role === 'Faculty' ? 'btn' : 'btn secondary';
-    document.getElementById('btn-role-student').className = role === 'Student' ? 'btn' : 'btn secondary';
+    const btnFaculty = document.getElementById('btn-role-faculty');
+    const btnStudent = document.getElementById('btn-role-student');
+
+    if (role === 'Faculty') {
+        btnFaculty.style.background = '#800000';
+        btnFaculty.style.color = 'white';
+        btnStudent.style.background = '#a0a0a0';
+        btnStudent.style.color = 'white';
+    } else {
+        btnStudent.style.background = '#800000';
+        btnStudent.style.color = 'white';
+        btnFaculty.style.background = '#a0a0a0';
+        btnFaculty.style.color = 'white';
+    }
+}
+
+function togglePassword() {
+    const passInput = $('loginPass');
+    const eyeOpen = $('eye-open');
+    const eyeClosed = $('eye-closed');
+
+    if (passInput.type === "password") {
+        passInput.type = "text";
+        eyeOpen.style.display = "block";
+        eyeClosed.style.display = "none";
+    } else {
+        passInput.type = "password";
+        eyeOpen.style.display = "none";
+        eyeClosed.style.display = "block";
+    }
 }
 
 async function doLogin() { 
@@ -45,8 +73,14 @@ async function doLogin() {
 
     if (session.role === 'Student') {
         const student = currentStudent();
-        const resEnrollments = await fetch(`/api/enrollments/${student.id}`);
-        db.enrollments = await resEnrollments.json();
+        if(student) {
+            const resEnrollments = await fetch(`/api/enrollments/${student.id}`);
+            db.enrollments = await resEnrollments.json();
+            const resBilling = await fetch(`/api/billing/${student.id}`);
+            db.billing = await resBilling.json();
+            const resPayments = await fetch(`/api/payments/${student.id}`);
+            db.payments = await resPayments.json();
+        }
     }
 
     $('loginScreen').style.display = 'none';
@@ -83,7 +117,8 @@ const MENUS = {
       { key:'legacy', label:'Legacy Record Archive' }
     ]},
     { key:'courses', label:'Course & Section Management' },
-    { key:'users', label:'Users Roles & Access Control' }
+    { key:'users', label:'Users Roles & Access Control' },
+    { key:'adminBilling', label:'Billing & Payments' }
   ],
   Faculty: [
     { key:'facultyDashboard', label:'Dashboard' }, 
@@ -95,44 +130,85 @@ const MENUS = {
   Student: [
     { key:'studentDashboard', label:'Dashboard' }, 
     { key:'registration', label:'Online Course Registration' },
+    { key:'schedule', label:'View Class Schedule' },
     { key:'profileGrades', label:'Academic Profile & Grades' },
+    { key:'studentBilling', label:'Billing & Payment' },
     { key:'profile', label:'Student Profile' }
   ]
 };
 
 function buildSidebar() {
   const nav = $('sidebar');
-  nav.innerHTML = `<div class="portal-title">${session.role} Portal</div>`;
+  
+  nav.style.display = 'flex';
+  nav.style.flexDirection = 'column';
+  nav.style.height = 'calc(100vh - 70px)';
+  nav.style.background = '#5c0000'; 
+  
+  let menuHTML = `<div class="portal-title" style="padding: 15px 20px; font-size: 12px; letter-spacing: 1px; opacity: 0.8; color: white;">${session.role} Portal</div>`;
+  
   MENUS[session.role].forEach(item => {
-    const btn = document.createElement('button');
-    btn.textContent = item.label;
-    btn.dataset.key = item.key;
-    btn.onclick = () => { navigate(item.key); highlight(item.key); };
-    nav.appendChild(btn);
+    menuHTML += `<button class="menu-item" data-key="${item.key}" onclick="navigate('${item.key}'); highlight('${item.key}');" style="width: 100%; text-align: left; padding: 12px 20px; border: none; background: transparent; color: #ffcccc; cursor: pointer; font-size: 14px; transition: 0.2s;">${item.label}</button>`;
+    
     if (item.children) {
       item.children.forEach(c => {
-        const sub = document.createElement('button');
-        sub.className = 'sub'; sub.textContent = '— ' + c.label;
-        sub.dataset.key = c.key;
-        sub.onclick = () => { navigate(c.key); highlight(c.key); };
-        nav.appendChild(sub);
+        menuHTML += `<button class="sub menu-item" data-key="${c.key}" onclick="navigate('${c.key}'); highlight('${c.key}');" style="width: 100%; text-align: left; padding: 10px 20px 10px 40px; border: none; background: transparent; color: #ffcccc; cursor: pointer; font-size: 13px; transition: 0.2s;">— ${c.label}</button>`;
       });
     }
   });
+
+  menuHTML += `
+    <div style="margin-top: auto; padding: 20px; border-top: 1px solid rgba(255,255,255,0.1);">
+        <button 
+            class="logout-btn" 
+            style="width: 100%; background: white; color: #5c0000; border: 2px solid white; font-weight: bold; padding: 12px; cursor: pointer; border-radius: 5px; transition: 0.3s; text-align: center; font-size: 14px;" 
+            onclick="doLogout()"
+            onmouseover="this.style.background='#5c0000'; this.style.color='white'; this.style.borderColor='#ffcccc';"
+            onmouseout="this.style.background='white'; this.style.color='#5c0000'; this.style.borderColor='white';"
+        >
+            Logout
+        </button>
+    </div>
+  `;
+
+  nav.innerHTML = menuHTML;
 }
 
 function highlight(key) {
-  document.querySelectorAll('#sidebar button').forEach(b => b.classList.toggle('active', b.dataset.key === key));
+  document.querySelectorAll('#sidebar .menu-item').forEach(b => {
+      if (b.dataset.key === key) {
+          b.style.background = '#800000'; 
+          b.style.color = 'white';
+          b.style.fontWeight = 'bold';
+          b.style.borderLeft = '4px solid #ffcccc';
+      } else {
+          b.style.background = 'transparent';
+          b.style.color = '#ffcccc';
+          b.style.fontWeight = 'normal';
+          b.style.borderLeft = '4px solid transparent';
+      }
+  });
 }
 
 function navigate(page) {
   const c = $('content');
   const R = {
-    adminDashboard: renderAdminDashboard, facultyDashboard: renderFacultyDashboard, studentDashboard: renderStudentDashboard,
-    students: renderActiveDirectory, activeDirectory: renderActiveDirectory, legacy: renderLegacy,
-    courses: renderCourses, users: renderUsers,
-    grading: renderClassRoster, classRoster: renderClassRoster, gradeEntry: renderGradeEntry,
-    registration: renderRegistration, profileGrades: renderProfileGrades,
+    adminDashboard: renderAdminDashboard, 
+    facultyDashboard: renderFacultyDashboard, 
+    studentDashboard: renderStudentDashboard,
+    students: renderActiveDirectory, 
+    activeDirectory: renderActiveDirectory, 
+    legacy: renderLegacy,
+    courses: renderCourses, 
+    users: renderUsers,
+    grading: renderClassRoster, 
+    classRoster: renderClassRoster, 
+    gradeEntry: renderGradeEntry,
+    registration: renderRegistration, 
+    schedule: renderSchedule, 
+    profileGrades: renderProfileGrades,
+    studentBilling: renderStudentBilling,
+    adminBilling: renderAdminBilling,
     profile: renderStudentProfile 
   };
   (R[page] || renderAdminDashboard)(c);
@@ -150,12 +226,16 @@ function filterTable(tableId, inputId) {
     tr.style.display = tr.textContent.toLowerCase().includes(q) ? '' : 'none';
   });
 }
+
 function currentStudent() { 
-    return db.students.find(s => s.username === session.username) || db.students[0] || {id:'', first:'', last:'', course:'', yr:'', birthday:''}; 
+    let student = db.students.find(s => s.username === session.username);
+    if (!student) {
+        student = db.students.find(s => s.id === session.username);
+    }
+    return student || {id:'', first:'', last:'', course:'', yr:'', birthday:'', status:''}; 
 }
 
 /* ---------- DASHBOARDS ---------- */
-
 function renderAdminDashboard(c) {
   const totalFaculty = db.users.filter(u => u.role === 'Faculty').length;
   const totalStudents = db.students.length;
@@ -200,8 +280,7 @@ function renderAdminDashboard(c) {
             <h2>Quick Actions</h2>
             <div style="display: flex; flex-direction: column; gap: 10px; margin-top: 10px;">
                 <button class="btn" onclick="navigate('activeDirectory'); highlight('activeDirectory');">Manage Students</button>
-                <button class="btn" onclick="navigate('users'); highlight('users');">Manage Users</button>
-                <button class="btn" onclick="navigate('courses'); highlight('courses');">View Courses</button>
+                <button class="btn" onclick="navigate('adminBilling'); highlight('adminBilling');">Manage Billing</button>
             </div>
         </div>
     </div>`;
@@ -234,35 +313,17 @@ async function renderFacultyDashboard(c) {
             <div class="card" style="background: linear-gradient(135deg, #a00000, #800000);">
                 <div class="num">3</div><div class="lbl">Pending Grades</div>
             </div>
-            <div class="card" style="background: linear-gradient(135deg, #c00000, #a00000);">
-                <div class="num" id="faculty-clock" style="font-size: 26px;">--:-- --</div>
-                <div class="lbl">Current Time</div>
-            </div>
-        </div>
-    </div>
-
-    <div class="grid2">
-        <div class="panel">
-            <h2>Quick Actions</h2>
-            <div style="display: flex; flex-direction: column; gap: 10px; margin-top: 10px;">
-                <button class="btn" onclick="navigate('classRoster'); highlight('classRoster');">View Class Roster</button>
-                <button class="btn" onclick="navigate('gradeEntry'); highlight('gradeEntry');">Submit Grades</button>
-            </div>
         </div>
     </div>`;
-
-  startClock('faculty-clock');
 }
 
 function startClock(elementId) {
     const clockElement = $(elementId);
     if (!clockElement) return;
-
     const updateTime = () => {
         const now = new Date();
         clockElement.textContent = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
     };
-    
     updateTime();
     if (window.myClockInterval) clearInterval(window.myClockInterval);
     window.myClockInterval = setInterval(updateTime, 1000);
@@ -296,16 +357,10 @@ function renderStudentDashboard(c) {
     
     <div class="grid2">
         <div class="panel">
-            <h2>My Enrolled Courses</h2>
-            <ul style="list-style-type: none; padding: 0;">
-                ${enrolledDetails || '<li>No courses enrolled yet. Go to Registration!</li>'}
-            </ul>
-        </div>
-        <div class="panel">
             <h2>Quick Links</h2>
             <div style="display: flex; flex-direction: column; gap: 10px; margin-top: 10px;">
                 <button class="btn" onclick="navigate('registration'); highlight('registration');">Register for a Course</button>
-                <button class="btn" onclick="navigate('profile'); highlight('profile');">View My Profile</button>
+                <button class="btn" onclick="navigate('studentBilling'); highlight('studentBilling');">View Billing & Pay</button>
             </div>
         </div>
     </div>`;
@@ -313,11 +368,389 @@ function renderStudentDashboard(c) {
     startClock('student-clock');
 }
 
-/* ---------- STUDENT REGISTRATION (UPDATED) ---------- */
+/* ---------- STUDENT BILLING & PAYMENT (FULLY FIXED) ---------- */
+function renderStudentBilling(c) {
+    const s = currentStudent();
+    
+    let yrStr = String(s.yr || '').trim().toLowerCase();
+    
+    let tuitionFee = 0;
+    let feeLabel = '';
+    
+    if (yrStr.includes('kinder')) {
+        tuitionFee = 5000;
+        feeLabel = 'Kinder Tuition';
+    } else if (yrStr.includes('grade 11') || yrStr.includes('grade 12')) {
+        tuitionFee = 13000;
+        feeLabel = 'Senior High School Tuition';
+    } else if (yrStr.includes('grade 7') || yrStr.includes('grade 8') || yrStr.includes('grade 9') || yrStr.includes('grade 10')) {
+        tuitionFee = 10000;
+        feeLabel = 'High School Tuition';
+    } else if (yrStr.includes('grade 1') || yrStr.includes('grade 2') || yrStr.includes('grade 3') || yrStr.includes('grade 4') || yrStr.includes('grade 5') || yrStr.includes('grade 6')) {
+        tuitionFee = 8000;
+        feeLabel = 'Elementary Tuition';
+    } else {
+        tuitionFee = 8000;
+        feeLabel = 'Tuition Fee';
+    }
+
+    const miscFee = 1500;
+    const totalAssessment = tuitionFee + miscFee;
+
+    const currentBill = db.billing.find(b => b.status === 'Unpaid');
+    const displayAmount = totalAssessment; 
+    const displayDueDate = currentBill ? currentBill.dueDate : '2026-11-15';
+    const billId = currentBill ? currentBill.id : 'new';
+
+    c.innerHTML = `
+        <div class="panel">
+            <h2>Billing & Payment</h2>
+            <p style="margin-bottom: 20px; color: #666;">View your assessment and payment history.</p>
+            
+            <div style="background: #fff0f0; border: 1px solid #800000; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
+                <h3 style="color: #800000; margin-top: 0;">Assessment Breakdown</h3>
+                
+                <table style="width: 100%; margin-bottom: 15px; font-size: 14px;">
+                    <tr>
+                        <td>${feeLabel} (Per Year)</td>
+                        <td style="text-align: right;">PHP ${tuitionFee.toLocaleString('en-US', {minimumFractionDigits: 2})}</td>
+                    </tr>
+                    <tr>
+                        <td>Miscellaneous Fees</td>
+                        <td style="text-align: right;">PHP ${miscFee.toLocaleString('en-US', {minimumFractionDigits: 2})}</td>
+                    </tr>
+                    <tr style="font-weight: bold; border-top: 1px solid #ddd;">
+                        <td style="padding-top: 10px;">TOTAL AMOUNT DUE</td>
+                        <td style="text-align: right; padding-top: 10px; color: #800000; font-size: 18px;">PHP ${displayAmount.toLocaleString('en-US', {minimumFractionDigits: 2})}</td>
+                    </tr>
+                </table>
+                <p style="margin: 0; color: #666;">Due Date: <b>${displayDueDate}</b></p>
+                
+                <div style="display: flex; gap: 10px; margin-top: 15px;">
+                    <button class="btn" style="background: #800000; color: white; flex: 1; padding: 12px;" onclick="openPaymentModal('${billId}', ${displayAmount}, 'Full')">
+                        Pay Full Amount
+                    </button>
+                    <button class="btn" style="background: #a00000; color: white; flex: 1; padding: 12px;" onclick="openPaymentModal('${billId}', ${displayAmount}, 'Installment')">
+                        Pay Installment (50%)
+                    </button>
+                </div>
+            </div>
+
+            <h3>Payment History</h3>
+            ${simpleTable(
+                ['Date', 'Amount', 'Method', 'Ref No.', 'Status'],
+                db.payments.map(p => [
+                    esc(p.datePaid),
+                    `PHP ${p.amount.toLocaleString()}`,
+                    esc(p.paymentMethod),
+                    esc(p.referenceNo),
+                    `<span class="badge ${p.status === 'Approved' ? 'active' : 'inactive'}">${p.status}</span>`
+                ])
+            )}
+        </div>
+
+        <!-- PAYMENT MODAL -->
+        <div id="paymentModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000; align-items: center; justify-content: center;">
+            <div style="background: white; width: 400px; padding: 30px; border-radius: 12px; position: relative;">
+                <span onclick="$('paymentModal').style.display='none'" style="position: absolute; top: 10px; right: 15px; cursor: pointer; font-size: 20px;">&times;</span>
+                <h3 style="margin-top: 0;" id="modalTitle">GCash Payment</h3>
+                <p style="color: #666; font-size: 13px;">Scan the QR code below or send to <b>0917-123-4567</b> (EduTrack SIS).</p>
+                
+                <div style="text-align: center; margin: 15px 0;">
+                    <img src="https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=GCashPaymentEduTrack" alt="GCash QR" style="border: 1px solid #ccc; padding: 5px; border-radius: 8px;">
+                </div>
+                
+                <div class="field" style="margin-bottom: 15px;">
+                    <label>Amount to Pay</label>
+                    <input type="text" id="payAmountDisplay" readonly style="width: 100%; padding: 8px; background: #f0f0f0; font-weight: bold;">
+                </div>
+
+                <div class="field" style="margin-bottom: 15px;">
+                    <label>Reference Number</label>
+                    <input type="text" id="payRefNo" placeholder="e.g., 10023456789" style="width: 100%; padding: 8px;">
+                </div>
+
+                <div class="field" style="margin-bottom: 15px;">
+                    <label>Upload Receipt (Screenshot)</label>
+                    <input type="file" id="payReceipt" accept="image/*" style="width: 100%; padding: 5px;" onchange="previewReceipt(this)">
+                    <small style="color: #666;">Max size: 2MB</small>
+                    <div id="receiptPreview" style="margin-top: 10px; display: none;">
+                        <img id="previewImg" style="width: 100%; max-height: 150px; object-fit: contain; border: 1px solid #ccc;">
+                    </div>
+                </div>
+
+                <button class="btn" style="width: 100%; background: #800000; color: white;" onclick="submitPayment()">Submit Payment</button>
+            </div>
+        </div>
+    `;
+}
+
+let currentBillingId = null;
+let currentPayAmount = 0;
+
+function openPaymentModal(billingId, totalAmount, type) {
+    currentBillingId = billingId;
+    
+    if (type === 'Full') {
+        currentPayAmount = totalAmount;
+        $('modalTitle').textContent = 'GCash Payment (Full)';
+    } else {
+        currentPayAmount = totalAmount * 0.5; 
+        $('modalTitle').textContent = 'GCash Payment (Installment 50%)';
+    }
+
+    $('payAmountDisplay').value = `PHP ${currentPayAmount.toLocaleString('en-US', {minimumFractionDigits: 2})}`;
+    $('paymentModal').style.display = 'flex';
+}
+
+function previewReceipt(input) {
+    if (input.files && input.files[0]) {
+        var reader = new FileReader();
+        reader.onload = function(e) {
+            $('previewImg').src = e.target.result;
+            $('receiptPreview').style.display = 'block';
+        };
+        reader.readAsDataURL(input.files[0]);
+    }
+}
+
+async function submitPayment() {
+    const refNo = $('payRefNo').value.trim();
+    const fileInput = $('payReceipt');
+
+    if (!refNo) { alert("Please enter the GCash Reference Number."); return; }
+    if (!fileInput.files || fileInput.files.length === 0) { alert("Please upload a screenshot of your receipt."); return; }
+
+    const reader = new FileReader();
+    reader.onload = async function(e) {
+        const base64Image = e.target.result;
+        const s = currentStudent();
+
+        try {
+            const response = await fetch('/api/payments', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    studentId: s.id,
+                    billingId: currentBillingId,
+                    amount: currentPayAmount,
+                    paymentMethod: 'GCash',
+                    referenceNo: refNo,
+                    receiptImage: base64Image,
+                    datePaid: new Date().toISOString().split('T')[0]
+                })
+            });
+
+            const data = await response.json();
+            if (!response.ok) throw new Error(data.error);
+
+            alert(data.message);
+            $('paymentModal').style.display = 'none';
+            
+            const resPayments = await fetch(`/api/payments/${s.id}`);
+            db.payments = await resPayments.json();
+            renderStudentBilling($('content'));
+
+        } catch (error) {
+            alert("Failed to submit payment: " + error.message);
+        }
+    };
+    reader.readAsDataURL(fileInput.files[0]);
+}
+
+/* ---------- ADMIN BILLING (WITH DIVISIONS & RECEIPT VIEWER) ---------- */
+async function renderAdminBilling(c) {
+    c.innerHTML = `
+        <div class="panel">
+            <h2>Billing & Payment Verification</h2>
+            <p style="margin-bottom: 15px; color: #666;">Review student payment receipts and approve them.</p>
+            
+            <div style="margin-bottom: 30px;">
+                <h3 style="color: #800000; border-bottom: 2px solid #800000; padding-bottom: 5px; margin-bottom: 15px;">Pending Payments (Action Required)</h3>
+                <div id="pendingTable"><p class="empty-note">Loading...</p></div>
+            </div>
+
+            <div>
+                <h3 style="color: #28a745; border-bottom: 2px solid #28a745; padding-bottom: 5px; margin-bottom: 15px;">Paid & Approved Students</h3>
+                <div id="paidTable"><p class="empty-note">Loading...</p></div>
+            </div>
+            
+            <div style="margin-top: 30px;">
+                <h3 style="color: #333; border-bottom: 2px solid #ccc; padding-bottom: 5px; margin-bottom: 15px;">Unpaid Students (No Action Yet)</h3>
+                <div id="unpaidTable"><p class="empty-note">Loading...</p></div>
+            </div>
+        </div>`;
+
+    try {
+        const res = await fetch('/api/admin/all-billing');
+        
+        if (!res.ok) {
+            throw new Error(`HTTP error! status: ${res.status}`);
+        }
+        
+        const data = await res.json();
+
+        let pendingRows = [];
+        let paidRows = [];
+        let unpaidRows = [];
+
+        data.forEach(s => {
+            const fullName = `<b>${esc(s.last)}, ${esc(s.first)}</b><br><small>(${esc(s.studentId)})</small>`;
+            const year = esc(s.yr);
+            const amountDue = s.totalAmount ? `PHP ${s.totalAmount.toLocaleString()}` : 'N/A';
+
+            if (s.paymentStatus === 'Pending') {
+                pendingRows.push([
+                    fullName,
+                    year,
+                    amountDue,
+                    `PHP ${s.paidAmount.toLocaleString()}`,
+                    esc(s.referenceNo),
+                    `<button class="btn small" style="background: #ffc107; color: #000;" onclick="adminViewReceipt(${s.paymentId}, '${s.receiptImage}', '${s.billingId}', true)">Review</button>`
+                ]);
+            } else if (s.paymentStatus === 'Approved') {
+                paidRows.push({
+                    date: s.datePaid,
+                    row: [
+                        fullName,
+                        year,
+                        `PHP ${s.paidAmount.toLocaleString()}`,
+                        esc(s.referenceNo),
+                        esc(s.datePaid),
+                        `<button class="btn small secondary" onclick="adminViewReceipt(${s.paymentId}, '${s.receiptImage}', '${s.billingId}', false)">View Receipt</button>`
+                    ]
+                });
+            } else {
+                unpaidRows.push([
+                    fullName,
+                    year,
+                    amountDue,
+                    `<span class="badge inactive">Unpaid</span>`
+                ]);
+            }
+        });
+
+        // Sort Paid rows: Newest date first
+        paidRows.sort((a, b) => new Date(b.date) - new Date(a.date));
+        const sortedPaidRows = paidRows.map(pr => pr.row);
+
+        if (pendingRows.length > 0) {
+            $('pendingTable').innerHTML = simpleTable(
+                ['Student', 'Year Level', 'Total Due', 'Amount Paid', 'Reference No.', 'Action'],
+                pendingRows
+            );
+        } else {
+            $('pendingTable').innerHTML = `<p class="empty-note">No pending payments to review.</p>`;
+        }
+
+        if (sortedPaidRows.length > 0) {
+            $('paidTable').innerHTML = simpleTable(
+                ['Student', 'Year Level', 'Amount Paid', 'Reference No.', 'Date Paid', 'Action'],
+                sortedPaidRows
+            );
+        } else {
+            $('paidTable').innerHTML = `<p class="empty-note">No approved payments yet.</p>`;
+        }
+
+        if (unpaidRows.length > 0) {
+            $('unpaidTable').innerHTML = simpleTable(
+                ['Student', 'Year Level', 'Amount Due', 'Status'],
+                unpaidRows
+            );
+        } else {
+            $('unpaidTable').innerHTML = `<p class="empty-note">All students have paid.</p>`;
+        }
+
+    } catch (error) {
+        console.error("Failed to load billing data:", error);
+        $('pendingTable').innerHTML = `<p class="empty-note">Failed to load billing data. Make sure server.js is updated and restarted.</p>`;
+        $('paidTable').innerHTML = `<p class="empty-note"></p>`;
+        $('unpaidTable').innerHTML = `<p class="empty-note"></p>`;
+    }
+}
+
+function adminViewReceipt(paymentId, base64Img, billingId, isPending) {
+    const modal = document.createElement('div');
+    modal.style = "position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 1000; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 20px;";
+    
+    let actionButtons = `
+        <button class="btn secondary" onclick="this.closest('div').parentElement.remove()">Close</button>
+    `;
+
+    if (isPending) {
+        actionButtons = `
+            <button class="btn" style="background: #28a745; color: white;" onclick="adminApprovePayment(${paymentId}, '${billingId}', this)">Approve Payment</button>
+            <button class="btn secondary" onclick="this.closest('div').parentElement.remove()">Close</button>
+        `;
+    }
+
+    modal.innerHTML = `
+        <div style="background: white; padding: 20px; border-radius: 8px; max-width: 600px; width: 100%; text-align: center;">
+            <h3>Payment Receipt</h3>
+            <img src="${base64Img}" style="max-width: 100%; max-height: 60vh; border: 1px solid #ccc; margin-bottom: 20px;">
+            <div style="display: flex; gap: 10px; justify-content: center;">
+                ${actionButtons}
+            </div>
+        </div>
+    `;
+    document.body.appendChild(modal);
+}
+
+async function adminApprovePayment(paymentId, billingId, btnElement) {
+    if (!confirm("Are you sure you want to approve this payment?")) return;
+
+    try {
+        const res = await fetch('/api/admin/payments/approve', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ paymentId: paymentId, billingId: billingId }) 
+        });
+
+        if (res.ok) {
+            alert("Payment approved successfully!");
+            btnElement.closest('div').parentElement.remove(); 
+            renderAdminBilling($('content')); 
+        }
+    } catch (error) {
+        alert("Error approving payment.");
+    }
+}
+
+/* ---------- STUDENT REGISTRATION ---------- */
 function renderRegistration(c) {
   const s = currentStudent();
   
-  // Get a list of course names the student is already enrolled in
+  const availableSections = [...new Set(
+      db.courses
+        .filter(course => course.gradeLevel === s.yr || course.gradeLevel.startsWith(s.yr))
+        .map(course => course.section)
+  )].sort();
+
+  c.innerHTML = `<div class="panel">
+    <h2>Online Course Registration</h2>
+    
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; background: #f6f9fd; padding: 10px 15px; border-radius: 8px;">
+        <p style="color: #666; margin: 0;">Showing available courses for: <b>${esc(s.yr)}</b></p>
+        
+        <div style="display: flex; align-items: center; gap: 10px;">
+            <label style="font-weight: bold; color: #5c0000; font-size: 14px;">Filter by Section:</label>
+            <select id="regSectionFilter" onchange="drawRegistrationTable()" style="padding: 8px; border-radius: 6px; border: 1px solid #ccc; font-size: 14px; font-weight: bold; color: #333; cursor: pointer;">
+                <option value="">All Sections</option>
+                ${availableSections.map(sec => `<option value="${esc(sec)}">Section ${esc(sec)}</option>`).join('')}
+            </select>
+        </div>
+    </div>
+
+    <div id="registrationTableArea"></div>
+  </div>`;
+
+  drawRegistrationTable();
+}
+
+function drawRegistrationTable() {
+  const s = currentStudent();
+  const selectedSection = $('regSectionFilter') ? $('regSectionFilter').value : '';
+  
   const myEnrolledCourseNames = db.enrollments
       .filter(e => e.studentId === s.id)
       .map(e => {
@@ -328,37 +761,28 @@ function renderRegistration(c) {
   const availableCourses = db.courses.filter(course => {
       let matchesGradeAndSem = false;
 
-      // 1. Check if the student is in SHS (contains a hyphen like "Grade 12 - STEM - 1st Sem")
       if (s.yr && s.yr.includes('-')) {
-          // STRICT MATCH for SHS: Must match exactly (Grade + Strand + Sem)
           matchesGradeAndSem = course.gradeLevel === s.yr;
       } else {
-          // 2. LENIENT MATCH for Kinder, Elem, and HS
-          // We check if the course's gradeLevel includes the student's year.
           matchesGradeAndSem = course.gradeLevel.startsWith(s.yr);
       }
 
       const isOpen = course.status === 'Open'; 
-      
-      // Check if the course name is already in their enrolled list
       const alreadyTaken = myEnrolledCourseNames.includes(course.name);
+      const matchesSection = selectedSection === '' || course.section === selectedSection;
       
-      // Only show if it matches grade, is open, and they haven't taken the subject yet
-      return matchesGradeAndSem && isOpen && !alreadyTaken;
+      return matchesGradeAndSem && isOpen && !alreadyTaken && matchesSection;
   });
 
-  c.innerHTML = `<div class="panel"><h2>Online Course Registration</h2>
-    <p style="margin-bottom: 15px; color: #666;">Showing available courses for: <b>${esc(s.yr)}</b></p>
-    ${simpleTable(
-        ['Course Code', 'Course Name', 'Section', 'Action'], 
-        availableCourses.map(x => [
-            esc(x.code), 
-            esc(x.name), 
-            esc(x.section), 
-            `<button class="btn small" onclick="enrollCourse('${esc(x.code)}', '${esc(x.section)}')">Enroll</button>`
-        ])
-    )}
-  </div>`;
+  $('registrationTableArea').innerHTML = simpleTable(
+      ['Course Code', 'Course Name', 'Section', 'Action'], 
+      availableCourses.map(x => [
+          esc(x.code), 
+          esc(x.name), 
+          esc(x.section), 
+          `<button class="btn small" onclick="enrollCourse('${esc(x.code)}', '${esc(x.section)}')">Enroll</button>`
+      ])
+  );
 }
 
 async function enrollCourse(courseCode, section) {
@@ -383,11 +807,186 @@ async function enrollCourse(courseCode, section) {
         const resCourses = await fetch('/api/courses');
         db.courses = await resCourses.json();
         
-        renderRegistration($('content'));
+        drawRegistrationTable();
         alert("Successfully Enrolled!");
     } catch (error) {
         alert("Failed to enroll.");
     }
+}
+
+/* ---------- STUDENT SCHEDULE ---------- */
+function renderSchedule(c) {
+    const s = currentStudent();
+    
+    const myEnrollments = db.enrollments.filter(e => e.studentId === s.id);
+    const myCourses = myEnrollments.map(e => db.courses.find(c => c.code === e.courseCode)).filter(c => c);
+
+    if (myCourses.length === 0) {
+        c.innerHTML = `<div class="panel"><h2>Weekly Class Schedule</h2><p class="empty-note">You are not enrolled in any courses yet. Please go to Online Course Registration.</p></div>`;
+        return;
+    }
+
+    const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
+    const isKinder = s.yr === 'Kinder';
+    const isSHS = s.yr.includes('Grade 11') || s.yr.includes('Grade 12');
+    const isElemOrJHS = !isKinder && !isSHS;
+
+    let endTimeMinutes = 15 * 60; 
+    if (isKinder) endTimeMinutes = 10 * 60; 
+    else if (isElemOrJHS && (s.yr.includes('Grade 1') || s.yr.includes('Grade 2') || s.yr.includes('Grade 3'))) {
+        endTimeMinutes = 12 * 60; 
+    }
+
+    const lunchStart = 12 * 60; 
+    const lunchEnd = 13 * 60;   
+    const snackStart = 9 * 60 + 30; 
+    const snackEnd = 10 * 60;   
+
+    const minorKeywords = ['Oral', 'Komunikasyon', 'General Math', 'Earth', 'Personal', 'Empowerment', 'PE and Health', 'Reading', 'Pagbasa', 'Statistics', 'Physical Science', 'Practical Research', '21st', 'Understanding', 'Philosophy', 'English for', 'Media', 'Contemporary', 'Pagsulat', 'Inquiries'];
+    
+    myCourses.forEach(course => {
+        if (isSHS) {
+            const isMinor = minorKeywords.some(kw => course.name.includes(kw));
+            course._duration = isMinor ? 60 : 120; 
+        } else if (isKinder) {
+            course._duration = 30;
+        } else {
+            course._duration = 60; 
+        }
+    });
+
+    let timeSlots = [];
+    let currentTime = 7 * 60;
+    while (currentTime < endTimeMinutes) {
+        if (currentTime === lunchStart) { currentTime = lunchEnd; continue; }
+        if (!isKinder && currentTime === snackStart) { currentTime = snackEnd; continue; }
+        timeSlots.push(currentTime);
+        currentTime += 30;
+    }
+
+    let scheduleGrid = {};
+    days.forEach(day => {
+        scheduleGrid[day] = {};
+        timeSlots.forEach(time => scheduleGrid[day][time] = null);
+    });
+
+    let teacherBusy = {}; 
+
+    for (let time of timeSlots) {
+        for (let day of days) {
+            if (scheduleGrid[day][time]) continue; 
+
+            let assigned = false;
+            let attempts = 0;
+            let currentShiftedCourses = [...myCourses];
+
+            while (!assigned && attempts < currentShiftedCourses.length) {
+                let course = currentShiftedCourses[attempts];
+                let teacher = course.adviser;
+                let duration = course._duration;
+
+                let canFit = true;
+                let requiredSlots = duration / 30; 
+
+                for (let i = 0; i < requiredSlots; i++) {
+                    let checkTime = time + (i * 30);
+                    if (!scheduleGrid[day].hasOwnProperty(checkTime) || scheduleGrid[day][checkTime] !== null) {
+                        canFit = false; break;
+                    }
+                    if (!teacherBusy[teacher]) teacherBusy[teacher] = {};
+                    if (teacherBusy[teacher][`${day}-${checkTime}`]) {
+                        canFit = false; break;
+                    }
+                }
+
+                if (canFit) {
+                    for (let i = 0; i < requiredSlots; i++) {
+                        let placeTime = time + (i * 30);
+                        scheduleGrid[day][placeTime] = { ...course, isStart: i === 0 };
+                        teacherBusy[teacher][`${day}-${placeTime}`] = true;
+                    }
+                    assigned = true;
+                    myCourses.push(myCourses.shift()); 
+                } else {
+                    attempts++;
+                }
+            }
+        }
+    }
+
+    let scheduleHTML = `
+        <div class="panel">
+            <h2>Weekly Class Schedule</h2>
+            <p style="margin-bottom: 15px; color: #666;">Schedule for <b>${esc(s.first)} ${esc(s.last)}</b> (${esc(s.yr)})</p>
+            <table style="width: 100%; border-collapse: collapse; text-align: center; font-size: 13px;">
+                <thead>
+                    <tr style="background: #5c0000; color: white;">
+                        <th style="padding: 10px; border: 1px solid #ddd;">Time</th>
+                        ${days.map(d => `<th style="padding: 10px; border: 1px solid #ddd;">${d}</th>`).join('')}
+                    </tr>
+                </thead>
+                <tbody>
+    `;
+
+    let currentRowTime = 7 * 60;
+    
+    while (currentRowTime < endTimeMinutes) {
+        const formatTime = (mins) => {
+            let h = Math.floor(mins / 60);
+            let m = mins % 60;
+            let ampm = h >= 12 ? 'PM' : 'AM';
+            if (h > 12) h -= 12;
+            if (h === 0) h = 12;
+            return `${h}:${m === 0 ? '00' : m} ${ampm}`;
+        };
+
+        if (!isKinder && currentRowTime === snackStart) {
+            scheduleHTML += `<tr>
+                <td style="padding: 10px; border: 1px solid #ddd; font-weight: bold; background: #f9f9f9;">${formatTime(snackStart)} - ${formatTime(snackEnd)}</td>
+                <td colspan="5" style="padding: 10px; border: 1px solid #ddd; font-weight: bold; color: #b8860b; background: #fffcf0;">S N A C K S</td>
+            </tr>`;
+            currentRowTime = snackEnd;
+            continue;
+        }
+
+        if (currentRowTime === lunchStart && endTimeMinutes > lunchStart) {
+            scheduleHTML += `<tr>
+                <td style="padding: 10px; border: 1px solid #ddd; font-weight: bold; background: #f9f9f9;">${formatTime(lunchStart)} - ${formatTime(lunchEnd)}</td>
+                <td colspan="5" style="padding: 10px; border: 1px solid #ddd; font-weight: bold; color: #800000; background: #fff0f0;">L U N C H   B R E A K</td>
+            </tr>`;
+            currentRowTime = lunchEnd;
+            continue;
+        }
+
+        scheduleHTML += `<tr>
+            <td style="padding: 10px; border: 1px solid #ddd; font-weight: bold; background: #f9f9f9;">${formatTime(currentRowTime)} - ${formatTime(currentRowTime + 30)}</td>`;
+            
+        days.forEach(day => {
+            const cell = scheduleGrid[day][currentRowTime];
+            if (cell) {
+                if (cell.isStart) {
+                    let rowspan = cell._duration / 30; 
+                    scheduleHTML += `<td rowspan="${rowspan}" style="padding: 10px; border: 1px solid #ddd; background: #fff; vertical-align: middle;">
+                        <b>${esc(cell.name)}</b><br>
+                        <small style="color: #666;">Sec: ${esc(cell.section)}</small>
+                    </td>`;
+                } 
+            } else {
+                scheduleHTML += `<td style="padding: 10px; border: 1px solid #ddd; background: #fafafa; color: #aaa;">—</td>`;
+            }
+        });
+        
+        scheduleHTML += `</tr>`;
+        currentRowTime += 30;
+    }
+
+    scheduleHTML += `
+                </tbody>
+            </table>
+        </div>
+    `;
+
+    c.innerHTML = scheduleHTML;
 }
 
 /* ---------- STUDENT PROFILE ---------- */
@@ -465,7 +1064,7 @@ function renderStudentProfile(c) {
         </div>`;
 }
 
-/* ---------- ADMIN: USERS ---------- */
+/* ---------- ADMIN: USERS, COURSES, DIRECTORY ---------- */
 function renderUsers(c) {
   const rows = db.users.map(u => [
       `<b>${esc(u.username)}</b>`,
@@ -551,9 +1150,51 @@ async function saveUserEdit(username) {
     }
 }
 
-/* ---------- ADMIN: COURSES & SECTIONS ---------- */
 function renderCourses(c) {
-  const rows = db.courses.map(x => [
+  const gradeLevels = [...new Set(db.courses.map(course => course.gradeLevel))].sort();
+
+  c.innerHTML = `
+    <div class="panel">
+        <h2>Course & Section Management</h2>
+        <p style="margin-bottom: 15px; color: #666;">Courses will automatically close once the capacity limit is reached.</p>
+        
+        <div style="display: flex; gap: 15px; margin-bottom: 20px; background: #f6f9fd; padding: 15px; border-radius: 8px; border: 1px solid #ddd;">
+            <div class="field" style="margin: 0; flex: 1;">
+                <label style="font-size: 12px; font-weight: bold; color: #5c0000;">Filter by Grade Level</label>
+                <select id="filterGrade" onchange="filterCoursesTable()" style="padding: 10px; border-radius: 6px; border: 1px solid #ccc; width: 100%;">
+                    <option value="">All Grade Levels</option>
+                    ${gradeLevels.map(g => `<option value="${esc(g)}">${esc(g)}</option>`).join('')}
+                </select>
+            </div>
+
+            <div class="field" style="margin: 0; flex: 1;">
+                <label style="font-size: 12px; font-weight: bold; color: #5c0000;">Filter by Section</label>
+                <select id="filterSection" onchange="filterCoursesTable()" style="padding: 10px; border-radius: 6px; border: 1px solid #ccc; width: 100%;">
+                    <option value="">All Sections</option>
+                </select>
+            </div>
+        </div>
+
+        <div id="courseTableContainer"></div>
+    </div>`;
+
+  renderCoursesTable();
+}
+
+function renderCoursesTable() {
+  const container = $('courseTableContainer');
+  const selectedGrade = $('filterGrade') ? $('filterGrade').value : '';
+  const selectedSection = $('filterSection') ? $('filterSection').value : '';
+
+  updateSectionDropdown(selectedGrade, selectedSection);
+
+  const filteredCourses = db.courses.filter(course => {
+      const matchGrade = selectedGrade === '' || course.gradeLevel === selectedGrade;
+      const matchSection = selectedSection === '' || course.section === selectedSection;
+      return matchGrade && matchSection;
+  });
+
+  const rows = filteredCourses.map(x => [
       esc(x.code), 
       esc(x.name), 
       esc(x.section), 
@@ -561,15 +1202,27 @@ function renderCourses(c) {
       `<span class="badge ${x.status === 'Open' ? 'active' : 'inactive'}">${esc(x.status)}</span>`
   ]);
 
-  c.innerHTML = `
-    <div class="panel">
-        <h2>Course & Section Management</h2>
-        <p style="margin-bottom: 15px; color: #666;">Courses will automatically close once the capacity limit is reached.</p>
-        ${simpleTable(['Code', 'Name', 'Section', 'Adviser', 'Status'], rows)}
-    </div>`;
+  container.innerHTML = simpleTable(['Code', 'Name', 'Section', 'Adviser', 'Status'], rows);
 }
 
-/* ---------- ADMIN: STUDENT DIRECTORY & ARCHIVE ---------- */
+function updateSectionDropdown(selectedGrade, currentSection) {
+  const sectionSelect = $('filterSection');
+  if (!sectionSelect) return;
+
+  let availableSections = db.courses;
+  if (selectedGrade !== '') {
+      availableSections = db.courses.filter(c => c.gradeLevel === selectedGrade);
+  }
+  
+  const uniqueSections = [...new Set(availableSections.map(course => course.section))].sort();
+
+  sectionSelect.innerHTML = `<option value="">All Sections</option>` + 
+      uniqueSections.map(s => `<option value="${esc(s)}" ${s === currentSection ? 'selected' : ''}>${esc(s)}</option>`).join('');
+}
+
+function filterCoursesTable() {
+  renderCoursesTable();
+}
 
 function renderActiveDirectory(c) {
   c.innerHTML = `<div class="panel"><h2>Active Student Directory</h2>
@@ -639,7 +1292,6 @@ function openEnrollmentForm(existingId) {
         
         <div class="field"><label>Year Level</label><select id="f_yr"></select></div>
         
-        <!-- SHS STRAND DROPDOWN -->
         <div class="field" id="f_strand_group" style="display: none;">
             <label>SHS Strand</label>
             <select id="f_strand">
@@ -650,7 +1302,6 @@ function openEnrollmentForm(existingId) {
             </select>
         </div>
 
-        <!-- SHS SEMESTER DROPDOWN -->
         <div class="field" id="f_sem_group" style="display: none;">
             <label>Semester</label>
             <select id="f_sem">
@@ -688,18 +1339,16 @@ function updateYearDropdown(selectedYear = null) {
         semGroup.style.display = 'none';
     } else if (course === 'SHS') {
         years = ['Grade 11','Grade 12'];
-        strandGroup.style.display = 'block'; // SHOW STRAND
-        semGroup.style.display = 'block';    // SHOW SEMESTER
+        strandGroup.style.display = 'block'; 
+        semGroup.style.display = 'block';    
     }
 
-    // Parse existing data if editing
     let currentStrand = 'STEM';
     let currentSem = '1st Sem';
     
     if (selectedYear && selectedYear.includes('-')) {
         const parts = selectedYear.split('-');
-        selectedYear = parts[0].trim(); // "Grade 12"
-        
+        selectedYear = parts[0].trim();
         if (parts[1]) currentStrand = parts[1].trim(); 
         if (parts[2]) currentSem = parts[2].trim(); 
     }
@@ -714,11 +1363,10 @@ async function saveStudent(existingId) {
   const course = $('f_course').value;
   let finalYear = $('f_yr').value;
   
-  // If SHS, combine the year, strand, and semester exactly as it is in the courses DB
   if (course === 'SHS') {
       const strand = $('f_strand').value;
       const sem = $('f_sem').value;
-      finalYear = `${finalYear} - ${strand} - ${sem}`; // e.g., "Grade 12 - STEM - 1st Sem"
+      finalYear = `${finalYear} - ${strand} - ${sem}`;
   }
 
   const rec = { 
@@ -736,10 +1384,14 @@ async function saveStudent(existingId) {
   
   await fetch('/api/students', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(rec) });
   const res = await fetch('/api/students'); db.students = await res.json();
-  $('enrollmentFormArea').innerHTML = ''; drawActiveTable();
-}
+  
+  const resUsers = await fetch('/api/users'); db.users = await resUsers.json();
 
-/* ---------- FACULTY: GRADING ---------- */
+  $('enrollmentFormArea').innerHTML = ''; 
+  drawActiveTable();
+  
+  if(!existingId) alert("Student added! They can now login with their Student ID as username and 'password123' as password.");
+}
 
 function renderClassRoster(c) {
   c.innerHTML = `
@@ -748,7 +1400,6 @@ function renderClassRoster(c) {
         <p style="margin-bottom: 15px; color: #666;">Students enrolled in the courses you handle.</p>
         <div id="rosterTableArea"><p class="empty-note">Loading students...</p></div>
     </div>`;
-    
   drawRosterTable();
 }
 
@@ -887,14 +1538,18 @@ async function submitGrade() {
     }
 }
 
-/* ---------- STUDENT: ACADEMIC PROFILE & GRADES ---------- */
 async function renderProfileGrades(c) {
     const s = currentStudent();
     
     c.innerHTML = `
         <div class="panel">
-            <h2>Academic Profile & Grades</h2>
-            <p style="margin-bottom: 15px; color: #666;">Below are your enrolled subjects and submitted grades.</p>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                <div>
+                    <h2>Academic Profile & Grades</h2>
+                    <p style="color: #666;">Below are your enrolled subjects and submitted grades.</p>
+                </div>
+                <button class="btn" style="background: #5c0000; color: white;" onclick="printCOR()">Print COR</button>
+            </div>
             <div id="studentGradesTable"><p class="empty-note">Loading grades...</p></div>
         </div>`;
 
@@ -931,4 +1586,144 @@ async function renderProfileGrades(c) {
         console.error(error);
         $('studentGradesTable').innerHTML = `<p class="empty-note">Failed to load grades.</p>`;
     }
+}
+
+function printCOR() {
+    const s = currentStudent();
+    const myEnrollments = db.enrollments.filter(e => e.studentId === s.id);
+    
+    if (myEnrollments.length === 0) {
+        alert("You need to enroll in subjects first before printing your COR.");
+        return;
+    }
+
+    const subjectsRows = myEnrollments.map((enroll, index) => {
+        const course = db.courses.find(c => c.code === enroll.courseCode);
+        if (!course) return '';
+        return `
+            <tr>
+                <td style="text-align: center;">${index + 1}</td>
+                <td>${esc(course.code)}</td>
+                <td>${esc(course.name)}</td>
+                <td style="text-align: center;">${esc(course.section)}</td>
+                <td>${esc(course.adviser)}</td>
+            </tr>
+        `;
+    }).join('');
+
+    // --- DYNAMIC TUITION LOGIC FOR PRINT COR ---
+    let yrStr = String(s.yr || '').trim().toLowerCase();
+    let tuitionFee = 0;
+
+    if (yrStr.includes('kinder')) {
+        tuitionFee = 5000;
+    } else if (yrStr.includes('grade 11') || yrStr.includes('grade 12')) {
+        tuitionFee = 13000;
+    } else if (yrStr.includes('grade 7') || yrStr.includes('grade 8') || yrStr.includes('grade 9') || yrStr.includes('grade 10')) {
+        tuitionFee = 10000;
+    } else if (yrStr.includes('grade 1') || yrStr.includes('grade 2') || yrStr.includes('grade 3') || yrStr.includes('grade 4') || yrStr.includes('grade 5') || yrStr.includes('grade 6')) {
+        tuitionFee = 8000;
+    } else {
+        tuitionFee = 8000; 
+    }
+
+    const miscFee = 1500;
+    const totalAmountDue = tuitionFee + miscFee;
+
+    const printWindow = window.open('', '_blank', 'width=900,height=800');
+    printWindow.document.write(`
+        <html>
+        <head>
+            <title>Certificate of Registration</title>
+            <style>
+                body { font-family: 'Times New Roman', Times, serif; margin: 40px; color: #000; }
+                .header { text-align: center; margin-bottom: 20px; }
+                .header h1 { font-size: 18px; margin: 0; font-weight: bold; letter-spacing: 1px;}
+                .header h2 { font-size: 16px; margin: 5px 0; font-weight: normal; }
+                .header h3 { font-size: 14px; margin: 10px 0; font-weight: bold; letter-spacing: 2px; }
+                .info-table { width: 100%; margin-bottom: 20px; font-size: 13px; }
+                .info-table td { padding: 3px 0; }
+                .main-table { width: 100%; border-collapse: collapse; font-size: 12px; margin-bottom: 20px; }
+                .main-table th { background-color: #eee; border: 1px solid #000; padding: 6px; }
+                .main-table td { border: 1px solid #000; padding: 6px; }
+                .fees-table { width: 50%; border-collapse: collapse; font-size: 13px; float: right; margin-top: 10px; }
+                .fees-table td { border: 1px solid #000; padding: 6px; }
+                .footer { clear: both; margin-top: 50px; text-align: center; font-size: 12px; }
+                .signature { margin-top: 50px; border-top: 1px solid #000; display: inline-block; padding-top: 5px; width: 250px; font-weight: bold; }
+            </style>
+        </head>
+        <body>
+            <div class="header">
+                <h1>REPUBLIC OF THE PHILIPPINES</h1>
+                <h2>EduTrack State University</h2>
+                <h2 style="font-size: 12px;">Mariveles, Bataan</h2>
+                <h3>CERTIFICATE OF REGISTRATION</h3>
+            </div>
+
+            <table class="info-table">
+                <tr>
+                    <td width="15%"><b>Student Name:</b></td>
+                    <td width="35%">${esc(s.first)} ${esc(s.mi)} ${esc(s.last)}</td>
+                    <td width="15%"><b>Student No:</b></td>
+                    <td width="35%">${esc(s.id)}</td>
+                </tr>
+                <tr>
+                    <td><b>Program:</b></td>
+                    <td>${esc(s.course)}</td>
+                    <td><b>School Year:</b></td>
+                    <td>2026-2027</td>
+                </tr>
+                <tr>
+                    <td><b>Year Level:</b></td>
+                    <td>${esc(s.yr)}</td>
+                    <td><b>Semester:</b></td>
+                    <td>1st Semester</td>
+                </tr>
+            </table>
+
+            <table class="main-table">
+                <thead>
+                    <tr>
+                        <th width="5%">No.</th>
+                        <th width="20%">Course Code</th>
+                        <th width="40%">Course Description</th>
+                        <th width="15%">Section</th>
+                        <th width="20%">Faculty / Instructor</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${subjectsRows}
+                </tbody>
+            </table>
+
+            <table class="fees-table">
+                <tr>
+                    <td colspan="2" style="text-align: center; font-weight: bold; background-color: #eee;">ASSESSED FEES</td>
+                </tr>
+                <tr>
+                    <td>Tuition Fee (Per Year)</td>
+                    <td style="text-align: right;">PHP ${tuitionFee.toLocaleString('en-US', {minimumFractionDigits: 2})}</td>
+                </tr>
+                <tr>
+                    <td>Miscellaneous Fee</td>
+                    <td style="text-align: right;">PHP ${miscFee.toLocaleString('en-US', {minimumFractionDigits: 2})}</td>
+                </tr>
+                <tr>
+                    <td style="font-weight: bold;">TOTAL AMOUNT DUE</td>
+                    <td style="text-align: right; font-weight: bold;">PHP ${totalAmountDue.toLocaleString('en-US', {minimumFractionDigits: 2})}</td>
+                </tr>
+            </table>
+
+            <div class="footer">
+                <p>This is a system-generated Certificate of Registration.</p>
+                <div class="signature">UNIVERSITY REGISTRAR</div>
+            </div>
+        </body>
+        </html>
+    `);
+    printWindow.document.close();
+    printWindow.focus();
+    setTimeout(() => {
+        printWindow.print();
+    }, 500);
 }
