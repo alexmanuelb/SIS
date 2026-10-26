@@ -19,7 +19,7 @@ const db = new sqlite3.Database(dbPath, (err) => {
     } else {
         console.log("Connected to SQLite database at:", dbPath);
         
-        // AUTO-SEED LOGIC: Kung walang 'users' table, gagawin nito ang lahat.
+        // AUTO-SEED LOGIC
         db.get("SELECT name FROM sqlite_master WHERE type='table' AND name='users'", (err, row) => {
             if (!row) {
                 console.log("Database is empty. Starting auto-seed...");
@@ -82,7 +82,22 @@ const db = new sqlite3.Database(dbPath, (err) => {
                     students.forEach(s => insertStudent.run(s));
                     insertStudent.finalize();
 
-                    // 4. Insert Billing Base (Optional, pero nilagay na rin natin)
+                    // 4. Insert Courses (FULL LIST PARA MAY LAMAN ANG REGISTRATION)
+                    const insertCourse = db.prepare(`INSERT INTO courses (code, name, gradeLevel, section, capacity, adviser, status) VALUES (?, ?, ?, ?, ?, ?, ?)`);
+                    const courses = [
+                        ['KIN-VAL', 'Values Education', 'Kinder', '1', 20, 'T. Mary C. Poppins', 'Open'], ['KIN-PHY', 'Physical Health & Motor Dev', 'Kinder', '1', 20, 'T. Mary C. Poppins', 'Open'], ['KIN-SOC', 'Socio-Emotional Dev', 'Kinder', '1', 20, 'T. Mary C. Poppins', 'Open'], ['KIN-LAN', 'Language & Literacy', 'Kinder', '1', 20, 'T. Mary C. Poppins', 'Open'], ['KIN-MAT', 'Mathematics & Science', 'Kinder', '1', 20, 'T. Mary C. Poppins', 'Open'],
+                        ['LANG1-1', 'Language', 'Grade 1', '1', 30, 'T. John Emmanuel S.', 'Open'], ['READ1-1', 'Reading & Literacy', 'Grade 1', '1', 30, 'T. Emily Bronte', 'Open'], ['MATH1-1', 'Mathematics', 'Grade 1', '1', 30, 'T. Alan Turing', 'Open'], ['GMRC1-1', 'Good Manners & Right Conduct', 'Grade 1', '1', 30, 'T. Liza Soberano', 'Open'], ['MAK1-1', 'Makabansa', 'Grade 1', '1', 30, 'T. Andres Bonifacio', 'Open'],
+                        ['ENG2-1', 'English', 'Grade 2', '1', 30, 'T. Emily Bronte', 'Open'], ['FIL2-1', 'Filipino', 'Grade 2', '1', 30, 'T. Enrique Gil', 'Open'], ['MATH2-1', 'Mathematics', 'Grade 2', '1', 30, 'T. Alan Turing', 'Open'], ['GMRC2-1', 'Good Manners & Right Conduct', 'Grade 2', '1', 30, 'T. Liza Soberano', 'Open'], ['MAK2-1', 'Makabansa', 'Grade 2', '1', 30, 'T. Andres Bonifacio', 'Open'],
+                        ['ENG3-1', 'English', 'Grade 3', '1', 30, 'T. Emily Bronte', 'Open'], ['FIL3-1', 'Filipino', 'Grade 3', '1', 30, 'T. Kathryn Bernardo', 'Open'], ['MATH3-1', 'Mathematics', 'Grade 3', '1', 30, 'T. Alan Turing', 'Open'], ['SCI3-1', 'Science', 'Grade 3', '1', 30, 'T. Marie Curie', 'Open'], ['GMRC3-1', 'Good Manners & Right Conduct', 'Grade 3', '1', 30, 'T. Liza Soberano', 'Open'], ['MAK3-1', 'Makabansa', 'Grade 3', '1', 30, 'T. Andres Bonifacio', 'Open'],
+                        ['ENG4-1', 'English 4', 'Grade 4', '1', 30, 'T. Emily Bronte', 'Open'], ['FIL4-1', 'Filipino 4', 'Grade 4', '1', 30, 'T. Daniel Padilla', 'Open'], ['MATH4-1', 'Mathematics 4', 'Grade 4', '1', 30, 'T. Alan Turing', 'Open'], ['SCI4-1', 'Science 4', 'Grade 4', '1', 30, 'T. Marie Curie', 'Open'], ['AP4-1', 'Araling Panlipunan 4', 'Grade 4', '1', 30, 'T. Andres Bonifacio', 'Open'], ['ESP4-1', 'Values Education 4', 'Grade 4', '1', 30, 'T. Liza Soberano', 'Open'], ['MAPEH4-1', 'MAPEH 4', 'Grade 4', '1', 30, 'T. Francisco Balagtas', 'Open'], ['EPP4-1', 'EPP 4', 'Grade 4', '1', 30, 'T. Gabriela Silang', 'Open'],
+                        ['ENG7-1', 'English 7', 'Grade 7', '1', 35, 'T. Emily Bronte', 'Open'], ['FIL7-1', 'Filipino 7', 'Grade 7', '1', 35, 'T. Enrique Gil', 'Open'], ['MATH7-1', 'Mathematics 7', 'Grade 7', '1', 35, 'T. Jane C. Villa', 'Open'], ['SCI7-1', 'Science 7', 'Grade 7', '1', 35, 'T. Marie Curie', 'Open'], ['AP7-1', 'Araling Panlipunan 7', 'Grade 7', '1', 35, 'T. Andres Bonifacio', 'Open'], ['ESP7-1', 'Values Education 7', 'Grade 7', '1', 35, 'T. Liza Soberano', 'Open'], ['MAPEH7-1', 'MAPEH 7', 'Grade 7', '1', 35, 'T. Francisco Balagtas', 'Open'], ['TLE7-1', 'TLE 7', 'Grade 7', '1', 35, 'T. Gabriela Silang', 'Open'],
+                        ['ORAL11-1', 'Oral Communication', 'Grade 11 - STEM - 1st Sem', '1', 40, 'T. Emily Bronte', 'Open'], ['KOMU11-1', 'Komunikasyon at Pananaliksik', 'Grade 11 - STEM - 1st Sem', '1', 40, 'T. Coco Martin', 'Open'], ['GENM11-1', 'General Mathematics', 'Grade 11 - STEM - 1st Sem', '1', 40, 'T. Smith V. Cruz', 'Open'], ['EALS11-1', 'Earth and Life Science', 'Grade 11 - STEM - 1st Sem', '1', 40, 'T. Marie Curie', 'Open'], ['PERD11-1', 'Personal Development', 'Grade 11 - STEM - 1st Sem', '1', 40, 'T. Liza Soberano', 'Open'], ['EMPW11-1', 'Empowerment Technologies', 'Grade 11 - STEM - 1st Sem', '1', 40, 'T. Alan Turing', 'Open'], ['PE111-1', 'PE and Health 1', 'Grade 11 - STEM - 1st Sem', '1', 40, 'T. Francisco Balagtas', 'Open'], ['PREC11-1', 'Pre-Calculus (STEM)', 'Grade 11 - STEM - 1st Sem', '1', 40, 'T. Alan Turing', 'Open'], ['CHEM111-1', 'General Chemistry 1 (STEM)', 'Grade 11 - STEM - 1st Sem', '1', 40, 'T. Marie Curie', 'Open'],
+                        ['21ST12-1', '21st Century Literature', 'Grade 12 - STEM - 1st Sem', '1', 40, 'T. Emily Bronte', 'Open'], ['UCSP12-1', 'Understanding Culture & Politics', 'Grade 12 - STEM - 1st Sem', '1', 40, 'T. Andres Bonifacio', 'Open'], ['PHIL12-1', 'Philosophy of the Human Person', 'Grade 12 - STEM - 1st Sem', '1', 40, 'T. Liza Soberano', 'Open'], ['PE312-1', 'PE and Health 3', 'Grade 12 - STEM - 1st Sem', '1', 40, 'T. Francisco Balagtas', 'Open'], ['EAPP12-1', 'English for Academic Purposes', 'Grade 12 - STEM - 1st Sem', '1', 40, 'T. Emily Bronte', 'Open'], ['PR212-1', 'Practical Research 2', 'Grade 12 - STEM - 1st Sem', '1', 40, 'T. Jane C. Villa', 'Open'], ['CPAR12-1', 'Contemporary Arts', 'Grade 12 - STEM - 1st Sem', '1', 40, 'T. Francisco Balagtas', 'Open'], ['MIL12-1', 'Media and Information Literacy', 'Grade 12 - STEM - 1st Sem', '1', 40, 'T. Alan Turing', 'Open'], ['PHY112-1', 'General Physics 1 (STEM)', 'Grade 12 - STEM - 1st Sem', '1', 40, 'T. Marie Curie', 'Open'], ['BIO112-1', 'General Biology 1 (STEM)', 'Grade 12 - STEM - 1st Sem', '1', 40, 'T. Marie Curie', 'Open']
+                    ];
+                    courses.forEach(c => insertCourse.run(c));
+                    insertCourse.finalize();
+
+                    // 5. Insert Billing
                     const insertBilling = db.prepare(`INSERT INTO billing (studentId, term, totalAmount, dueDate) VALUES (?, ?, ?, ?)`);
                     insertBilling.run('2023-0006', '1st Sem 2026-2027', 9500.00, '2026-11-15');
                     insertBilling.run('2026-01523', '1st Sem 2026-2027', 14500.00, '2026-11-15');
@@ -99,7 +114,7 @@ const db = new sqlite3.Database(dbPath, (err) => {
 });
 
 // ==========================================
-// LOGIN
+// API ROUTES (Same as before)
 // ==========================================
 app.post('/api/login', (req, res) => {
     const { username, password, roleAttempt } = req.body;
@@ -113,9 +128,6 @@ app.post('/api/login', (req, res) => {
     });
 });
 
-// ==========================================
-// STUDENTS & COURSES
-// ==========================================
 app.get('/api/students', (req, res) => {
     db.all("SELECT * FROM students", [], (err, rows) => {
         if (err) return res.status(500).json({ error: err.message });
@@ -173,18 +185,11 @@ app.post('/api/enroll', (req, res) => {
     db.get("SELECT name, capacity FROM courses WHERE code = ?", [courseCode], (err, course) => {
         if (err || !course) return res.status(404).json({ error: "Course not found" });
 
-        const checkSql = `
-            SELECT e.id FROM enrollments e
-            JOIN courses c ON e.courseCode = c.code
-            WHERE e.studentId = ? AND c.name = ?
-        `;
+        const checkSql = `SELECT e.id FROM enrollments e JOIN courses c ON e.courseCode = c.code WHERE e.studentId = ? AND c.name = ?`;
         
         db.get(checkSql, [studentId, course.name], (err, existing) => {
             if (err) return res.status(500).json({ error: err.message });
-            
-            if (existing) {
-                return res.status(400).json({ error: "You are already enrolled in this subject." });
-            }
+            if (existing) return res.status(400).json({ error: "You are already enrolled in this subject." });
 
             const sql = `INSERT INTO enrollments (studentId, courseCode, section, term) VALUES (?, ?, ?, ?)`;
             db.run(sql, [studentId, courseCode, section, term], function(err) {
@@ -192,7 +197,6 @@ app.post('/api/enroll', (req, res) => {
 
                 db.get("SELECT COUNT(*) as count FROM enrollments WHERE courseCode = ? AND section = ?", [courseCode, section], (err, result) => {
                     if (err) return res.json({ message: "Enrolled successfully" });
-
                     if (result.count >= course.capacity) {
                         db.run("UPDATE courses SET status = 'Closed' WHERE code = ?", [courseCode]);
                     }
@@ -203,9 +207,6 @@ app.post('/api/enroll', (req, res) => {
     });
 });
 
-// ==========================================
-// USERS
-// ==========================================
 app.get('/api/users', (req, res) => {
     db.all("SELECT username, name, role, section FROM users", [], (err, rows) => {
         if (err) return res.status(500).json({ error: err.message });
@@ -215,34 +216,22 @@ app.get('/api/users', (req, res) => {
 
 app.post('/api/users/update', (req, res) => {
     const { username, password, name, role, section } = req.body;
-    
     if (!password) {
-        const sql = `UPDATE users SET name=?, role=?, section=? WHERE username=?`;
-        db.run(sql, [name, role, section, username], function(err) {
+        db.run(`UPDATE users SET name=?, role=?, section=? WHERE username=?`, [name, role, section, username], function(err) {
             if (err) return res.status(400).json({ error: err.message });
             res.json({ message: "User details updated successfully" });
         });
     } else {
-        const sql = `UPDATE users SET password=?, name=?, role=?, section=? WHERE username=?`;
-        db.run(sql, [password, name, role, section, username], function(err) {
+        db.run(`UPDATE users SET password=?, name=?, role=?, section=? WHERE username=?`, [password, name, role, section, username], function(err) {
             if (err) return res.status(400).json({ error: err.message });
             res.json({ message: "User details and password updated successfully" });
         });
     }
 });
 
-// ==========================================
-// GRADING
-// ==========================================
 app.get('/api/students/teacher/:teacherName', (req, res) => {
     const teacherName = req.params.teacherName;
-    const sql = `
-        SELECT DISTINCT s.*, c.name as courseName, c.code as courseCode
-        FROM students s
-        JOIN enrollments e ON s.id = e.studentId
-        JOIN courses c ON e.courseCode = c.code
-        WHERE c.adviser = ?
-    `;
+    const sql = `SELECT DISTINCT s.*, c.name as courseName, c.code as courseCode FROM students s JOIN enrollments e ON s.id = e.studentId JOIN courses c ON e.courseCode = c.code WHERE c.adviser = ?`;
     db.all(sql, [teacherName], (err, rows) => {
         if (err) return res.status(500).json({ error: err.message });
         res.json(rows);
@@ -272,53 +261,27 @@ app.get('/api/student/grades/:studentId', (req, res) => {
     });
 });
 
-// ==========================================
-// BILLING & PAYMENTS
-// ==========================================
 app.get('/api/billing/:studentId', (req, res) => {
     const studentId = req.params.studentId;
-
     db.all("SELECT * FROM billing WHERE studentId = ?", [studentId], (err, rows) => {
         if (err) return res.status(500).json({ error: err.message });
-        
-        if (rows.length > 0) {
-            return res.json(rows);
-        }
+        if (rows.length > 0) return res.json(rows);
 
-        // Auto-generate if no bill exists
         db.get("SELECT yr FROM students WHERE id = ?", [studentId], (err, student) => {
             if (err || !student) return res.json([]); 
-
             const yearStr = (student.yr || '').toLowerCase();
             let tuitionFee = 8000; 
-
-            if (yearStr.includes('kinder')) {
-                tuitionFee = 5000;
-            } else if (
-                yearStr.includes('grade 1') || yearStr.includes('grade 2') || 
-                yearStr.includes('grade 3') || yearStr.includes('grade 4') || 
-                yearStr.includes('grade 5') || yearStr.includes('grade 6')
-            ) {
-                tuitionFee = 8000;
-            } else if (
-                yearStr.includes('grade 7') || yearStr.includes('grade 8') || 
-                yearStr.includes('grade 9') || yearStr.includes('grade 10')
-            ) {
-                tuitionFee = 10000;
-            } else if (
-                yearStr.includes('grade 11') || yearStr.includes('grade 12')
-            ) {
-                tuitionFee = 13000;
-            }
+            if (yearStr.includes('kinder')) tuitionFee = 5000;
+            else if (yearStr.includes('grade 1') || yearStr.includes('grade 2') || yearStr.includes('grade 3') || yearStr.includes('grade 4') || yearStr.includes('grade 5') || yearStr.includes('grade 6')) tuitionFee = 8000;
+            else if (yearStr.includes('grade 7') || yearStr.includes('grade 8') || yearStr.includes('grade 9') || yearStr.includes('grade 10')) tuitionFee = 10000;
+            else if (yearStr.includes('grade 11') || yearStr.includes('grade 12')) tuitionFee = 13000;
 
             const totalAmount = tuitionFee + 1500; 
             const term = '1st Sem 2026-2027';
             const dueDate = '2026-11-15';
 
-            const insertSql = `INSERT INTO billing (studentId, term, totalAmount, dueDate) VALUES (?, ?, ?, ?)`;
-            db.run(insertSql, [studentId, term, totalAmount, dueDate], function(err) {
+            db.run(`INSERT INTO billing (studentId, term, totalAmount, dueDate) VALUES (?, ?, ?, ?)`, [studentId, term, totalAmount, dueDate], function(err) {
                 if (err) return res.status(500).json({ error: err.message });
-                
                 db.all("SELECT * FROM billing WHERE studentId = ?", [studentId], (err, newRows) => {
                     if (err) return res.status(500).json({ error: err.message });
                     res.json(newRows);
@@ -338,9 +301,7 @@ app.get('/api/payments/:studentId', (req, res) => {
 app.post('/api/payments', (req, res) => {
     const { studentId, billingId, amount, paymentMethod, referenceNo, receiptImage, datePaid } = req.body;
     const finalBillingId = billingId === 'new' ? 0 : billingId;
-
     const sql = `INSERT INTO payments (studentId, billingId, amount, paymentMethod, referenceNo, receiptImage, datePaid) VALUES (?, ?, ?, ?, ?, ?, ?)`;
-    
     db.run(sql, [studentId, finalBillingId, amount, paymentMethod, referenceNo, receiptImage, datePaid], function(err) {
         if (err) return res.status(400).json({ error: err.message });
         res.json({ message: "Payment submitted successfully! Waiting for admin approval." });
@@ -349,38 +310,25 @@ app.post('/api/payments', (req, res) => {
 
 app.get('/api/admin/all-billing', (req, res) => {
     const sql = `
-        SELECT 
-            s.id as studentId, s.first, s.last, s.yr,
-            b.id as billingId, b.totalAmount, b.dueDate, b.status as billStatus,
+        SELECT s.id as studentId, s.first, s.last, s.yr, b.id as billingId, b.totalAmount, b.dueDate, b.status as billStatus,
             p.id as paymentId, p.amount as paidAmount, p.referenceNo, p.receiptImage, p.datePaid, p.status as paymentStatus
         FROM students s
         LEFT JOIN billing b ON s.id = b.studentId AND b.status = 'Unpaid'
         LEFT JOIN payments p ON s.id = p.studentId AND p.status IN ('Pending', 'Approved')
         ORDER BY s.last ASC
     `;
-    
     db.all(sql, [], (err, rows) => {
         if (err) return res.status(500).json({ error: err.message });
-        
-        let processed = [];
-        let seen = new Set();
-        
-        rows.forEach(row => {
-            if (!seen.has(row.studentId)) {
-                processed.push(row);
-                seen.add(row.studentId);
-            }
-        });
+        let processed = []; let seen = new Set();
+        rows.forEach(row => { if (!seen.has(row.studentId)) { processed.push(row); seen.add(row.studentId); } });
         res.json(processed);
     });
 });
 
 app.post('/api/admin/payments/approve', (req, res) => {
     const { paymentId, billingId } = req.body;
-    
     db.run(`UPDATE payments SET status = 'Approved' WHERE id = ?`, [paymentId], function(err) {
         if (err) return res.status(400).json({ error: err.message });
-        
         if (billingId && billingId !== 0) {
             db.run(`UPDATE billing SET status = 'Paid' WHERE id = ?`, [billingId], function(err) {
                 if (err) return res.status(400).json({ error: err.message });
