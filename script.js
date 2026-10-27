@@ -78,9 +78,9 @@ const MENUS = {
     { key: 'studentDashboard', label: 'Dashboard' },
     { key: 'registration', label: 'My Subjects' },
     { key: 'schedule', label: 'Class Schedule' },
-    { key: 'profileGrades', label: 'Academic Profile' },
-    { key: 'studentRecords', label: 'My Records' },
+    { key: 'profileGrades', label: 'Report of Grades' }, // Changed Label
     { key: 'profile', label: 'Student Profile' }
+    // Removed 'My Records'
   ]
 };
 
@@ -713,6 +713,7 @@ function renderRegistration(c) {
   </div>`;
 }
 
+// --- STUDENT SCHEDULE (Updated to include Friday) ---
 async function renderSchedule(c) {
   const s = currentStudent();
   
@@ -736,7 +737,7 @@ async function renderSchedule(c) {
     return;
   }
 
-  const daysOrder = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
+  const daysOrder = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday']; // Added Friday
   let html = `<div class="panel"><h2>Class Schedule</h2><p style="margin-bottom:15px; color:#666;">Weekly schedule for <b>${esc(s.yr)}</b></p>
     <div style="display:grid; gap:20px;">`;
 
@@ -768,13 +769,49 @@ async function renderSchedule(c) {
   c.innerHTML = html;
 }
 
+// --- REPORT OF GRADES (Print COR) ---
 async function renderProfileGrades(c) {
   const s = currentStudent();
+  
+  // Fetch enrolled courses and grades
+  const studentYear = s.yr.split('-')[0].trim(); 
+  const studentTrack = s.yr.includes('STEM') ? 'STEM' : s.yr.includes('HUMSS') ? 'HUMSS' : s.yr.includes('ABM') ? 'ABM' : '';
+  const studentSem = s.yr.includes('2nd Sem') ? '2nd Sem' : '1st Sem';
+  let studentSec = '1';
+  if (s.yr.includes('Sec ')) studentSec = s.yr.split('Sec ')[1].trim();
+
+  // Get all subjects for their section
+  const mySubjects = db.courses.filter(cr => {
+    if (s.course === 'SHS') {
+      return cr.gradeLevel.includes(studentYear) && cr.gradeLevel.includes(studentTrack) && cr.gradeLevel.includes(studentSem) && cr.section === studentSec;
+    } else {
+      return cr.gradeLevel.startsWith(studentYear) && cr.section === studentSec;
+    }
+  });
+
+  // Get grades
   const grades = await (await fetch('/api/student/grades/' + s.id)).json();
-  c.innerHTML = `<div class="panel"><h2>Academic Profile & Grades</h2>${simpleTable(['Course','Grade','Term'], grades.map(g => [esc(g.courseName), `<b>${esc(g.grade)}</b>`, esc(g.term)]))}</div>`;
+  
+  // Combine subjects with their grades
+  const rows = mySubjects.map(sub => {
+    const gradeRec = grades.find(g => g.courseName === sub.name);
+    const gradeVal = gradeRec ? gradeRec.grade : '--';
+    const remarks = gradeRec ? (gradeRec.grade <= 3.0 ? 'PASSED' : 'FAILED') : 'ONGOING';
+    return [esc(sub.code), esc(sub.name), esc(sub.subjectTeacher), `<b>${gradeVal}</b>`, remarks];
+  });
+
+  c.innerHTML = `<div class="panel">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+      <h2 style="margin:0;">Report of Grades</h2>
+      <button class="btn" onclick="window.print()">Print COR</button>
+    </div>
+    <p style="margin-bottom:15px; color:#666;">Your official enrolled courses and grades for <b>${esc(s.yr)}</b>.</p>
+    ${simpleTable(['Course Code','Subject Name','Teacher','Grade','Remarks'], rows)}
+  </div>`;
 }
 
 async function renderStudentRecords(c) {
+  // This function is kept but removed from the menu.
   const s = currentStudent();
   const records = await (await fetch('/api/student/records/' + s.id)).json();
   const groups = {};
@@ -793,17 +830,65 @@ function showRecordFolder(grade) {
   $('recordView').innerHTML = `<div class="panel" style="margin-top:20px; border:2px solid #5c0000;"><h3>${esc(grade)} — Records</h3>${simpleTable(['School Year','Subject','Grade','Status'], rows.map(r => [esc(r.schoolYear), esc(r.subject), `<b>${esc(r.grade)}</b>`, esc(r.status)]))}</div>`;
 }
 
+// --- NEW STUDENT PROFILE LAYOUT ---
 function renderStudentProfile(c) {
   const s = currentStudent();
-  c.innerHTML = `<div class="panel"><h2>Student Profile</h2><div style="display:grid; grid-template-columns:1fr 1fr; gap:20px; margin-top:20px;">
-    <div><small style="color:#888; font-weight:bold;">NAME</small><div style="font-size:16px; font-weight:600; margin-top:5px;">${esc(s.first)} ${esc(s.mi)} ${esc(s.last)}</div></div>
-    <div><small style="color:#888; font-weight:bold;">STUDENT NO.</small><div style="font-size:16px; font-weight:600; margin-top:5px;">${esc(s.id)}</div></div>
-    <div><small style="color:#888; font-weight:bold;">YEAR LEVEL</small><div style="font-size:16px; font-weight:600; margin-top:5px;">${esc(s.yr)}</div></div>
-    <div><small style="color:#888; font-weight:bold;">ADDRESS</small><div style="font-size:16px; font-weight:600; margin-top:5px;">${esc(s.address)}</div></div>
-    <div><small style="color:#888; font-weight:bold;">BIRTHDAY</small><div style="font-size:16px; font-weight:600; margin-top:5px;">${esc(s.birthday || 'N/A')}</div></div>
-    <div><small style="color:#888; font-weight:bold;">AGE</small><div style="font-size:16px; font-weight:600; margin-top:5px;">${esc(s.age || 'N/A')}</div></div>
-    <div><small style="color:#888; font-weight:bold;">GENDER</small><div style="font-size:16px; font-weight:600; margin-top:5px;">${esc(s.gender || 'N/A')}</div></div>
-    <div><small style="color:#888; font-weight:bold;">GUARDIAN</small><div style="font-size:16px; font-weight:600; margin-top:5px;">${esc(s.guardianName || 'N/A')}</div></div>
-    <div><small style="color:#888; font-weight:bold;">GUARDIAN CONTACT</small><div style="font-size:16px; font-weight:600; margin-top:5px;">${esc(s.guardianContact || 'N/A')}</div></div>
-  </div></div>`;
+  c.innerHTML = `
+    <div class="panel">
+      <h2 style="border-bottom: 2px solid #5c0000; padding-bottom:10px; margin-bottom:20px;">Student Profile</h2>
+      
+      <div style="display:flex; align-items:center; gap:20px; margin-bottom:30px;">
+        <div style="width:80px; height:80px; background:#5c0000; color:white; border-radius:50%; display:flex; justify-content:center; align-items:center; font-size:32px; font-weight:bold;">
+          ${esc(s.first.charAt(0))}${esc(s.last.charAt(0))}
+        </div>
+        <div>
+          <h3 style="font-size:24px; color:#333; margin-bottom:5px;">${esc(s.first)} ${esc(s.mi)} ${esc(s.last)}</h3>
+          <p style="color:#666; font-size:15px;">${esc(s.yr)}</p>
+        </div>
+      </div>
+
+      <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(250px, 1fr)); gap:20px;">
+        
+        <div style="background:#f9f9f9; padding:15px; border-radius:8px; border-left:4px solid #5c0000;">
+          <small style="color:#888; font-weight:bold; text-transform:uppercase;">Student No.</small>
+          <div style="font-size:16px; font-weight:600; margin-top:5px;">${esc(s.id)}</div>
+        </div>
+
+        <div style="background:#f9f9f9; padding:15px; border-radius:8px; border-left:4px solid #5c0000;">
+          <small style="color:#888; font-weight:bold; text-transform:uppercase;">Email Address</small>
+          <div style="font-size:16px; font-weight:600; margin-top:5px;">${esc(s.email || 'N/A')}</div>
+        </div>
+
+        <div style="background:#f9f9f9; padding:15px; border-radius:8px; border-left:4px solid #5c0000;">
+          <small style="color:#888; font-weight:bold; text-transform:uppercase;">Birthday</small>
+          <div style="font-size:16px; font-weight:600; margin-top:5px;">${esc(s.birthday || 'N/A')}</div>
+        </div>
+
+        <div style="background:#f9f9f9; padding:15px; border-radius:8px; border-left:4px solid #5c0000;">
+          <small style="color:#888; font-weight:bold; text-transform:uppercase;">Age</small>
+          <div style="font-size:16px; font-weight:600; margin-top:5px;">${esc(s.age || 'N/A')}</div>
+        </div>
+
+        <div style="background:#f9f9f9; padding:15px; border-radius:8px; border-left:4px solid #5c0000;">
+          <small style="color:#888; font-weight:bold; text-transform:uppercase;">Gender</small>
+          <div style="font-size:16px; font-weight:600; margin-top:5px;">${esc(s.gender || 'N/A')}</div>
+        </div>
+
+        <div style="background:#f9f9f9; padding:15px; border-radius:8px; border-left:4px solid #5c0000;">
+          <small style="color:#888; font-weight:bold; text-transform:uppercase;">Address</small>
+          <div style="font-size:16px; font-weight:600; margin-top:5px;">${esc(s.address || 'N/A')}</div>
+        </div>
+
+        <div style="background:#f9f9f9; padding:15px; border-radius:8px; border-left:4px solid #5c0000;">
+          <small style="color:#888; font-weight:bold; text-transform:uppercase;">Guardian Name</small>
+          <div style="font-size:16px; font-weight:600; margin-top:5px;">${esc(s.guardianName || 'N/A')}</div>
+        </div>
+
+        <div style="background:#f9f9f9; padding:15px; border-radius:8px; border-left:4px solid #5c0000;">
+          <small style="color:#888; font-weight:bold; text-transform:uppercase;">Guardian Contact</small>
+          <div style="font-size:16px; font-weight:600; margin-top:5px;">${esc(s.guardianContact || 'N/A')}</div>
+        </div>
+
+      </div>
+    </div>`;
 }

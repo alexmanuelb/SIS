@@ -123,7 +123,7 @@ function buildDatabase() {
     });
 }
 
-// GENERATE SCHEDULES (2x a week, no overlap, until 3PM)
+// GENERATE SCHEDULES (2x a week, no overlap, until 3PM, Mon-Fri)
 function generateSchedules() {
     db.all("SELECT * FROM courses", [], (err, courses) => {
         if (err || !courses) return;
@@ -144,6 +144,7 @@ function generateSchedules() {
                 const [gradeLevel, section] = key.split('|');
                 const subjectList = groupedBySection[key];
                 
+                // Slots ending at or before 3:00 PM
                 const slots = [
                     { start: '07:00', end: '09:00' },
                     { start: '09:00', end: '11:00' },
@@ -152,8 +153,12 @@ function generateSchedules() {
                 ];
 
                 subjectList.forEach((sub, index) => {
-                    const isFirstSession = index % 2 === 0;
-                    const assignedDays = isFirstSession ? ['Monday', 'Wednesday'] : ['Tuesday', 'Thursday'];
+                    // Distribute sessions across Mon-Fri
+                    let assignedDays = [];
+                    if (index % 3 === 0) assignedDays = ['Monday', 'Wednesday'];
+                    else if (index % 3 === 1) assignedDays = ['Tuesday', 'Thursday'];
+                    else assignedDays = ['Wednesday', 'Friday'];
+
                     const teacher = sub.subjectTeacher || 'Unassigned';
 
                     let assignedSlot = null;
@@ -175,7 +180,7 @@ function generateSchedules() {
             });
 
             insertSchedule.finalize(() => {
-                console.log("✅ Schedules generated (2x/week, until 3PM, no overlaps).");
+                console.log("✅ Schedules generated (Mon-Fri, 2x/week, until 3PM, no overlaps).");
             });
         });
     });
