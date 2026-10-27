@@ -3,17 +3,25 @@ let session = null;
 const $ = id => document.getElementById(id);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 
-function doLogin() {
+/* ---------- LOGIN & LOGOUT ---------- */
+function togglePassword() {
+  const p = $('loginPass');
+  p.type = p.type === 'password' ? 'text' : 'password';
+}
+
+async function doLogin() {
   const username = $('loginUser').value.trim();
   const password = $('loginPass').value.trim();
   if (!username || !password) return alert('Enter username and password');
   
-  fetch('/api/login', {
-    method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ username, password })
-  }).then(res => res.json().then(data => ({ status: res.status, data })))
-  .then(async ({ status, data }) => {
-    if (status !== 200) return alert(data.error);
+  try {
+    const res = await fetch('/api/login', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, password })
+    });
+    const data = await res.json();
+    if (!res.ok) return alert(data.error);
+    
     session = data;
     
     db.students = await (await fetch('/api/students')).json();
@@ -37,12 +45,13 @@ function doLogin() {
     $('whoami').textContent = session.name;
     
     buildSidebar();
+    
     if (session.role === 'Admin') navigate('adminDashboard');
     else if (session.role === 'Faculty') navigate('facultyDashboard');
     else navigate('studentDashboard');
     
     setInterval(() => { $('clock').textContent = new Date().toLocaleTimeString(); }, 1000);
-  }).catch(e => alert('Login failed.'));
+  } catch (e) { alert('Login failed. Is server running?'); }
 }
 
 function doLogout() {
@@ -51,8 +60,10 @@ function doLogout() {
   $('appScreen').style.display = 'none';
   $('loginScreen').style.display = 'flex';
   $('topUserDisplay').style.display = 'none';
+  $('loginUser').value = ''; $('loginPass').value = '';
 }
 
+/* ---------- SIDEBAR ---------- */
 const MENUS = {
   Admin: [
     { key: 'adminDashboard', label: 'Dashboard' },
@@ -93,17 +104,29 @@ function navigate(page, btn) {
     document.querySelectorAll('#sidebar button').forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
   }
+  
   const c = $('content');
   const R = {
-    adminDashboard: renderAdminDashboard, activeDirectory: renderActiveDirectory, facultyDirectory: renderFacultyDirectory,
-    courses: renderCourses, users: renderUsers, facultyDashboard: renderFacultyDashboard, classRecords: renderClassRecords,
-    gradeEntry: renderGradeEntry, attendance: renderAttendance, studentDashboard: renderStudentDashboard,
-    registration: renderRegistration, schedule: renderSchedule, profileGrades: renderProfileGrades,
-    studentRecords: renderStudentRecords, profile: renderStudentProfile
+    adminDashboard: renderAdminDashboard, 
+    activeDirectory: renderActiveDirectory, 
+    facultyDirectory: renderFacultyDirectory,
+    courses: renderCourses, 
+    users: renderUsers,
+    facultyDashboard: renderFacultyDashboard, 
+    classRecords: renderClassRecords, 
+    gradeEntry: renderGradeEntry, 
+    attendance: renderAttendance,
+    studentDashboard: renderStudentDashboard, 
+    registration: renderRegistration, 
+    schedule: renderSchedule, 
+    profileGrades: renderProfileGrades, 
+    studentRecords: renderStudentRecords, 
+    profile: renderStudentProfile
   };
   (R[page] || renderAdminDashboard)(c);
 }
 
+/* ---------- HELPERS ---------- */
 function simpleTable(headers, rows) {
   if (!rows.length) return `<p style="color:#999; padding:20px; text-align:center;">No records found.</p>`;
   return `<table><thead><tr>${headers.map(h=>`<th>${h}</th>`).join('')}</tr></thead>
@@ -114,6 +137,7 @@ function currentStudent() {
   return db.students.find(s => s.username === session.username) || null;
 }
 
+/* ---------- DASHBOARDS ---------- */
 function renderAdminDashboard(c) {
   const totalFaculty = db.users.filter(u => u.role === 'Faculty').length;
   c.innerHTML = `
@@ -151,6 +175,7 @@ function renderStudentDashboard(c) {
   setInterval(() => { if($('dash-clock')) $('dash-clock').textContent = new Date().toLocaleTimeString(); }, 1000);
 }
 
+/* ---------- ADMIN: STUDENT DIRECTORY ---------- */
 function renderActiveDirectory(c) {
   const active = db.students.filter(s => s.status !== 'Archived' && s.status !== 'Graduated');
   c.innerHTML = `<div class="panel"><h2>Student Directory</h2>
@@ -165,6 +190,7 @@ function renderActiveDirectory(c) {
 function openStudentForm(id) {
   const s = id ? db.students.find(x => x.id === id) : null;
   const nextId = s ? s.id : '2026-' + Math.floor(1000 + Math.random() * 9000);
+  
   let currentYear = s ? s.yr : 'Grade 7';
   if (currentYear && currentYear.includes('-')) currentYear = currentYear.split('-')[0].trim();
 
@@ -207,6 +233,7 @@ async function saveStudent(existingId) {
   $('enrollFormArea').innerHTML = ''; renderActiveDirectory($('content')); alert('Saved!');
 }
 
+/* ---------- ADMIN: FACULTY DIRECTORY ---------- */
 function renderFacultyDirectory(c) {
   const facultyList = db.users.filter(u => u.role === 'Faculty');
   const rows = facultyList.map(f => {
@@ -217,17 +244,113 @@ function renderFacultyDirectory(c) {
   c.innerHTML = `<div class="panel"><h2>Faculty Directory</h2>${simpleTable(['Username', 'Full Name', 'Advisory Class', 'Action'], rows)}</div>`;
 }
 
+/* ---------- ADMIN: COURSES & SECTIONS (UPDATED) ---------- */
 function renderCourses(c) {
-  c.innerHTML = `<div class="panel"><h2>Course & Section Management</h2>
+  c.innerHTML = `<div class="panel">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+      <h2 style="margin:0;">Course & Section Management</h2>
+      <div style="display:flex; gap:10px;">
+        <button class="btn" onclick="openAddCourseForm()">+ Add New Course</button>
+        <button class="btn secondary" onclick="openAddSectionForm()">+ Add New Section</button>
+      </div>
+    </div>
+    <div id="courseFormArea"></div>
     ${simpleTable(['Code','Name','Grade Level','Section','Adviser','Subject Teacher','Status'],
       db.courses.map(x => [esc(x.code), esc(x.name), esc(x.gradeLevel), esc(x.section), esc(x.adviser), esc(x.subjectTeacher), `<span class="badge ${x.status === 'Open' ? 'active' : 'inactive'}">${esc(x.status)}</span>`]))}
   </div>`;
+}
+
+function openAddCourseForm() {
+  $('courseFormArea').innerHTML = `
+    <div class="form-panel" style="border-left: 4px solid #5c0000;">
+      <h3 style="color:#5c0000; margin-bottom:15px;">Add New Course</h3>
+      <div class="form-grid">
+        <div class="field"><label>Course Code</label><input id="c_code" placeholder="e.g., MATH7-3"></div>
+        <div class="field"><label>Course Name</label><input id="c_name" placeholder="e.g., Mathematics 7"></div>
+        <div class="field"><label>Grade Level</label><input id="c_grade" placeholder="e.g., Grade 7"></div>
+        <div class="field"><label>Section</label><input id="c_section" placeholder="e.g., 3"></div>
+        <div class="field"><label>Advisory Teacher</label><input id="c_adviser" placeholder="e.g., T. Maria Clara"></div>
+        <div class="field"><label>Subject Teacher</label><input id="c_subjectTeacher" placeholder="e.g., T. Jose Rizal"></div>
+      </div>
+      <button class="btn" onclick="saveNewCourse()">Save Course</button>
+      <button class="btn secondary" onclick="$('courseFormArea').innerHTML=''">Cancel</button>
+    </div>`;
+}
+
+async function saveNewCourse() {
+  const rec = { 
+    code: $('c_code').value, 
+    name: $('c_name').value, 
+    gradeLevel: $('c_grade').value, 
+    section: $('c_section').value, 
+    adviser: $('c_adviser').value,
+    subjectTeacher: $('c_subjectTeacher').value,
+    capacity: 30, 
+    status: 'Open' 
+  };
+  await fetch('/api/courses', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(rec) });
+  db.courses = await (await fetch('/api/courses')).json();
+  $('courseFormArea').innerHTML = '';
+  renderCourses($('content')); 
+  alert('Course added!');
+}
+
+function openAddSectionForm() {
+  $('courseFormArea').innerHTML = `
+    <div class="form-panel" style="border-left: 4px solid #5c0000;">
+      <h3 style="color:#5c0000; margin-bottom:15px;">Add New Section</h3>
+      <p style="font-size:13px; color:#666; margin-bottom:15px;">This will copy subjects from Section 1 and assign the new Section.</p>
+      <div class="form-grid">
+        <div class="field"><label>Grade Level</label><input id="s_grade" placeholder="e.g., Grade 7"></div>
+        <div class="field"><label>New Section Name</label><input id="s_section" placeholder="e.g., 3"></div>
+        <div class="field"><label>Advisory Teacher</label><input id="s_adviser" placeholder="e.g., T. Maria Clara"></div>
+        <div class="field"><label>Subject Teacher</label><input id="s_subjectTeacher" placeholder="e.g., T. Jose Rizal"></div>
+      </div>
+      <button class="btn" onclick="saveNewSection()">Create Section</button>
+      <button class="btn secondary" onclick="$('courseFormArea').innerHTML=''">Cancel</button>
+    </div>`;
+}
+
+async function saveNewSection() {
+  const grade = $('s_grade').value.trim();
+  const newSec = $('s_section').value.trim();
+  const newAdviser = $('s_adviser').value.trim();
+  const newSubjectTeacher = $('s_subjectTeacher').value.trim();
+
+  if(!grade || !newSec || !newAdviser || !newSubjectTeacher) return alert('Fill in all fields');
+
+  // Find all courses for this grade in Section 1 to copy as template
+  const templates = db.courses.filter(c => c.gradeLevel === grade && c.section === '1');
+  if(templates.length === 0) return alert('No courses found for Section 1 in this grade to copy.');
+
+  for(const t of templates) {
+    const newCode = t.code.replace('-1', '-' + newSec);
+    await fetch('/api/courses', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ 
+        code: newCode, 
+        name: t.name, 
+        gradeLevel: t.gradeLevel, 
+        section: newSec, 
+        capacity: t.capacity, 
+        adviser: newAdviser, 
+        subjectTeacher: newSubjectTeacher, 
+        status: 'Open' 
+      })
+    });
+  }
+  
+  db.courses = await (await fetch('/api/courses')).json();
+  $('courseFormArea').innerHTML = '';
+  renderCourses($('content'));
+  alert(`Section ${newSec} created for ${grade}!`);
 }
 
 function renderUsers(c) {
   c.innerHTML = `<div class="panel"><h2>Users & Access</h2>${simpleTable(['Username','Name','Role','Section'], db.users.map(u => [esc(u.username), esc(u.name), esc(u.role), esc(u.section||'—')]))}</div>`;
 }
 
+/* ---------- FACULTY PAGES ---------- */
 async function renderClassRecords(c) {
   const myCourses = db.courses.filter(x => x.adviser === session.name || x.subjectTeacher === session.name);
   const groups = {};
@@ -238,7 +361,7 @@ async function renderClassRecords(c) {
   }
   let html = `<div class="panel"><h2>Class Records</h2><p>Click a folder to view enrolled students.</p>`;
   for (const key of Object.keys(groups)) html += `<div class="folder" onclick="showClassFolder('${esc(key)}')"><span>📁 ${esc(key)}</span> <span>&rarr;</span></div>`;
-  if(Object.keys(groups).length === 0) html += `<p style="color:#999;">No advisory classes assigned to you.</p>`;
+  if(Object.keys(groups).length === 0) html += `<p style="color:#999;">No classes assigned to you.</p>`;
   html += `<div id="classFolderView"></div></div>`;
   c.innerHTML = html;
 }
