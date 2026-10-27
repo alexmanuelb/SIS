@@ -3,25 +3,17 @@ let session = null;
 const $ = id => document.getElementById(id);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 
-/* ---------- LOGIN & LOGOUT ---------- */
-function togglePassword() {
-  const p = $('loginPass');
-  p.type = p.type === 'password' ? 'text' : 'password';
-}
-
-async function doLogin() {
+function doLogin() {
   const username = $('loginUser').value.trim();
   const password = $('loginPass').value.trim();
   if (!username || !password) return alert('Enter username and password');
   
-  try {
-    const res = await fetch('/api/login', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username, password })
-    });
-    const data = await res.json();
-    if (!res.ok) return alert(data.error);
-    
+  fetch('/api/login', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ username, password })
+  }).then(res => res.json().then(data => ({ status: res.status, data })))
+  .then(async ({ status, data }) => {
+    if (status !== 200) return alert(data.error);
     session = data;
     
     db.students = await (await fetch('/api/students')).json();
@@ -47,12 +39,12 @@ async function doLogin() {
     buildSidebar();
     
     if (session.role === 'Admin') navigate('adminDashboard');
-    else if (session.role === 'Registrar') navigate('activeDirectory'); // Registrar goes straight to students
+    else if (session.role === 'Registrar') navigate('activeDirectory');
     else if (session.role === 'Faculty') navigate('facultyDashboard');
     else navigate('studentDashboard');
     
     setInterval(() => { $('clock').textContent = new Date().toLocaleTimeString(); }, 1000);
-  } catch (e) { alert('Login failed. Is server running?'); }
+  }).catch(e => alert('Login failed.'));
 }
 
 function doLogout() {
@@ -64,7 +56,6 @@ function doLogout() {
   $('loginUser').value = ''; $('loginPass').value = '';
 }
 
-/* ---------- SIDEBAR ---------- */
 const MENUS = {
   Admin: [
     { key: 'adminDashboard', label: 'Dashboard' },
@@ -109,29 +100,17 @@ function navigate(page, btn) {
     document.querySelectorAll('#sidebar button').forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
   }
-  
   const c = $('content');
   const R = {
-    adminDashboard: renderAdminDashboard, 
-    activeDirectory: renderActiveDirectory, 
-    facultyDirectory: renderFacultyDirectory,
-    courses: renderCourses, 
-    users: renderUsers,
-    facultyDashboard: renderFacultyDashboard, 
-    classRecords: renderClassRecords, 
-    gradeEntry: renderGradeEntry, 
-    attendance: renderAttendance,
-    studentDashboard: renderStudentDashboard, 
-    registration: renderRegistration, 
-    schedule: renderSchedule, 
-    profileGrades: renderProfileGrades, 
-    studentRecords: renderStudentRecords, 
-    profile: renderStudentProfile
+    adminDashboard: renderAdminDashboard, activeDirectory: renderActiveDirectory, facultyDirectory: renderFacultyDirectory,
+    courses: renderCourses, users: renderUsers, facultyDashboard: renderFacultyDashboard, classRecords: renderClassRecords,
+    gradeEntry: renderGradeEntry, attendance: renderAttendance, studentDashboard: renderStudentDashboard,
+    registration: renderRegistration, schedule: renderSchedule, profileGrades: renderProfileGrades,
+    studentRecords: renderStudentRecords, profile: renderStudentProfile
   };
   (R[page] || renderAdminDashboard)(c);
 }
 
-/* ---------- HELPERS ---------- */
 function simpleTable(headers, rows) {
   if (!rows.length) return `<p style="color:#999; padding:20px; text-align:center;">No records found.</p>`;
   return `<table><thead><tr>${headers.map(h=>`<th>${h}</th>`).join('')}</tr></thead>
@@ -142,7 +121,6 @@ function currentStudent() {
   return db.students.find(s => s.username === session.username) || null;
 }
 
-/* ---------- DASHBOARDS ---------- */
 function renderAdminDashboard(c) {
   const totalFaculty = db.users.filter(u => u.role === 'Faculty').length;
   c.innerHTML = `
@@ -180,7 +158,6 @@ function renderStudentDashboard(c) {
   setInterval(() => { if($('dash-clock')) $('dash-clock').textContent = new Date().toLocaleTimeString(); }, 1000);
 }
 
-/* ---------- ADMIN/REGISTRAR: STUDENT DIRECTORY (With Email) ---------- */
 function renderActiveDirectory(c) {
   const active = db.students.filter(s => s.status !== 'Archived' && s.status !== 'Graduated');
   c.innerHTML = `<div class="panel">
@@ -200,10 +177,19 @@ function openStudentForm(id) {
   const nextId = s ? s.id : '2026-' + Math.floor(1000 + Math.random() * 9000);
   
   let currentYear = s ? s.yr : 'Grade 1';
-  if (currentYear && currentYear.includes('-')) currentYear = currentYear.split('-')[0].trim();
+  let currentSem = '1st Sem';
+  let currentTrack = 'STEM';
+  
+  if (currentYear && currentYear.includes('-')) {
+      const parts = currentYear.split('-');
+      currentYear = parts[0].trim();
+      currentTrack = parts[1].trim();
+      currentSem = parts[2].trim();
+  }
 
   const yearLevels = ['Grade 1', 'Grade 2', 'Grade 3', 'Grade 4', 'Grade 5', 'Grade 6', 'Grade 7', 'Grade 8', 'Grade 9', 'Grade 10', 'Grade 11', 'Grade 12'];
   const statuses = ['Active', 'Archived', 'Graduated'];
+  const semesters = ['1st Sem', '2nd Sem'];
 
   $('enrollFormArea').innerHTML = `
     <div class="form-panel">
@@ -215,7 +201,7 @@ function openStudentForm(id) {
         <div class="field"><label>Middle Initial</label><input id="f_mi" value="${esc(s?.mi||'')}" maxlength="2"></div>
         <div class="field"><label>Email Address</label><input id="f_email" type="email" value="${esc(s?.email||'')}" placeholder="student@email.com"></div>
         <div class="field"><label>Course / Dept</label>
-          <select id="f_course">
+          <select id="f_course" onchange="toggleSHS()">
             <option value="Elem" ${s?.course === 'Elem' ? 'selected' : ''}>Elementary</option>
             <option value="JHS" ${s?.course === 'JHS' ? 'selected' : ''}>Junior High School</option>
             <option value="SHS" ${s?.course === 'SHS' ? 'selected' : ''}>Senior High School</option>
@@ -223,6 +209,21 @@ function openStudentForm(id) {
         </div>
         <div class="field"><label>Year Level</label>
           <select id="f_yr">${yearLevels.map(y => `<option value="${y}" ${currentYear === y ? 'selected' : ''}>${y}</option>`).join('')}</select>
+        </div>
+        <div class="field" id="shs_track_group" style="display: ${s?.course === 'SHS' ? 'block' : 'none'};">
+          <label>SHS Track</label>
+          <select id="f_track">
+            <option value="STEM" ${currentTrack === 'STEM' ? 'selected' : ''}>STEM</option>
+            <option value="HUMSS" ${currentTrack === 'HUMSS' ? 'selected' : ''}>HUMSS</option>
+            <option value="ABM" ${currentTrack === 'ABM' ? 'selected' : ''}>ABM</option>
+          </select>
+        </div>
+        <div class="field" id="shs_sem_group" style="display: ${s?.course === 'SHS' ? 'block' : 'none'};">
+          <label>Semester</label>
+          <select id="f_sem">
+            <option value="1st Sem" ${currentSem === '1st Sem' ? 'selected' : ''}>1st Semester</option>
+            <option value="2nd Sem" ${currentSem === '2nd Sem' ? 'selected' : ''}>2nd Semester</option>
+          </select>
         </div>
         <div class="field"><label>Status</label>
           <select id="f_status">${statuses.map(st => `<option value="${st}" ${s?.status === st ? 'selected' : ''}>${st}</option>`).join('')}</select>
@@ -233,16 +234,33 @@ function openStudentForm(id) {
     </div>`;
 }
 
+function toggleSHS() {
+  const course = $('f_course').value;
+  if (course === 'SHS') {
+    $('shs_track_group').style.display = 'block';
+    $('shs_sem_group').style.display = 'block';
+  } else {
+    $('shs_track_group').style.display = 'none';
+    $('shs_sem_group').style.display = 'none';
+  }
+}
+
 async function saveStudent(existingId) {
   const email = $('f_email').value;
   const first = $('f_first').value;
-  const rec = { id: $('f_id').value, last: $('f_last').value, first: first, mi: $('f_mi').value, course: $('f_course').value, yr: $('f_yr').value, status: $('f_status').value, enrol: 'Enrolled', email: email };
+  const course = $('f_course').value;
+  let yr = $('f_yr').value;
+  
+  if (course === 'SHS') {
+    yr = `${yr} - ${$('f_track').value} - ${$('f_sem').value}`;
+  }
+
+  const rec = { id: $('f_id').value, last: $('f_last').value, first: first, mi: $('f_mi').value, course: course, yr: yr, status: $('f_status').value, enrol: 'Enrolled', email: email };
   
   const res = await fetch('/api/students', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(rec) });
   if(!res.ok) return alert('Error saving');
   
   if (!existingId && email) {
-    // Auto-generate email link
     const username = rec.id;
     const password = `${first.toLowerCase()}123`;
     const subject = `Your EduTrack SIS Account`;
@@ -255,19 +273,12 @@ async function saveStudent(existingId) {
   $('enrollFormArea').innerHTML = ''; renderActiveDirectory($('content')); alert('Saved!');
 }
 
-/* ---------- ADMIN: FACULTY DIRECTORY (Name-based Password) ---------- */
 function renderFacultyDirectory(c) {
   const facultyList = db.users.filter(u => u.role === 'Faculty');
   const rows = facultyList.map(f => {
     const advised = db.courses.filter(crs => crs.adviser === f.name).map(crs => `${crs.gradeLevel} (Sec ${crs.section})`);
     const advisoryDisplay = advised.length > 0 ? advised[0] : '<span style="color:#999;">None</span>';
-    
-    return [
-      `<b>${esc(f.username)}</b>`, 
-      esc(f.name), 
-      advisoryDisplay, 
-      `<button class="btn secondary" onclick="openEditFacultyForm('${esc(f.username)}')">Edit</button>`
-    ];
+    return [`<b>${esc(f.username)}</b>`, esc(f.name), advisoryDisplay, `<button class="btn secondary" onclick="openEditFacultyForm('${esc(f.username)}')">Edit</button>`];
   });
 
   c.innerHTML = `<div class="panel">
@@ -281,7 +292,7 @@ function renderFacultyDirectory(c) {
 }
 
 function openAddFacultyForm() {
-  const grades = ['Grade 1', 'Grade 2', 'Grade 3', 'Grade 4', 'Grade 5', 'Grade 6', 'Grade 7', 'Grade 8', 'Grade 9', 'Grade 10', 'Grade 11', 'Grade 12'];
+  const grades = ['Grade 1', 'Grade 2', 'Grade 3', 'Grade 4', 'Grade 5', 'Grade 6', 'Grade 7', 'Grade 8', 'Grade 9', 'Grade 10', 'Grade 11 - STEM', 'Grade 11 - HUMSS', 'Grade 11 - ABM', 'Grade 12 - STEM', 'Grade 12 - HUMSS', 'Grade 12 - ABM'];
   const sections = ['1', '2'];
   let uniqueSections = [];
   grades.forEach(g => sections.forEach(s => uniqueSections.push(`${g} - Section ${s}`)));
@@ -307,7 +318,7 @@ function openAddFacultyForm() {
 }
 
 function generateFacultyCredentials() {
-  const name = $('t_name').value.trim().replace(/^T\.\s*/i, ''); // Remove T.
+  const name = $('t_name').value.trim().replace(/^T\.\s*/i, '');
   if (!name) {
     $('t_user').value = '';
     $('t_pass').value = '';
@@ -360,7 +371,7 @@ function openEditFacultyForm(username) {
   const currentAdvisory = db.courses.filter(crs => crs.adviser === user.name).map(crs => `${crs.gradeLevel} - Section ${crs.section}`);
   const currentAdvisoryStr = currentAdvisory.length > 0 ? currentAdvisory[0] : "";
   
-  const grades = ['Grade 1', 'Grade 2', 'Grade 3', 'Grade 4', 'Grade 5', 'Grade 6', 'Grade 7', 'Grade 8', 'Grade 9', 'Grade 10', 'Grade 11', 'Grade 12'];
+  const grades = ['Grade 1', 'Grade 2', 'Grade 3', 'Grade 4', 'Grade 5', 'Grade 6', 'Grade 7', 'Grade 8', 'Grade 9', 'Grade 10', 'Grade 11 - STEM', 'Grade 11 - HUMSS', 'Grade 11 - ABM', 'Grade 12 - STEM', 'Grade 12 - HUMSS', 'Grade 12 - ABM'];
   const sections = ['1', '2'];
   let uniqueSections = [];
   grades.forEach(g => sections.forEach(s => uniqueSections.push(`${g} - Section ${s}`)));
@@ -417,9 +428,8 @@ async function updateFaculty(username) {
   alert('Teacher updated successfully!');
 }
 
-/* ---------- ADMIN: COURSES & SECTIONS ---------- */
 function renderCourses(c) {
-  const grades = ['Grade 1', 'Grade 2', 'Grade 3', 'Grade 4', 'Grade 5', 'Grade 6', 'Grade 7', 'Grade 8', 'Grade 9', 'Grade 10', 'Grade 11', 'Grade 12'];
+  const grades = ['Grade 1', 'Grade 2', 'Grade 3', 'Grade 4', 'Grade 5', 'Grade 6', 'Grade 7', 'Grade 8', 'Grade 9', 'Grade 10', 'Grade 11 - STEM - 1st Sem', 'Grade 11 - STEM - 2nd Sem', 'Grade 11 - HUMSS - 1st Sem', 'Grade 11 - HUMSS - 2nd Sem', 'Grade 11 - ABM - 1st Sem', 'Grade 11 - ABM - 2nd Sem', 'Grade 12 - STEM - 1st Sem', 'Grade 12 - STEM - 2nd Sem', 'Grade 12 - HUMSS - 1st Sem', 'Grade 12 - HUMSS - 2nd Sem', 'Grade 12 - ABM - 1st Sem', 'Grade 12 - ABM - 2nd Sem'];
   
   c.innerHTML = `<div class="panel">
     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
@@ -431,9 +441,9 @@ function renderCourses(c) {
     </div>
     
     <div class="form-panel" style="margin-bottom: 20px; background: #f9eaea; border-left: 4px solid #5c0000;">
-      <label style="font-weight:bold; color:#5c0000; margin-bottom:5px; display:block;">Filter by Grade Level:</label>
+      <label style="font-weight:bold; color:#5c0000; margin-bottom:5px; display:block;">Filter by Grade Level / Track:</label>
       <select id="courseFilter" onchange="renderCoursesTable()" style="padding: 10px; border-radius: 6px; border: 1px solid #ccc; width: 100%; max-width: 300px; font-size:14px;">
-        <option value="All">All Grades</option>
+        <option value="All">All</option>
         ${grades.map(g => `<option value="${g}">${g}</option>`).join('')}
       </select>
     </div>
@@ -454,14 +464,14 @@ function renderCoursesTable() {
 }
 
 function openAddCourseForm() {
-  const grades = ['Grade 1', 'Grade 2', 'Grade 3', 'Grade 4', 'Grade 5', 'Grade 6', 'Grade 7', 'Grade 8', 'Grade 9', 'Grade 10', 'Grade 11', 'Grade 12'];
+  const grades = ['Grade 1', 'Grade 2', 'Grade 3', 'Grade 4', 'Grade 5', 'Grade 6', 'Grade 7', 'Grade 8', 'Grade 9', 'Grade 10', 'Grade 11 - STEM - 1st Sem', 'Grade 11 - STEM - 2nd Sem', 'Grade 11 - HUMSS - 1st Sem', 'Grade 11 - HUMSS - 2nd Sem', 'Grade 11 - ABM - 1st Sem', 'Grade 11 - ABM - 2nd Sem', 'Grade 12 - STEM - 1st Sem', 'Grade 12 - STEM - 2nd Sem', 'Grade 12 - HUMSS - 1st Sem', 'Grade 12 - HUMSS - 2nd Sem', 'Grade 12 - ABM - 1st Sem', 'Grade 12 - ABM - 2nd Sem'];
   $('courseFormArea').innerHTML = `
     <div class="form-panel" style="border-left: 4px solid #5c0000;">
       <h3 style="color:#5c0000; margin-bottom:15px;">Add New Course</h3>
       <div class="form-grid">
         <div class="field"><label>Course Code</label><input id="c_code" placeholder="e.g., MATH7-3"></div>
         <div class="field"><label>Course Name</label><input id="c_name" placeholder="e.g., Mathematics 7"></div>
-        <div class="field"><label>Grade Level</label>
+        <div class="field"><label>Grade Level / Track</label>
           <select id="c_grade">${grades.map(g => `<option value="${g}">${g}</option>`).join('')}</select>
         </div>
         <div class="field"><label>Section</label><input id="c_section" placeholder="e.g., 3"></div>
@@ -491,12 +501,12 @@ async function saveNewCourse() {
 }
 
 function openAddSectionForm() {
-  const grades = ['Grade 1', 'Grade 2', 'Grade 3', 'Grade 4', 'Grade 5', 'Grade 6', 'Grade 7', 'Grade 8', 'Grade 9', 'Grade 10', 'Grade 11', 'Grade 12'];
+  const grades = ['Grade 1', 'Grade 2', 'Grade 3', 'Grade 4', 'Grade 5', 'Grade 6', 'Grade 7', 'Grade 8', 'Grade 9', 'Grade 10', 'Grade 11 - STEM - 1st Sem', 'Grade 11 - STEM - 2nd Sem', 'Grade 11 - HUMSS - 1st Sem', 'Grade 11 - HUMSS - 2nd Sem', 'Grade 11 - ABM - 1st Sem', 'Grade 11 - ABM - 2nd Sem', 'Grade 12 - STEM - 1st Sem', 'Grade 12 - STEM - 2nd Sem', 'Grade 12 - HUMSS - 1st Sem', 'Grade 12 - HUMSS - 2nd Sem', 'Grade 12 - ABM - 1st Sem', 'Grade 12 - ABM - 2nd Sem'];
   $('courseFormArea').innerHTML = `
     <div class="form-panel" style="border-left: 4px solid #5c0000;">
       <h3 style="color:#5c0000; margin-bottom:15px;">Add New Section</h3>
       <div class="form-grid">
-        <div class="field"><label>Grade Level</label>
+        <div class="field"><label>Grade Level / Track</label>
           <select id="s_grade">${grades.map(g => `<option value="${g}">${g}</option>`).join('')}</select>
         </div>
         <div class="field"><label>New Section Name</label><input id="s_section" placeholder="e.g., 3"></div>
@@ -531,7 +541,6 @@ async function saveNewSection() {
   alert(`Section ${newSec} created for ${grade}!`);
 }
 
-/* ---------- ADMIN: USERS & ACCESS (All Users) ---------- */
 function renderUsers(c) {
   const rows = db.users.map(u => [
     esc(u.username), 
@@ -545,7 +554,6 @@ function renderUsers(c) {
   </div>`;
 }
 
-/* ---------- FACULTY PAGES ---------- */
 async function renderClassRecords(c) {
   const myCourses = db.courses.filter(x => x.adviser === session.name || x.subjectTeacher === session.name);
   const groups = {};
@@ -623,7 +631,25 @@ async function markAttendance(courseCode, section, studentId, date, status) {
 function renderRegistration(c) {
   const s = currentStudent();
   const myCourseNames = db.enrollments.map(e => { const cr = db.courses.find(x => x.code === e.courseCode); return cr ? cr.name : ''; });
-  const avail = db.courses.filter(cr => (cr.gradeLevel === s.yr || s.yr.startsWith(cr.gradeLevel)) && cr.status === 'Open' && !myCourseNames.includes(cr.name));
+  
+  // Dito natin i-filter base sa track at semester ng student
+  const studentYear = s.yr.split('-')[0].trim(); // e.g. "Grade 11"
+  const studentTrack = s.yr.includes('STEM') ? 'STEM' : s.yr.includes('HUMSS') ? 'HUMSS' : s.yr.includes('ABM') ? 'ABM' : '';
+  const studentSem = s.yr.includes('2nd Sem') ? '2nd Sem' : '1st Sem';
+
+  const avail = db.courses.filter(cr => {
+    if (s.course === 'SHS') {
+      return cr.gradeLevel.includes(studentYear) && 
+             cr.gradeLevel.includes(studentTrack) && 
+             cr.gradeLevel.includes(studentSem) && 
+             cr.status === 'Open' && 
+             !myCourseNames.includes(cr.name);
+    } else {
+      // Elem / JHS
+      return (cr.gradeLevel === s.yr || s.yr.startsWith(cr.gradeLevel)) && cr.status === 'Open' && !myCourseNames.includes(cr.name);
+    }
+  });
+  
   c.innerHTML = `<div class="panel"><h2>Course Registration</h2>${simpleTable(['Code','Name','Section','Action'], avail.map(x => [esc(x.code), esc(x.name), esc(x.section), `<button class="btn" onclick="enroll('${esc(x.code)}','${esc(x.section)}')">Enroll</button>`]))}</div>`;
 }
 

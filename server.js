@@ -16,20 +16,17 @@ const db = new sqlite3.Database(dbPath, (err) => {
     else console.log("Connected to SQLite DB");
 });
 
-// ==========================================
-// AUTO-SEED (Bubuo ng bagong database tuwing mag-restart ang Render)
-// ==========================================
+// AUTO-SEED
 db.serialize(() => {
     db.get("SELECT name FROM sqlite_master WHERE type='table' AND name='users'", (err, row) => {
         if (!row) {
             console.log("⚠️ No tables found. Building database from scratch...");
             buildDatabase();
         } else {
-            // Check kung may email column na (para sa bagong features)
             db.all("PRAGMA table_info(students)", (err, cols) => {
                 const hasEmail = cols.some(c => c.name === 'email');
                 if (!hasEmail) {
-                    console.log("⚠️ Old structure detected. Dropping tables and rebuilding...");
+                    console.log("⚠️ Old structure detected. Rebuilding...");
                     db.run("DROP TABLE IF EXISTS attendance");
                     db.run("DROP TABLE IF EXISTS student_records");
                     db.run("DROP TABLE IF EXISTS enrollments");
@@ -48,7 +45,7 @@ db.serialize(() => {
 
 function buildDatabase() {
     db.serialize(() => {
-        // 1. CREATE TABLES
+        // CREATE TABLES
         db.run(`CREATE TABLE users (username TEXT PRIMARY KEY, password TEXT, name TEXT, role TEXT, section TEXT)`);
         db.run(`CREATE TABLE students (id TEXT PRIMARY KEY, last TEXT, first TEXT, mi TEXT, address TEXT, course TEXT, yr TEXT, status TEXT, enrol TEXT, username TEXT, password TEXT, birthday TEXT, email TEXT)`);
         db.run(`CREATE TABLE courses (code TEXT PRIMARY KEY, name TEXT, gradeLevel TEXT, section TEXT, capacity INTEGER, adviser TEXT, subjectTeacher TEXT, status TEXT)`);
@@ -58,11 +55,11 @@ function buildDatabase() {
         db.run(`CREATE TABLE attendance (id INTEGER PRIMARY KEY AUTOINCREMENT, courseCode TEXT, section TEXT, studentId TEXT, date TEXT, status TEXT, UNIQUE(courseCode, section, studentId, date))`);
         db.run(`CREATE TABLE student_records (id INTEGER PRIMARY KEY AUTOINCREMENT, studentId TEXT, gradeLevel TEXT, schoolYear TEXT, subject TEXT, grade REAL, status TEXT, remarks TEXT)`);
 
-        // 2. INSERT ADMIN & REGISTRAR
+        // ADMIN & REGISTRAR
         db.run(`INSERT INTO users (username, password, name, role, section) VALUES ('admin', 'admin123', 'Admin User', 'Admin', '')`);
         db.run(`INSERT INTO users (username, password, name, role, section) VALUES ('registrar', 'reg123', 'Registrar Staff', 'Registrar', '')`);
 
-        // 3. INSERT 30 TEACHERS
+        // TEACHERS
         const insertUser = db.prepare(`INSERT INTO users (username, password, name, role, section) VALUES (?, ?, ?, ?, ?)`);
         const teachers = [
             'T. John Emmanuel S.', 'T. Emily Bronte', 'T. Alan Turing', 'T. Liza Soberano', 'T. Andres Bonifacio',
@@ -78,18 +75,18 @@ function buildDatabase() {
         });
         insertUser.finalize();
 
-        // 4. INSERT STUDENTS
+        // STUDENTS (May email at specific na yr para sa sem)
         const insertStudent = db.prepare(`INSERT INTO students (id, last, first, mi, address, course, yr, status, enrol, username, password, birthday, email) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
         insertStudent.run('2023-0006', 'Dela Cruz', 'Juan', 'A', 'Mariveles, Bataan', 'Elem', 'Grade 4', 'Active', 'Enrolled', 'juandc', 'juan123', '2017-05-14', 'juan@example.com');
         insertStudent.run('2026-01523', 'Reyes', 'Maria', 'B', 'Limay, Bataan', 'SHS', 'Grade 11 - STEM - 1st Sem', 'Active', 'Enrolled', 'mariar', 'maria123', '2010-08-22', 'maria@example.com');
-        insertStudent.run('2026-0163', 'Santos', 'Pedro', 'C', 'Mariveles, Bataan', 'Elem', 'Grade 1', 'Active', 'Enrolled', 'pedros', 'pedro123', '2021-02-10', 'pedro@example.com');
         insertStudent.finalize();
 
-        // 5. GENERATE COURSES & SCHEDULES (Grades 1-12 only)
+        // COURSES & SCHEDULES
         const insertCourse = db.prepare(`INSERT INTO courses (code, name, gradeLevel, section, capacity, adviser, subjectTeacher, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`);
         const insertSchedule = db.prepare(`INSERT INTO schedules (courseCode, section, day, startTime, endTime) VALUES (?, ?, ?, ?, ?)`);
 
         const gradeConfigs = [
+            // JHS
             { level: 'Grade 1', subjects: [['LANG', 'Language'], ['READ', 'Reading'], ['MATH', 'Mathematics'], ['GMRC', 'Good Manners'], ['MAK', 'Makabansa']], capacity: 30 },
             { level: 'Grade 2', subjects: [['ENG', 'English'], ['FIL', 'Filipino'], ['MATH', 'Mathematics'], ['GMRC', 'Good Manners'], ['MAK', 'Makabansa']], capacity: 30 },
             { level: 'Grade 3', subjects: [['ENG', 'English'], ['FIL', 'Filipino'], ['MATH', 'Mathematics'], ['SCI', 'Science'], ['GMRC', 'Good Manners'], ['MAK', 'Makabansa']], capacity: 30 },
@@ -100,10 +97,33 @@ function buildDatabase() {
             { level: 'Grade 8', subjects: [['ENG', 'English'], ['FIL', 'Filipino'], ['MATH', 'Mathematics'], ['SCI', 'Science'], ['AP', 'Araling Panlipunan'], ['ESP', 'Values Ed'], ['MAPEH', 'MAPEH'], ['TLE', 'TLE']], capacity: 35 },
             { level: 'Grade 9', subjects: [['ENG', 'English'], ['FIL', 'Filipino'], ['MATH', 'Mathematics'], ['SCI', 'Science'], ['AP', 'Araling Panlipunan'], ['ESP', 'Values Ed'], ['MAPEH', 'MAPEH'], ['TLE', 'TLE']], capacity: 35 },
             { level: 'Grade 10', subjects: [['ENG', 'English'], ['FIL', 'Filipino'], ['MATH', 'Mathematics'], ['SCI', 'Science'], ['AP', 'Araling Panlipunan'], ['ESP', 'Values Ed'], ['MAPEH', 'MAPEH'], ['TLE', 'TLE']], capacity: 35 },
+            
+            // SHS STEM 1st Sem
             { level: 'Grade 11 - STEM - 1st Sem', subjects: [['ORAL', 'Oral Communication'], ['KOMU', 'Komunikasyon'], ['GENM', 'General Math'], ['EALS', 'Earth & Life Science'], ['PERD', 'Personal Dev'], ['EMPW', 'Empowerment Tech'], ['PE11', 'PE & Health 1'], ['PREC', 'Pre-Calculus'], ['CHEM1', 'Gen Chem 1']], capacity: 40 },
+            // SHS STEM 2nd Sem
             { level: 'Grade 11 - STEM - 2nd Sem', subjects: [['READ', 'Reading & Writing'], ['PAGB', 'Pagbasa'], ['STAT', 'Statistics'], ['PHYS', 'Physical Science'], ['PE11B', 'PE & Health 2'], ['PR1', 'Practical Research 1'], ['BASC', 'Basic Calculus'], ['CHEM2', 'Gen Chem 2']], capacity: 40 },
+            // SHS STEM 1st Sem (Gr 12)
             { level: 'Grade 12 - STEM - 1st Sem', subjects: [['21ST', '21st Century Lit'], ['UCSP', 'UCSP'], ['PHIL', 'Philosophy'], ['PE12', 'PE & Health 3'], ['EAPP', 'EAPP'], ['PR2', 'Practical Research 2'], ['CPAR', 'Contemporary Arts'], ['MIL', 'Media & Info Lit'], ['PHY1', 'Gen Physics 1'], ['BIO1', 'Gen Biology 1']], capacity: 40 },
-            { level: 'Grade 12 - STEM - 2nd Sem', subjects: [['PAGS', 'Pagsulat'], ['PE12B', 'PE & Health 4'], ['ENTR', 'Entrepreneurship'], ['INQ', 'Inquiries'], ['PHY2', 'Gen Physics 2'], ['BIO2', 'Gen Biology 2'], ['STEMW', 'Work Immersion']], capacity: 40 }
+            // SHS STEM 2nd Sem (Gr 12)
+            { level: 'Grade 12 - STEM - 2nd Sem', subjects: [['PAGS', 'Pagsulat'], ['PE12B', 'PE & Health 4'], ['ENTR', 'Entrepreneurship'], ['INQ', 'Inquiries'], ['PHY2', 'Gen Physics 2'], ['BIO2', 'Gen Biology 2'], ['STEMW', 'Work Immersion']], capacity: 40 },
+            
+            // SHS HUMSS 1st Sem (Gr 11)
+            { level: 'Grade 11 - HUMSS - 1st Sem', subjects: [['ORAL', 'Oral Communication'], ['KOMU', 'Komunikasyon'], ['PERD', 'Personal Dev'], ['UCSP', 'UCSP'], ['DISS', 'Disciplines & Ideas'], ['HUM1', 'Humanities 1'], ['PE11', 'PE & Health 1']], capacity: 40 },
+            // SHS HUMSS 2nd Sem (Gr 11)
+            { level: 'Grade 11 - HUMSS - 2nd Sem', subjects: [['READ', 'Reading & Writing'], ['PAGB', 'Pagbasa'], ['STAT', 'Statistics'], ['PHYS', 'Physical Science'], ['PE11B', 'PE & Health 2'], ['PR1', 'Practical Research 1'], ['HUM2', 'Humanities 2'], ['POLG', 'Politics & Governance']], capacity: 40 },
+            // SHS HUMSS 1st Sem (Gr 12)
+            { level: 'Grade 12 - HUMSS - 1st Sem', subjects: [['21ST', '21st Century Lit'], ['PHIL', 'Philosophy'], ['PE12', 'PE & Health 3'], ['EAPP', 'EAPP'], ['PR2', 'Practical Research 2'], ['CPAR', 'Contemporary Arts'], ['MIL', 'Media & Info Lit']], capacity: 40 },
+            // SHS HUMSS 2nd Sem (Gr 12)
+            { level: 'Grade 12 - HUMSS - 2nd Sem', subjects: [['PAGS', 'Pagsulat'], ['PE12B', 'PE & Health 4'], ['ENTR', 'Entrepreneurship'], ['INQ', 'Inquiries'], ['CULM', 'Culminating Activity']], capacity: 40 },
+
+            // SHS ABM 1st Sem (Gr 11)
+            { level: 'Grade 11 - ABM - 1st Sem', subjects: [['ORAL', 'Oral Communication'], ['KOMU', 'Komunikasyon'], ['PERD', 'Personal Dev'], ['FABM1', 'Fundamentals of ABM 1'], ['BUSM', 'Business Math'], ['PE11', 'PE & Health 1']], capacity: 40 },
+            // SHS ABM 2nd Sem (Gr 11)
+            { level: 'Grade 11 - ABM - 2nd Sem', subjects: [['READ', 'Reading & Writing'], ['PAGB', 'Pagbasa'], ['STAT', 'Statistics'], ['PE11B', 'PE & Health 2'], ['PR1', 'Practical Research 1'], ['FABM2', 'Fundamentals of ABM 2'], ['BUSF', 'Business Finance']], capacity: 40 },
+            // SHS ABM 1st Sem (Gr 12)
+            { level: 'Grade 12 - ABM - 1st Sem', subjects: [['21ST', '21st Century Lit'], ['PHIL', 'Philosophy'], ['PE12', 'PE & Health 3'], ['EAPP', 'EAPP'], ['PR2', 'Practical Research 2'], ['CPAR', 'Contemporary Arts'], ['MIL', 'Media & Info Lit']], capacity: 40 },
+            // SHS ABM 2nd Sem (Gr 12)
+            { level: 'Grade 12 - ABM - 2nd Sem', subjects: [['PAGS', 'Pagsulat'], ['PE12B', 'PE & Health 4'], ['ENTR', 'Entrepreneurship'], ['INQ', 'Inquiries'], ['BUSR', 'Business Research']], capacity: 40 }
         ];
 
         const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
@@ -137,20 +157,18 @@ function buildDatabase() {
 
         insertCourse.finalize();
         insertSchedule.finalize(() => {
-            console.log("✅ Database successfully created with all courses, teachers, and students.");
+            console.log("✅ Database successfully created with 1st and 2nd Semester configurations.");
         });
     });
 }
 
-// ==========================================
 // API ROUTES
-// ==========================================
 app.post('/api/login', (req, res) => {
     const { username, password } = req.body;
     if (!username || !password) return res.status(400).json({ error: "Username and password required" });
     db.get("SELECT * FROM users WHERE username = ? AND password = ?", [username, password], (err, user) => {
         if (err) return res.status(500).json({ error: err.message });
-        if (!user) return res.status(401).json({ error: "Invalid username or password" });
+        if (!user) return res.status(401).json({ error: "Invalid credentials" });
         res.json(user);
     });
 });
