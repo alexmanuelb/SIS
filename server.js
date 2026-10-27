@@ -51,7 +51,7 @@ db.serialize(() => {
 function buildDatabase() {
     db.serialize(() => {
         db.run(`CREATE TABLE settings (key TEXT PRIMARY KEY, value TEXT)`);
-        db.run(`INSERT INTO settings (key, value) VALUES ('active_term', '1st Sem')`);
+        db.run(`INSERT INTO settings (key, value) VALUES ('active_term', '1st Semester')`);
 
         db.run(`CREATE TABLE users (username TEXT PRIMARY KEY, password TEXT, name TEXT, role TEXT, section TEXT)`);
         db.run(`CREATE TABLE students (id TEXT PRIMARY KEY, last TEXT, first TEXT, mi TEXT, address TEXT, course TEXT, yr TEXT, status TEXT, enrol TEXT, username TEXT, password TEXT, birthday TEXT, email TEXT, age TEXT, gender TEXT, guardianName TEXT, guardianContact TEXT)`);
@@ -82,8 +82,8 @@ function buildDatabase() {
 
         const insertStudent = db.prepare(`INSERT INTO students (id, last, first, mi, address, course, yr, status, enrol, username, password, birthday, email, age, gender, guardianName, guardianContact) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
         insertStudent.run('2023-0006', 'Dela Cruz', 'Juan', 'A', 'Mariveles, Bataan', 'Elem', 'Grade 4', 'Active', 'Enrolled', 'juandc', 'juan123', '2017-05-14', 'juan@example.com', '8', 'Male', 'Maria Dela Cruz', '0917-111-2222');
-        insertStudent.run('2026-01523', 'Reyes', 'Maria', 'B', 'Limay, Bataan', 'SHS', 'Grade 11 - STEM - 1st Sem', 'Active', 'Enrolled', 'mariar', 'maria123', '2010-08-22', 'maria@example.com', '15', 'Female', 'Jose Reyes', '0918-333-4444');
-        insertStudent.run('2026-0011', 'Manuel', 'Alexandra', 'B.', 'Mariveles, Bataan', 'SHS', 'Grade 12 - STEM - 1st Sem', 'Active', 'Enrolled', 'alexandram', 'alexandra123', '2009-03-30', 'alexandra@example.com', '17', 'Female', 'Rosa Manuel', '0921-999-0000');
+        insertStudent.run('2026-01523', 'Reyes', 'Maria', 'B', 'Limay, Bataan', 'SHS', 'Grade 11 - STEM - 1st Semester', 'Active', 'Enrolled', 'mariar', 'maria123', '2010-08-22', 'maria@example.com', '15', 'Female', 'Jose Reyes', '0918-333-4444');
+        insertStudent.run('2026-0011', 'Manuel', 'Alexandra', 'B.', 'Mariveles, Bataan', 'SHS', 'Grade 12 - STEM - 1st Semester', 'Active', 'Enrolled', 'alexandram', 'alexandra123', '2009-03-30', 'alexandra@example.com', '17', 'Female', 'Rosa Manuel', '0921-999-0000');
         insertStudent.finalize();
 
         const insertCourse = db.prepare(`INSERT INTO courses (code, name, gradeLevel, section, capacity, adviser, subjectTeacher, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`);
@@ -98,10 +98,10 @@ function buildDatabase() {
             { level: 'Grade 8', subjects: [['ENG', 'English'], ['FIL', 'Filipino'], ['MATH', 'Mathematics'], ['SCI', 'Science'], ['AP', 'Araling Panlipunan'], ['ESP', 'Values Ed'], ['MAPEH', 'MAPEH'], ['TLE', 'TLE']], capacity: 35 },
             { level: 'Grade 9', subjects: [['ENG', 'English'], ['FIL', 'Filipino'], ['MATH', 'Mathematics'], ['SCI', 'Science'], ['AP', 'Araling Panlipunan'], ['ESP', 'Values Ed'], ['MAPEH', 'MAPEH'], ['TLE', 'TLE']], capacity: 35 },
             { level: 'Grade 10', subjects: [['ENG', 'English'], ['FIL', 'Filipino'], ['MATH', 'Mathematics'], ['SCI', 'Science'], ['AP', 'Araling Panlipunan'], ['ESP', 'Values Ed'], ['MAPEH', 'MAPEH'], ['TLE', 'TLE']], capacity: 35 },
-            { level: 'Grade 11 - STEM - 1st Sem', subjects: [['ORAL', 'Oral Communication'], ['KOMU', 'Komunikasyon'], ['GENM', 'General Math'], ['EALS', 'Earth & Life Science'], ['PERD', 'Personal Dev'], ['EMPW', 'Empowerment Tech'], ['PE11', 'PE & Health 1'], ['PREC', 'Pre-Calculus'], ['CHEM1', 'Gen Chem 1']], capacity: 40 },
-            { level: 'Grade 11 - STEM - 2nd Sem', subjects: [['READ', 'Reading & Writing'], ['PAGB', 'Pagbasa'], ['STAT', 'Statistics'], ['PHYS', 'Physical Science'], ['PE11B', 'PE & Health 2'], ['PR1', 'Practical Research 1'], ['BASC', 'Basic Calculus'], ['CHEM2', 'Gen Chem 2']], capacity: 40 },
-            { level: 'Grade 12 - STEM - 1st Sem', subjects: [['21ST', '21st Century Lit'], ['UCSP', 'UCSP'], ['PHIL', 'Philosophy'], ['PE12', 'PE & Health 3'], ['EAPP', 'EAPP'], ['PR2', 'Practical Research 2'], ['CPAR', 'Contemporary Arts'], ['MIL', 'Media & Info Lit'], ['PHY1', 'Gen Physics 1'], ['BIO1', 'Gen Biology 1']], capacity: 40 },
-            { level: 'Grade 12 - STEM - 2nd Sem', subjects: [['PAGS', 'Pagsulat'], ['PE12B', 'PE & Health 4'], ['ENTR', 'Entrepreneurship'], ['INQ', 'Inquiries'], ['PHY2', 'Gen Physics 2'], ['BIO2', 'Gen Biology 2'], ['STEMW', 'Work Immersion']], capacity: 40 }
+            { level: 'Grade 11 - STEM - 1st Semester', subjects: [['ORAL', 'Oral Communication'], ['KOMU', 'Komunikasyon'], ['GENM', 'General Math'], ['EALS', 'Earth & Life Science'], ['PERD', 'Personal Dev'], ['EMPW', 'Empowerment Tech'], ['PE11', 'PE & Health 1'], ['PREC', 'Pre-Calculus'], ['CHEM1', 'Gen Chem 1']], capacity: 40 },
+            { level: 'Grade 11 - STEM - 2nd Semester', subjects: [['READ', 'Reading & Writing'], ['PAGB', 'Pagbasa'], ['STAT', 'Statistics'], ['PHYS', 'Physical Science'], ['PE11B', 'PE & Health 2'], ['PR1', 'Practical Research 1'], ['BASC', 'Basic Calculus'], ['CHEM2', 'Gen Chem 2']], capacity: 40 },
+            { level: 'Grade 12 - STEM - 1st Semester', subjects: [['21ST', '21st Century Lit'], ['UCSP', 'UCSP'], ['PHIL', 'Philosophy'], ['PE12', 'PE & Health 3'], ['EAPP', 'EAPP'], ['PR2', 'Practical Research 2'], ['CPAR', 'Contemporary Arts'], ['MIL', 'Media & Info Lit'], ['PHY1', 'Gen Physics 1'], ['BIO1', 'Gen Biology 1']], capacity: 40 },
+            { level: 'Grade 12 - STEM - 2nd Semester', subjects: [['PAGS', 'Pagsulat'], ['PE12B', 'PE & Health 4'], ['ENTR', 'Entrepreneurship'], ['INQ', 'Inquiries'], ['PHY2', 'Gen Physics 2'], ['BIO2', 'Gen Biology 2'], ['STEMW', 'Work Immersion']], capacity: 40 }
         ];
 
         let teacherIndex = 0;
@@ -127,7 +127,7 @@ function buildDatabase() {
     });
 }
 
-// GENERATE SCHEDULES (2x a week, no overlap, until 3PM, Mon-Fri)
+// GENERATE SCHEDULES
 function generateSchedules() {
     db.all("SELECT * FROM courses", [], (err, courses) => {
         if (err || !courses) return;
@@ -142,7 +142,7 @@ function generateSchedules() {
                 groupedBySection[key].push(c);
             });
 
-            const teacherSchedule = {}; // Prevents overlap
+            const teacherSchedule = {}; 
 
             Object.keys(groupedBySection).forEach(key => {
                 const [gradeLevel, section] = key.split('|');
@@ -199,10 +199,10 @@ app.post('/api/login', (req, res) => {
     });
 });
 
-// Settings Route for Global Term
+// School Term Settings
 app.get('/api/settings/term', (req, res) => {
     db.get("SELECT value FROM settings WHERE key = 'active_term'", [], (err, row) => {
-        if(err || !row) return res.json({ term: '1st Sem' });
+        if(err || !row) return res.json({ term: '1st Semester' });
         res.json({ term: row.value });
     });
 });
@@ -302,7 +302,7 @@ app.post('/api/enroll', (req, res) => {
                     db.run(`UPDATE courses SET status = 'Closed' WHERE code = ?`, [courseCode]);
                     return res.status(400).json({ error: "Course is full" });
                 }
-                db.run(`INSERT INTO enrollments (studentId, courseCode, section, term) VALUES (?,?,?,?)`, [studentId, courseCode, section, term || '1st Sem'], (e) => {
+                db.run(`INSERT INTO enrollments (studentId, courseCode, section, term) VALUES (?,?,?,?)`, [studentId, courseCode, section, term || '1st Semester'], (e) => {
                     if (e) return res.status(400).json({ error: e.message });
                     res.json({ message: "Enrolled" });
                 });

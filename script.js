@@ -1,4 +1,4 @@
-let db = { students: [], courses: [], users: [], enrollments: [], grades: [], schedules: [], attendance: [], records: [], activeTerm: '1st Sem' };
+let db = { students: [], courses: [], users: [], enrollments: [], grades: [], schedules: [], attendance: [], records: [], activeTerm: '1st Semester' };
 let session = null;
 const $ = id => document.getElementById(id);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -16,7 +16,7 @@ async function doLogin() {
     if (status !== 200) return alert(data.error);
     session = data;
     
-    // Fetch all necessary data including the active term
+    // Fetch active term globally
     const termRes = await (await fetch('/api/settings/term')).json();
     db.activeTerm = termRes.term;
 
@@ -124,7 +124,7 @@ function currentStudent() {
   return db.students.find(s => s.username === session.username) || null;
 }
 
-// Admin Dashboard with Global Term Settings
+// Admin Dashboard with Global School Term
 function renderAdminDashboard(c) {
   const totalFaculty = db.users.filter(u => u.role === 'Faculty').length;
   c.innerHTML = `
@@ -140,11 +140,11 @@ function renderAdminDashboard(c) {
         <p style="color:#666; font-size:15px;">Welcome back, <b>${esc(session.name)}</b>.</p>
       </div>
       <div style="background:#f9eaea; padding:15px 20px; border-radius:8px; border-left:4px solid #5c0000;">
-        <label style="font-size:12px; font-weight:bold; color:#5c0000; text-transform:uppercase;">Active Enrollment Term:</label>
+        <label style="font-size:12px; font-weight:bold; color:#5c0000; text-transform:uppercase;">Global School Term:</label>
         <div style="display:flex; gap:10px; margin-top:5px;">
           <select id="globalTermSelect" style="padding:8px; border-radius:6px; border:1px solid #ccc; font-weight:bold; color:#5c0000;">
-            <option value="1st Sem" ${db.activeTerm === '1st Sem' ? 'selected' : ''}>1st Semester</option>
-            <option value="2nd Sem" ${db.activeTerm === '2nd Sem' ? 'selected' : ''}>2nd Semester</option>
+            <option value="1st Semester" ${db.activeTerm === '1st Semester' ? 'selected' : ''}>1st Semester</option>
+            <option value="2nd Semester" ${db.activeTerm === '2nd Semester' ? 'selected' : ''}>2nd Semester</option>
           </select>
           <button class="btn" onclick="updateGlobalTerm()">Update</button>
         </div>
@@ -156,7 +156,7 @@ async function updateGlobalTerm() {
   const newTerm = $('globalTermSelect').value;
   await fetch('/api/settings/term', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ term: newTerm }) });
   db.activeTerm = newTerm;
-  alert('Active Enrollment Term updated to ' + newTerm + '. Student report of grades will now reflect this term.');
+  alert('Global School Term updated to ' + newTerm + '. Student records and schedules will now reflect this term.');
 }
 
 function renderFacultyDashboard(c) {
@@ -211,7 +211,7 @@ function openStudentForm(id) {
   const nextId = s ? s.id : '2026-' + Math.floor(1000 + Math.random() * 9000);
   
   let currentYear = s ? s.yr : 'Grade 1';
-  let currentSem = '1st Sem';
+  let currentSem = '1st Semester';
   let currentTrack = 'STEM';
   let currentSection = '1';
   
@@ -269,8 +269,8 @@ function openStudentForm(id) {
         <div class="field" id="shs_sem_group" style="display: ${s?.course === 'SHS' ? 'block' : 'none'};">
           <label>Semester</label>
           <select id="f_sem">
-            <option value="1st Sem" ${currentSem === '1st Sem' ? 'selected' : ''}>1st Semester</option>
-            <option value="2nd Sem" ${currentSem === '2nd Sem' ? 'selected' : ''}>2nd Semester</option>
+            <option value="1st Semester" ${currentSem === '1st Semester' ? 'selected' : ''}>1st Semester</option>
+            <option value="2nd Semester" ${currentSem === '2nd Semester' ? 'selected' : ''}>2nd Semester</option>
           </select>
         </div>
         <div class="field"><label>Status</label>
@@ -492,7 +492,7 @@ async function updateFaculty(username) {
 }
 
 function renderCourses(c) {
-  const grades = ['Grade 1', 'Grade 2', 'Grade 3', 'Grade 4', 'Grade 5', 'Grade 6', 'Grade 7', 'Grade 8', 'Grade 9', 'Grade 10', 'Grade 11 - STEM - 1st Sem', 'Grade 11 - STEM - 2nd Sem', 'Grade 11 - HUMSS - 1st Sem', 'Grade 11 - HUMSS - 2nd Sem', 'Grade 11 - ABM - 1st Sem', 'Grade 11 - ABM - 2nd Sem', 'Grade 12 - STEM - 1st Sem', 'Grade 12 - STEM - 2nd Sem', 'Grade 12 - HUMSS - 1st Sem', 'Grade 12 - HUMSS - 2nd Sem', 'Grade 12 - ABM - 1st Sem', 'Grade 12 - ABM - 2nd Sem'];
+  const grades = ['Grade 1', 'Grade 2', 'Grade 3', 'Grade 4', 'Grade 5', 'Grade 6', 'Grade 7', 'Grade 8', 'Grade 9', 'Grade 10', 'Grade 11 - STEM - 1st Semester', 'Grade 11 - STEM - 2nd Semester', 'Grade 11 - HUMSS - 1st Semester', 'Grade 11 - HUMSS - 2nd Semester', 'Grade 11 - ABM - 1st Semester', 'Grade 11 - ABM - 2nd Semester', 'Grade 12 - STEM - 1st Semester', 'Grade 12 - STEM - 2nd Semester', 'Grade 12 - HUMSS - 1st Semester', 'Grade 12 - HUMSS - 2nd Semester', 'Grade 12 - ABM - 1st Semester', 'Grade 12 - ABM - 2nd Semester'];
   
   c.innerHTML = `<div class="panel">
     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
@@ -527,7 +527,7 @@ function renderCoursesTable() {
 }
 
 function openAddCourseForm() {
-  const grades = ['Grade 1', 'Grade 2', 'Grade 3', 'Grade 4', 'Grade 5', 'Grade 6', 'Grade 7', 'Grade 8', 'Grade 9', 'Grade 10', 'Grade 11 - STEM - 1st Sem', 'Grade 11 - STEM - 2nd Sem', 'Grade 11 - HUMSS - 1st Sem', 'Grade 11 - HUMSS - 2nd Sem', 'Grade 11 - ABM - 1st Sem', 'Grade 11 - ABM - 2nd Sem', 'Grade 12 - STEM - 1st Sem', 'Grade 12 - STEM - 2nd Sem', 'Grade 12 - HUMSS - 1st Sem', 'Grade 12 - HUMSS - 2nd Sem', 'Grade 12 - ABM - 1st Sem', 'Grade 12 - ABM - 2nd Sem'];
+  const grades = ['Grade 1', 'Grade 2', 'Grade 3', 'Grade 4', 'Grade 5', 'Grade 6', 'Grade 7', 'Grade 8', 'Grade 9', 'Grade 10', 'Grade 11 - STEM - 1st Semester', 'Grade 11 - STEM - 2nd Semester', 'Grade 11 - HUMSS - 1st Semester', 'Grade 11 - HUMSS - 2nd Semester', 'Grade 11 - ABM - 1st Semester', 'Grade 11 - ABM - 2nd Semester', 'Grade 12 - STEM - 1st Semester', 'Grade 12 - STEM - 2nd Semester', 'Grade 12 - HUMSS - 1st Semester', 'Grade 12 - HUMSS - 2nd Semester', 'Grade 12 - ABM - 1st Semester', 'Grade 12 - ABM - 2nd Semester'];
   $('courseFormArea').innerHTML = `
     <div class="form-panel" style="border-left: 4px solid #5c0000;">
       <h3 style="color:#5c0000; margin-bottom:15px;">Add New Course</h3>
@@ -564,7 +564,7 @@ async function saveNewCourse() {
 }
 
 function openAddSectionForm() {
-  const grades = ['Grade 1', 'Grade 2', 'Grade 3', 'Grade 4', 'Grade 5', 'Grade 6', 'Grade 7', 'Grade 8', 'Grade 9', 'Grade 10', 'Grade 11 - STEM - 1st Sem', 'Grade 11 - STEM - 2nd Sem', 'Grade 11 - HUMSS - 1st Sem', 'Grade 11 - HUMSS - 2nd Sem', 'Grade 11 - ABM - 1st Sem', 'Grade 11 - ABM - 2nd Sem', 'Grade 12 - STEM - 1st Sem', 'Grade 12 - STEM - 2nd Sem', 'Grade 12 - HUMSS - 1st Sem', 'Grade 12 - HUMSS - 2nd Sem', 'Grade 12 - ABM - 1st Sem', 'Grade 12 - ABM - 2nd Sem'];
+  const grades = ['Grade 1', 'Grade 2', 'Grade 3', 'Grade 4', 'Grade 5', 'Grade 6', 'Grade 7', 'Grade 8', 'Grade 9', 'Grade 10', 'Grade 11 - STEM - 1st Semester', 'Grade 11 - STEM - 2nd Semester', 'Grade 11 - HUMSS - 1st Semester', 'Grade 11 - HUMSS - 2nd Semester', 'Grade 11 - ABM - 1st Semester', 'Grade 11 - ABM - 2nd Semester', 'Grade 12 - STEM - 1st Semester', 'Grade 12 - STEM - 2nd Semester', 'Grade 12 - HUMSS - 1st Semester', 'Grade 12 - HUMSS - 2nd Semester', 'Grade 12 - ABM - 1st Semester', 'Grade 12 - ABM - 2nd Semester'];
   $('courseFormArea').innerHTML = `
     <div class="form-panel" style="border-left: 4px solid #5c0000;">
       <h3 style="color:#5c0000; margin-bottom:15px;">Add New Section</h3>
@@ -710,7 +710,7 @@ function renderRegistration(c) {
   
   const studentYear = s.yr.split('-')[0].trim(); 
   const studentTrack = s.yr.includes('STEM') ? 'STEM' : s.yr.includes('HUMSS') ? 'HUMSS' : s.yr.includes('ABM') ? 'ABM' : '';
-  const studentSem = s.yr.includes('2nd Sem') ? '2nd Sem' : '1st Sem';
+  const studentSem = s.yr.includes('2nd Semester') ? '2nd Semester' : '1st Semester';
   
   let studentSec = '1'; 
   if (s.yr.includes('Sec ')) {
@@ -735,6 +735,7 @@ function renderRegistration(c) {
   </div>`;
 }
 
+// UPDATED SCHEDULE (Follows Global Term)
 async function renderSchedule(c) {
   const s = currentStudent();
   
@@ -742,8 +743,8 @@ async function renderSchedule(c) {
   let queryYr = s.yr;
   if (s.course === 'SHS') {
      const studentTrack = s.yr.includes('STEM') ? 'STEM' : s.yr.includes('HUMSS') ? 'HUMSS' : s.yr.includes('ABM') ? 'ABM' : '';
-     const studentSem = s.yr.includes('2nd Sem') ? '2nd Sem' : '1st Sem';
-     queryYr = `${studentYear} - ${studentTrack} - ${studentSem}`;
+     // Use the active term set by the Admin
+     queryYr = `${studentYear} - ${studentTrack} - ${db.activeTerm}`;
   }
   
   let studentSec = '1'; 
@@ -754,12 +755,12 @@ async function renderSchedule(c) {
   const sched = await (await fetch(`/api/schedules/${encodeURIComponent(queryYr)}/${studentSec}`)).json();
   
   if (sched.length === 0) {
-    c.innerHTML = `<div class="panel"><h2>Class Schedule</h2><p style="color:#999;">No schedule found for your section.</p></div>`;
+    c.innerHTML = `<div class="panel"><h2>Class Schedule</h2><p style="color:#999;">No schedule found for ${esc(db.activeTerm)}.</p></div>`;
     return;
   }
 
   const daysOrder = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday']; 
-  let html = `<div class="panel"><h2>Class Schedule</h2><p style="margin-bottom:15px; color:#666;">Weekly schedule for <b>${esc(s.yr)}</b></p>
+  let html = `<div class="panel"><h2>Class Schedule</h2><p style="margin-bottom:15px; color:#666;">Weekly schedule for <b>${esc(s.yr)}</b> | <b>${esc(db.activeTerm)}</b></p>
     <div style="display:grid; gap:20px;">`;
 
   daysOrder.forEach(day => {
@@ -790,23 +791,21 @@ async function renderSchedule(c) {
   c.innerHTML = html;
 }
 
-// UPDATED REPORT OF GRADES (Filters by active term, no Print COR button)
+// UPDATED REPORT OF GRADES (Follows Global Term, no Print COR button)
 async function renderProfileGrades(c) {
   const s = currentStudent();
   
-  // Get term from student's year level, but filter by the Admin's active term
   const studentYear = s.yr.split('-')[0].trim(); 
   const studentTrack = s.yr.includes('STEM') ? 'STEM' : s.yr.includes('HUMSS') ? 'HUMSS' : s.yr.includes('ABM') ? 'ABM' : '';
-  
   let studentSec = '1';
   if (s.yr.includes('Sec ')) studentSec = s.yr.split('Sec ')[1].trim();
 
-  // Filter subjects based on the Active Term set by Admin
+  // Filter subjects based on the Global Active Term
   const mySubjects = db.courses.filter(cr => {
     if (s.course === 'SHS') {
       return cr.gradeLevel.includes(studentYear) && 
              cr.gradeLevel.includes(studentTrack) && 
-             cr.gradeLevel.includes(db.activeTerm) && // Filter using active term
+             cr.gradeLevel.includes(db.activeTerm) && 
              cr.section === studentSec;
     } else {
       return cr.gradeLevel.startsWith(studentYear) && cr.section === studentSec;
