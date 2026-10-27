@@ -21,7 +21,54 @@ const db = new sqlite3.Database(dbPath, (err) => {
    ========================================================= */
 db.get("SELECT name FROM sqlite_master WHERE type='table' AND name='users'", (err, row) => {
     if (!row) {
-        console.log("⚠️ No tables found. Please run `node setup.js` first to initialize the database.");
+        console.log("⚠️ No tables found. Auto-seeding database...");
+        db.serialize(() => {
+            // CREATE ALL TABLES
+            db.run(`CREATE TABLE users (username TEXT PRIMARY KEY, password TEXT, name TEXT, role TEXT, section TEXT)`);
+            db.run(`CREATE TABLE students (id TEXT PRIMARY KEY, last TEXT, first TEXT, mi TEXT, address TEXT, course TEXT, yr TEXT, status TEXT, enrol TEXT, username TEXT, password TEXT, birthday TEXT)`);
+            db.run(`CREATE TABLE courses (code TEXT PRIMARY KEY, name TEXT, gradeLevel TEXT, section TEXT, capacity INTEGER, adviser TEXT, status TEXT)`);
+            db.run(`CREATE TABLE enrollments (id INTEGER PRIMARY KEY AUTOINCREMENT, studentId TEXT, courseCode TEXT, section TEXT, term TEXT)`);
+            db.run(`CREATE TABLE grades (id INTEGER PRIMARY KEY AUTOINCREMENT, studentId TEXT, courseCode TEXT, courseName TEXT, grade REAL, term TEXT)`);
+            db.run(`CREATE TABLE schedules (id INTEGER PRIMARY KEY AUTOINCREMENT, courseCode TEXT, section TEXT, day TEXT, startTime TEXT, endTime TEXT, UNIQUE(courseCode, section, day, startTime))`);
+            db.run(`CREATE TABLE attendance (id INTEGER PRIMARY KEY AUTOINCREMENT, courseCode TEXT, section TEXT, studentId TEXT, date TEXT, status TEXT, UNIQUE(courseCode, section, studentId, date))`);
+            db.run(`CREATE TABLE student_records (id INTEGER PRIMARY KEY AUTOINCREMENT, studentId TEXT, gradeLevel TEXT, schoolYear TEXT, subject TEXT, grade REAL, status TEXT, remarks TEXT)`);
+
+            // INSERT SEED DATA
+            const insertUser = db.prepare(`INSERT INTO users (username, password, name, role, section) VALUES (?, ?, ?, ?, ?)`);
+            [
+                ['admin', 'admin123', 'Admin User', 'Admin', ''],
+                ['talan', 'alan123', 'T. Alan Turing', 'Faculty', 'Math Dept'],
+                ['temily', 'emily123', 'T. Emily Bronte', 'Faculty', 'English Dept'],
+                ['juandc', 'juan123', 'Juan Dela Cruz', 'Student', 'Grade 4'],
+                ['mariar', 'maria123', 'Maria Reyes', 'Student', 'Grade 11 - STEM - 1st Sem']
+            ].forEach(u => insertUser.run(u));
+            insertUser.finalize();
+
+            const insertStudent = db.prepare(`INSERT INTO students (id, last, first, mi, address, course, yr, status, enrol, username, password, birthday) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
+            [
+                ['2023-0006', 'Dela Cruz', 'Juan', 'A', 'Mariveles, Bataan', 'Elem', 'Grade 4', 'Active', 'Enrolled', 'juandc', 'juan123', '2017-05-14'],
+                ['2026-01523', 'Reyes', 'Maria', 'B', 'Limay, Bataan', 'SHS', 'Grade 11 - STEM - 1st Sem', 'Active', 'Enrolled', 'mariar', 'maria123', '2010-08-22']
+            ].forEach(s => insertStudent.run(s));
+            insertStudent.finalize();
+
+            const insertCourse = db.prepare(`INSERT INTO courses (code, name, gradeLevel, section, capacity, adviser, status) VALUES (?, ?, ?, ?, ?, ?, ?)`);
+            [
+                ['ENG4-1', 'English 4', 'Grade 4', '1', 30, 'T. Emily Bronte', 'Open'],
+                ['MATH4-1', 'Mathematics 4', 'Grade 4', '1', 30, 'T. Alan Turing', 'Open'],
+                ['ORAL11-1', 'Oral Communication', 'Grade 11 - STEM - 1st Sem', '1', 40, 'T. Emily Bronte', 'Open']
+            ].forEach(c => insertCourse.run(c));
+            insertCourse.finalize();
+
+            const insertSchedule = db.prepare(`INSERT INTO schedules (courseCode, section, day, startTime, endTime) VALUES (?, ?, ?, ?, ?)`);
+            [
+                ['ENG4-1', '1', 'Monday', '07:00', '08:00'],
+                ['MATH4-1', '1', 'Tuesday', '07:00', '08:00'],
+                ['ORAL11-1', '1', 'Monday', '08:00', '09:00']
+            ].forEach(s => insertSchedule.run(s));
+            insertSchedule.finalize();
+
+            console.log("✅ Auto-seed complete! Database is ready.");
+        });
     } else {
         console.log("✅ Tables present. Server ready.");
     }

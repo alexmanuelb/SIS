@@ -2,59 +2,104 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>EduTrack SIS</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
 <style>
-  * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', sans-serif; }
-  body { background: #f4f4f4; }
-  .login-screen { display: flex; align-items: center; justify-content: center; height: 100vh;
-    background: linear-gradient(135deg, #5c0000, #800000); }
-  .login-box { background: white; padding: 40px; border-radius: 12px; width: 350px; box-shadow: 0 8px 30px rgba(0,0,0,0.3); }
-  .login-box h1 { color: #5c0000; text-align: center; margin-bottom: 25px; font-size: 24px; }
-  .login-box label { font-size: 13px; color: #555; font-weight: bold; }
-  .login-box input { width: 100%; padding: 10px; margin: 6px 0 15px; border: 1px solid #ccc; border-radius: 6px; }
-  .login-box button { width: 100%; padding: 12px; background: #800000; color: white; border: none;
-    border-radius: 6px; font-weight: bold; cursor: pointer; }
-  .login-box button:hover { background: #5c0000; }
-  #appScreen { display: none; height: 100vh; flex-direction: row; }
-  #sidebar { width: 230px; background: #5c0000; color: white; padding: 15px; display: flex; flex-direction: column; }
-  #sidebar button { background: transparent; border: none; color: #ffcccc; padding: 10px; text-align: left;
-    cursor: pointer; border-radius: 5px; font-size: 14px; }
+  * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Inter', sans-serif; }
+  body { background-color: #ffffff; color: #333; height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+  
+  /* TOP NAVBAR */
+  .navbar { background-color: #5c0000; padding: 15px 40px; display: flex; align-items: center; justify-content: space-between; color: white; }
+  .navbar-brand { display: flex; align-items: center; gap: 15px; font-size: 20px; font-weight: 700; letter-spacing: 0.5px; }
+  .navbar-brand svg { width: 35px; height: 35px; fill: #ffcccc; }
+  .navbar-user { font-size: 14px; font-weight: 600; }
+
+  /* LOGIN SPLIT SCREEN */
+  .login-container { display: flex; flex: 1; }
+  .login-left { flex: 1; display: flex; flex-direction: column; justify-content: center; padding: 0 10%; }
+  .login-left h1 { font-size: 64px; color: #5c0000; line-height: 1.1; font-weight: 800; letter-spacing: -1px; }
+  .login-right { flex: 1; display: flex; align-items: center; justify-content: center; background-color: #ffffff; padding-right: 10%; }
+  
+  .login-box { background: white; padding: 40px; border-radius: 12px; width: 100%; max-width: 420px; box-shadow: 0 10px 40px rgba(0,0,0,0.08); border: 1px solid #eee; }
+  
+  /* TOGGLE BUTTONS */
+  .role-toggle { display: flex; gap: 10px; margin-bottom: 25px; }
+  .role-btn { flex: 1; padding: 12px; border: none; border-radius: 6px; font-weight: 600; font-size: 14px; cursor: pointer; transition: 0.3s; }
+  .role-btn.active { background: #5c0000; color: white; }
+  .role-btn.inactive { background: #a0a0a0; color: white; }
+
+  .login-box label { font-size: 13px; color: #333; font-weight: 600; display: block; margin-bottom: 8px; }
+  .input-group { position: relative; margin-bottom: 20px; }
+  .login-box input { width: 100%; padding: 14px; border: 1px solid #ccc; border-radius: 6px; font-size: 14px; outline: none; }
+  .login-box input:focus { border-color: #5c0000; }
+  .eye-icon { position: absolute; right: 15px; top: 50%; transform: translateY(-50%); cursor: pointer; color: #888; }
+
+  .login-box button.login-btn { width: 100%; padding: 14px; background: #5c0000; color: white; border: none; border-radius: 6px; font-weight: 700; font-size: 15px; cursor: pointer; display: flex; justify-content: center; align-items: center; gap: 8px; }
+  .login-box button.login-btn:hover { background: #450000; }
+
+  /* APP SCREEN */
+  #appScreen { display: none; height: 100vh; flex-direction: row; background: #f4f4f4; }
+  #sidebar { width: 230px; background: #5c0000; color: white; padding: 20px 10px; display: flex; flex-direction: column; }
+  .portal-title { font-size: 12px; letter-spacing: 1px; opacity: 0.8; margin-bottom: 20px; padding-left: 10px; font-weight: 600; }
+  #sidebar button { background: transparent; border: none; color: #ffcccc; padding: 12px 15px; text-align: left; cursor: pointer; border-radius: 5px; font-size: 14px; margin-bottom: 5px; width: 100%; }
   #sidebar button:hover { background: #800000; color: white; }
-  #sidebar .logout-btn { margin-top: auto; background: white; color: #5c0000; font-weight: bold; }
-  #main { flex: 1; padding: 20px; overflow-y: auto; }
-  .topbar { background: white; padding: 15px; border-radius: 8px; margin-bottom: 15px;
-    display: flex; justify-content: space-between; }
-  .panel { background: white; padding: 20px; border-radius: 8px; margin-bottom: 15px; }
+  #sidebar .logout-btn { margin-top: auto; background: white; color: #5c0000; font-weight: bold; text-align: center; }
+  #main { flex: 1; padding: 30px; overflow-y: auto; }
+  .topbar { background: white; padding: 15px 20px; border-radius: 8px; margin-bottom: 20px; display: flex; justify-content: space-between; box-shadow: 0 2px 10px rgba(0,0,0,0.05); }
+  .panel { background: white; padding: 20px; border-radius: 8px; margin-bottom: 20px; box-shadow: 0 2px 10px rgba(0,0,0,0.05); }
   .panel h2 { color: #5c0000; margin-bottom: 15px; }
   table { width: 100%; border-collapse: collapse; margin-top: 10px; }
-  th, td { padding: 8px; border-bottom: 1px solid #eee; font-size: 13px; text-align: left; }
+  th, td { padding: 12px; border-bottom: 1px solid #eee; font-size: 13px; text-align: left; }
   th { background: #5c0000; color: white; }
-  .btn { padding: 8px 14px; background: #800000; color: white; border: none;
-    border-radius: 6px; cursor: pointer; font-size: 13px; }
+  .btn { padding: 8px 14px; background: #800000; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 13px; }
   .btn.secondary { background: #ccc; color: #333; }
-  .folder { background: #f9eaea; padding: 10px; margin: 6px 0; border-left: 4px solid #800000;
-    border-radius: 4px; cursor: pointer; }
+  .folder { background: #f9eaea; padding: 12px; margin: 8px 0; border-left: 4px solid #800000; border-radius: 4px; cursor: pointer; font-weight: 600; color: #5c0000; }
   .folder:hover { background: #f0d5d5; }
-  .field { margin-bottom: 12px; }
-  .field label { display: block; font-size: 12px; font-weight: bold; color: #5c0000; margin-bottom: 4px; }
-  .field input, .field select { width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 6px; }
-  .badge { padding: 3px 8px; border-radius: 10px; font-size: 11px; }
+  .field { margin-bottom: 15px; }
+  .field label { display: block; font-size: 12px; font-weight: bold; color: #5c0000; margin-bottom: 6px; }
+  .field input, .field select { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 6px; }
+  .badge { padding: 4px 10px; border-radius: 12px; font-size: 11px; font-weight: 600; }
   .badge.active { background: #d3f2dd; color: #186a3b; }
   .badge.inactive { background: #fde2e2; color: #9b1c1c; }
-  .badge.pending { background: #fff3cd; color: #856404; }
 </style>
 </head>
 <body>
 
-<!-- LOGIN SCREEN (NO role toggle buttons) -->
-<div class="login-screen" id="loginScreen">
-  <div class="login-box">
-    <h1>EduTrack SIS</h1>
-    <label>Username</label>
-    <input id="loginUser" placeholder="Enter username">
-    <label>Password</label>
-    <input id="loginPass" type="password" placeholder="Enter password">
-    <button onclick="doLogin()">Log In</button>
+<!-- TOP NAVBAR -->
+<div class="navbar">
+  <div class="navbar-brand">
+    <svg viewBox="0 0 24 24"><path d="M12 3L1 9l4 2.18v6L12 21l7-3.82v-6l2-1.09V17h2V9L12 3zm6.82 6L12 12.72 5.18 9 12 5.28 18.82 9zM17 15.99l-5 2.73-5-2.73v-3.72L12 15l5-2.73v3.72z"/></svg>
+    EduTrack
+  </div>
+  <div class="navbar-user" id="topUserDisplay" style="display: none;"></div>
+</div>
+
+<!-- LOGIN SPLIT SCREEN -->
+<div class="login-container" id="loginScreen">
+  <div class="login-left">
+    <h1>Student<br>Information<br>System</h1>
+  </div>
+  <div class="login-right">
+    <div class="login-box">
+      
+      <!-- Role Toggle -->
+      <div class="role-toggle">
+        <button class="role-btn active" id="btn-faculty" onclick="setRole('Faculty')">Faculty</button>
+        <button class="role-btn inactive" id="btn-student" onclick="setRole('Student')">Student</button>
+      </div>
+
+      <label>Username</label>
+      <input id="loginUser" placeholder="Enter username">
+      
+      <label>Password</label>
+      <div class="input-group">
+        <input id="loginPass" type="password" placeholder="Enter password">
+        <span class="eye-icon" onclick="togglePassword()">👁</span>
+      </div>
+
+      <button class="login-btn" onclick="doLogin()">Log In &rarr;</button>
+    </div>
   </div>
 </div>
 
@@ -70,7 +115,6 @@
   </div>
 </div>
 
-<!-- LINK TO SCRIPT.JS -->
 <script src="script.js"></script>
 </body>
 </html>
