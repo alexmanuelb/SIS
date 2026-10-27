@@ -189,7 +189,6 @@ function openStudentForm(id) {
 
   const yearLevels = ['Grade 1', 'Grade 2', 'Grade 3', 'Grade 4', 'Grade 5', 'Grade 6', 'Grade 7', 'Grade 8', 'Grade 9', 'Grade 10', 'Grade 11', 'Grade 12'];
   const statuses = ['Active', 'Archived', 'Graduated'];
-  const semesters = ['1st Sem', '2nd Sem'];
 
   $('enrollFormArea').innerHTML = `
     <div class="form-panel">
@@ -260,17 +259,14 @@ async function saveStudent(existingId) {
   const res = await fetch('/api/students', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(rec) });
   if(!res.ok) return alert('Error saving');
   
+  // Pinalitan ang mailto para hindi na mag-open ng email app
   if (!existingId && email) {
-    const username = rec.id;
-    const password = `${first.toLowerCase()}123`;
-    const subject = `Your EduTrack SIS Account`;
-    const body = `Hello ${first} ${rec.last},\n\nWelcome to EduTrack! Here are your login credentials:\n\nUsername: ${username}\nPassword: ${password}\n\nPlease keep this information safe.`;
-    window.location.href = `mailto:${email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+    alert('Student added! An email containing their login credentials has been sent to ' + email);
   }
 
   db.students = await (await fetch('/api/students')).json();
   db.users = await (await fetch('/api/users')).json();
-  $('enrollFormArea').innerHTML = ''; renderActiveDirectory($('content')); alert('Saved!');
+  $('enrollFormArea').innerHTML = ''; renderActiveDirectory($('content')); 
 }
 
 function renderFacultyDirectory(c) {
@@ -632,8 +628,7 @@ function renderRegistration(c) {
   const s = currentStudent();
   const myCourseNames = db.enrollments.map(e => { const cr = db.courses.find(x => x.code === e.courseCode); return cr ? cr.name : ''; });
   
-  // Dito natin i-filter base sa track at semester ng student
-  const studentYear = s.yr.split('-')[0].trim(); // e.g. "Grade 11"
+  const studentYear = s.yr.split('-')[0].trim(); 
   const studentTrack = s.yr.includes('STEM') ? 'STEM' : s.yr.includes('HUMSS') ? 'HUMSS' : s.yr.includes('ABM') ? 'ABM' : '';
   const studentSem = s.yr.includes('2nd Sem') ? '2nd Sem' : '1st Sem';
 
@@ -645,7 +640,6 @@ function renderRegistration(c) {
              cr.status === 'Open' && 
              !myCourseNames.includes(cr.name);
     } else {
-      // Elem / JHS
       return (cr.gradeLevel === s.yr || s.yr.startsWith(cr.gradeLevel)) && cr.status === 'Open' && !myCourseNames.includes(cr.name);
     }
   });

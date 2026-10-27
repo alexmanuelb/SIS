@@ -2,9 +2,13 @@ const express = require('express');
 const sqlite3 = require('sqlite3').verbose();
 const path = require('path');
 const cors = require('cors');
+const { Resend } = require('resend'); // Idinagdag para sa email
 
 const app = express();
 const port = process.env.PORT || 10000;
+
+// ⚠️ ANG API KEY MO
+const resend = new Resend(process.env.RESEND_API_KEY);
 
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
@@ -199,6 +203,7 @@ app.delete('/api/users/:username', (req, res) => {
     });
 });
 
+// DITO YUNG UPDATED NA /api/students PARA SA EMAIL
 app.get('/api/students', (req, res) => db.all("SELECT * FROM students", [], (err, rows) => res.json(err ? [] : rows)));
 app.post('/api/students', (req, res) => {
     const { id, last, first, mi, address, course, yr, status, enrol, birthday, email } = req.body;
@@ -206,13 +211,44 @@ app.post('/api/students', (req, res) => {
     const fullName = `${first} ${last}`;
     const generatedPass = `${first.toLowerCase()}123`;
 
-    db.get("SELECT id FROM students WHERE id = ?", [id], (err, row) => {
+    db.get("SELECT id FROM students WHERE id = ?", [id], async (err, row) => {
         if (row) {
             db.run(`UPDATE students SET last=?, first=?, mi=?, address=?, course=?, yr=?, status=?, enrol=?, birthday=?, email=? WHERE id=?`, [last, first, mi, address, course, yr, status, enrol, birthday, email, id], (e) => res.json({ message: e ? e.message : "Updated" }));
         } else {
-            db.run(`INSERT INTO students (id, last, first, mi, address, course, yr, status, enrol, username, password, birthday, email) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`, [id, last, first, mi, address, course, yr, status, enrol, id, generatedPass, birthday, email], (e) => {
+            db.run(`INSERT INTO students (id, last, first, mi, address, course, yr, status, enrol, username, password, birthday, email) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`, [id, last, first, mi, address, course, yr, status, enrol, id, generatedPass, birthday, email], async (e) => {
                 if (e) return res.status(400).json({ error: e.message });
-                db.run(`INSERT INTO users (username, password, name, role, section) VALUES (?,?,?,'Student',?)`, [id, generatedPass, fullName, yr], () => res.json({ message: "Created" }));
+                
+                db.run(`INSERT INTO users (username, password, name, role, section) VALUES (?,?,?,'Student',?)`, [id, generatedPass, fullName, yr], async () => {
+                    
+                    // RESEND EMAIL SENDING
+                    if (email && email.trim() !== "") {
+                        try {
+                            const response = await resend.emails.send({
+                                from: 'EduTrack <onboarding@resend.dev>', 
+                                to: [email],
+                                subject: 'Your EduTrack SIS Account',
+                                html: `
+                                    <div style="font-family: Arial, sans-serif; padding: 20px; color: #333;">
+                                        <h2 style="color: #5c0000;">Welcome to EduTrack, ${first}!</h2>
+                                        <p>Your student account has been successfully created. Here are your login credentials:</p>
+                                        <table style="margin-top: 15px; border-collapse: collapse;">
+                                            <tr><td style="padding: 5px; font-weight: bold;">Username:</td><td style="padding: 5px;">${id}</td></tr>
+                                            <tr><td style="padding: 5px; font-weight: bold;">Password:</td><td style="padding: 5px;">${generatedPass}</td></tr>
+                                        </table>
+                                        <p style="margin-top: 20px;">Please keep this information safe and change your password upon your first login.</p>
+                                        <br>
+                                        <p>Best regards,<br>EduTrack Admin</p>
+                                    </div>
+                                `
+                            });
+                            console.log(`📧 Email sent to ${email}. ID: ${response.data?.id}`);
+                        } catch (error) {
+                            console.error("❌ Failed to send email:", error);
+                        }
+                    }
+
+                    res.json({ message: "Student created and email process completed!" });
+                });
             });
         }
     });
