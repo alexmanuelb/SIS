@@ -96,13 +96,10 @@ function buildSidebar() {
   });
   html += `<button class="logout-btn" onclick="doLogout()">Logout</button>`;
   nav.innerHTML = html;
-  
-  // Set default active
   nav.querySelector('button').classList.add('active');
 }
 
 function navigate(page, btn) {
-  // Update active state
   if(btn) {
     document.querySelectorAll('#sidebar button').forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
@@ -193,17 +190,30 @@ function renderActiveDirectory(c) {
   c.innerHTML = `<div class="panel"><h2>Student Directory</h2>
     <div id="enrollFormArea"></div>
     ${simpleTable(['Student ID','Last Name','First Name','Year Level','Status','Action'],
-      active.map(s => [esc(s.id), esc(s.last), esc(s.first), esc(s.yr), `<span class="badge active">${esc(s.status)}</span>`,
+      active.map(s => [esc(s.id), esc(s.last), esc(s.first), esc(s.yr), `<span class="badge ${s.status === 'Active' ? 'active' : 'inactive'}">${esc(s.status)}</span>`,
         `<button class="btn" onclick="openStudentForm('${esc(s.id)}')">Edit</button>`]))}
     <button class="btn" style="margin-top:20px;" onclick="openStudentForm()">+ Add New Student</button>
   </div>`;
 }
 
+// RESTORED DROPDOWNS FOR COURSE, YEAR LEVEL, AND STATUS
 function openStudentForm(id) {
   const s = id ? db.students.find(x => x.id === id) : null;
-  // Auto-generate ID if new
   const nextId = s ? s.id : '2026-' + Math.floor(1000 + Math.random() * 9000);
   
+  // Parse existing Year Level if editing (e.g., "Grade 11 - STEM - 1st Sem" -> "Grade 11")
+  let currentYear = s ? s.yr : 'Grade 7';
+  if (currentYear && currentYear.includes('-')) {
+      currentYear = currentYear.split('-')[0].trim();
+  }
+
+  const yearLevels = [
+      'Kinder', 'Grade 1', 'Grade 2', 'Grade 3', 'Grade 4', 'Grade 5', 'Grade 6', 
+      'Grade 7', 'Grade 8', 'Grade 9', 'Grade 10', 'Grade 11', 'Grade 12'
+  ];
+  
+  const statuses = ['Active', 'Archived', 'Graduated'];
+
   $('enrollFormArea').innerHTML = `
     <div class="form-panel">
       <h3 style="color:#5c0000; margin-bottom:15px;">${s ? 'Edit' : 'New'} Student Record</h3>
@@ -211,8 +221,30 @@ function openStudentForm(id) {
         <div class="field"><label>Student No. (Auto-generated)</label><input id="f_id" value="${esc(nextId)}" readonly style="background:#e9ecef; cursor:not-allowed;"></div>
         <div class="field"><label>Last Name</label><input id="f_last" value="${esc(s?.last||'')}"></div>
         <div class="field"><label>First Name</label><input id="f_first" value="${esc(s?.first||'')}"></div>
-        <div class="field"><label>Course / Dept</label><input id="f_course" value="${esc(s?.course||'')}" placeholder="Elem / JHS / SHS"></div>
-        <div class="field"><label>Year Level</label><input id="f_yr" value="${esc(s?.yr||'')}" placeholder="Grade 7 / Grade 11 - STEM"></div>
+        
+        <div class="field">
+          <label>Course / Dept</label>
+          <select id="f_course">
+            <option value="Elem" ${s?.course === 'Elem' ? 'selected' : ''}>Elementary</option>
+            <option value="JHS" ${s?.course === 'JHS' ? 'selected' : ''}>Junior High School</option>
+            <option value="SHS" ${s?.course === 'SHS' ? 'selected' : ''}>Senior High School</option>
+          </select>
+        </div>
+
+        <div class="field">
+          <label>Year Level</label>
+          <select id="f_yr">
+            ${yearLevels.map(y => `<option value="${y}" ${currentYear === y ? 'selected' : ''}>${y}</option>`).join('')}
+          </select>
+        </div>
+
+        <div class="field">
+          <label>Status</label>
+          <select id="f_status">
+            ${statuses.map(st => `<option value="${st}" ${s?.status === st ? 'selected' : ''}>${st}</option>`).join('')}
+          </select>
+        </div>
+
       </div>
       <button class="btn" onclick="saveStudent('${esc(s?.id||'')}')">Save Record</button>
       <button class="btn secondary" onclick="$('enrollFormArea').innerHTML=''">Cancel</button>
@@ -226,15 +258,17 @@ async function saveStudent(existingId) {
     first: $('f_first').value, 
     course: $('f_course').value, 
     yr: $('f_yr').value, 
-    status: 'Active', 
+    status: $('f_status').value, 
     enrol: 'Enrolled' 
   };
+  
   const res = await fetch('/api/students', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(rec) });
   const data = await res.json();
   if(!res.ok) return alert(data.error);
   
   db.students = await (await fetch('/api/students')).json();
   db.users = await (await fetch('/api/users')).json();
+  
   $('enrollFormArea').innerHTML = ''; 
   renderActiveDirectory($('content')); 
   alert(existingId ? 'Student updated!' : 'Student added successfully!');
@@ -244,7 +278,6 @@ async function saveStudent(existingId) {
 function renderFacultyDirectory(c) {
   const facultyList = db.users.filter(u => u.role === 'Faculty');
   
-  // Get advisory classes for each faculty
   const rows = facultyList.map(f => {
     const advised = db.courses.filter(crs => crs.adviser === f.name).map(crs => `${crs.gradeLevel} (Sec ${crs.section})`).join(', ');
     return [
@@ -286,8 +319,6 @@ async function saveFaculty() {
   };
   if(!rec.username || !rec.password || !rec.name) return alert('Fill in all fields');
   
-  // Reusing the /api/users/update endpoint actually works as an UPSERT if we add a create endpoint, 
-  // but for simplicity, let's use a custom fetch to our backend.
   const res = await fetch('/api/faculty', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(rec) });
   const data = await res.json();
   if(!res.ok) return alert(data.error);
@@ -353,7 +384,6 @@ async function createSection() {
   const secName = $('s_name').value.trim();
   if(!grade || !secName) return alert('Fill in all fields');
   
-  // Find all courses for this grade in Section 1
   const templates = db.courses.filter(c => c.gradeLevel === grade && c.section === '1');
   if(templates.length === 0) return alert('No courses found for this grade level in Section 1 to copy.');
   
