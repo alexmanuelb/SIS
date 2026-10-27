@@ -72,7 +72,7 @@ db.get("SELECT name FROM sqlite_master WHERE type='table' AND name='users'", (er
 });
 
 /* =========================================================
-   AUTH
+   AUTH & USERS
    ========================================================= */
 app.post('/api/login', (req, res) => {
     const { username, password } = req.body;
@@ -84,9 +84,6 @@ app.post('/api/login', (req, res) => {
     });
 });
 
-/* =========================================================
-   USERS
-   ========================================================= */
 app.get('/api/users', (req, res) => {
     db.all("SELECT username, name, role, section FROM users", [], (err, rows) => {
         if (err) return res.status(500).json({ error: err.message });
@@ -102,29 +99,6 @@ app.post('/api/faculty', (req, res) => {
             if(e) return res.status(400).json({ error: "Username already exists" });
             res.json({ message: "Faculty created" });
         });
-});
-
-app.post('/api/users/update', (req, res) => {
-    const { username, password, name, role, section } = req.body;
-    if (!username) return res.status(400).json({ error: "Username required" });
-
-    if (password && password.trim() !== '') {
-        db.run(`UPDATE users SET password=?, name=?, role=?, section=? WHERE username=?`,
-            [password, name, role, section, username],
-            function (e) {
-                if (e) return res.status(400).json({ error: e.message });
-                if (this.changes === 0) return res.status(404).json({ error: "User not found" });
-                res.json({ message: "User updated successfully" });
-            });
-    } else {
-        db.run(`UPDATE users SET name=?, role=?, section=? WHERE username=?`,
-            [name, role, section, username],
-            function (e) {
-                if (e) return res.status(400).json({ error: e.message });
-                if (this.changes === 0) return res.status(404).json({ error: "User not found" });
-                res.json({ message: "User updated successfully" });
-            });
-    }
 });
 
 /* =========================================================
@@ -179,7 +153,7 @@ app.post('/api/students', (req, res) => {
 });
 
 /* =========================================================
-   COURSES
+   COURSES & ENROLLMENTS (With Auto-Close Capacity Logic)
    ========================================================= */
 app.get('/api/courses', (req, res) => {
     db.all("SELECT * FROM courses", [], (err, rows) => {
@@ -193,23 +167,20 @@ app.post('/api/courses', (req, res) => {
     if (!code || !name || !gradeLevel || !section) {
         return res.status(400).json({ error: "Code, name, gradeLevel, and section required" });
     }
-    db.get("SELECT code FROM courses WHERE code = ?", [code], (err, row) => {
-        if (err) return res.status(500).json({ error: err.message });
-        if (row) return res.status(400).json({ error: "Course code already exists" });
-
-        db.run(`INSERT INTO courses (code, name, gradeLevel, section, capacity, adviser, status)
-                VALUES (?,?,?,?,?,?,?)`,
-            [code, name, gradeLevel, section, capacity || 30, adviser || '', status || 'Open'],
-            function (e) {
-                if (e) return res.status(400).json({ error: e.message });
-                res.json({ message: "Course created" });
-            });
-    });
+    
+    // UPSERT logic for courses (works for adding new and updating adviser)
+    db.run(`INSERT INTO courses (code, name, gradeLevel, section, capacity, adviser, status)
+            VALUES (?,?,?,?,?,?,?)
+            ON CONFLICT(code) DO UPDATE SET
+            name=excluded.name, gradeLevel=excluded.gradeLevel, section=excluded.section,
+            capacity=excluded.capacity, adviser=excluded.adviser, status=excluded.status`,
+        [code, name, gradeLevel, section, capacity || 30, adviser || '', status || 'Open'],
+        function (e) {
+            if (e) return res.status(400).json({ error: e.message });
+            res.json({ message: "Course created/updated" });
+        });
 });
 
-/* =========================================================
-   ENROLLMENTS & GRADES
-   ========================================================= */
 app.get('/api/enrollments/:studentId', (req, res) => {
     db.all("SELECT * FROM enrollments WHERE studentId = ?", [req.params.studentId], (err, rows) => {
         if (err) return res.status(500).json({ error: err.message });
@@ -221,22 +192,44 @@ app.post('/api/enroll', (req, res) => {
     const { studentId, courseCode, section, term } = req.body;
     db.get("SELECT name, capacity, status FROM courses WHERE code = ?", [courseCode], (err, course) => {
         if (!course) return res.status(404).json({ error: "Course not found" });
-        if (course.status === 'Closed') return res.status(400).json({ error: "Course is closed" });
+        if (course.status === 'Closed') return res.status(400).json({ error: "Course is already full/closed" });
 
         db.get(`SELECT e.id FROM enrollments e JOIN courses c ON e.courseCode = c.code WHERE e.studentId = ? AND c.name = ?`,
             [studentId, course.name], (err2, existing) => {
                 if (existing) return res.status(400).json({ error: "Already enrolled" });
+                
+                // Check Capacity
                 db.get(`SELECT COUNT(*) as count FROM enrollments WHERE courseCode = ? AND section = ?`,
                     [courseCode, section], (err3, result) => {
-                        if (result.count >= course.capacity) return res.status(400).json({ error: "Course is full" });
+                        if (result.count >= course.capacity) {
+                            // Auto-close if maxed out
+                            db.run(`UPDATE courses SET status = 'Closed' WHERE code = ?`, [courseCode]);
+                            return res.status(400).json({ error: "Course is full. Status changed to Closed." });
+                        }
+                        
+                        // Insert Enrollment
                         db.run(`INSERT INTO enrollments (studentId, courseCode, section, term) VALUES (?,?,?,?)`,
                             [studentId, courseCode, section, term || '1st Sem'],
-                            (e) => res.json({ message: "Enrolled" }));
+                            (e) => {
+                                if (e) return res.status(400).json({ error: e.message });
+                                
+                                // Final check to auto-close if this was the last slot
+                                db.get(`SELECT COUNT(*) as count FROM enrollments WHERE courseCode = ? AND section = ?`,
+                                    [courseCode, section], (err4, finalCount) => {
+                                        if (finalCount.count >= course.capacity) {
+                                            db.run(`UPDATE courses SET status = 'Closed' WHERE code = ?`, [courseCode]);
+                                        }
+                                        res.json({ message: "Enrolled successfully" });
+                                    });
+                            });
                     });
             });
     });
 });
 
+/* =========================================================
+   GRADES & OTHERS
+   ========================================================= */
 app.get('/api/grades/check/:studentId/:courseName', (req, res) => {
     db.get("SELECT * FROM grades WHERE studentId = ? AND courseName = ?", [req.params.studentId, req.params.courseName], (err, row) => res.json(row || null));
 });
@@ -256,9 +249,6 @@ app.get('/api/student/grades/:studentId', (req, res) => {
     db.all("SELECT * FROM grades WHERE studentId = ?", [req.params.studentId], (err, rows) => res.json(rows));
 });
 
-/* =========================================================
-   SCHEDULES, ATTENDANCE, RECORDS
-   ========================================================= */
 app.get('/api/schedules', (req, res) => {
     db.all("SELECT * FROM schedules", [], (err, rows) => res.json(rows));
 });

@@ -196,12 +196,10 @@ function renderActiveDirectory(c) {
   </div>`;
 }
 
-// RESTORED DROPDOWNS FOR COURSE, YEAR LEVEL, AND STATUS
 function openStudentForm(id) {
   const s = id ? db.students.find(x => x.id === id) : null;
   const nextId = s ? s.id : '2026-' + Math.floor(1000 + Math.random() * 9000);
   
-  // Parse existing Year Level if editing (e.g., "Grade 11 - STEM - 1st Sem" -> "Grade 11")
   let currentYear = s ? s.yr : 'Grade 7';
   if (currentYear && currentYear.includes('-')) {
       currentYear = currentYear.split('-')[0].trim();
@@ -279,11 +277,14 @@ function renderFacultyDirectory(c) {
   const facultyList = db.users.filter(u => u.role === 'Faculty');
   
   const rows = facultyList.map(f => {
-    const advised = db.courses.filter(crs => crs.adviser === f.name).map(crs => `${crs.gradeLevel} (Sec ${crs.section})`).join(', ');
+    // Find advisory class
+    const advised = db.courses.filter(crs => crs.adviser === f.name).map(crs => `${crs.gradeLevel} (Sec ${crs.section})`);
+    const advisoryDisplay = advised.length > 0 ? advised[0] : '<span style="color:#999;">None</span>'; // Show only one if multiple
+    
     return [
       `<b>${esc(f.username)}</b>`,
       esc(f.name),
-      advised || '<span style="color:#999;">None</span>',
+      advisoryDisplay,
       `<button class="btn secondary" onclick="alert('To edit faculty, please use the Users & Access page.')">Edit</button>`
     ];
   });
@@ -296,13 +297,23 @@ function renderFacultyDirectory(c) {
 }
 
 function openFacultyForm() {
+  // Get all unique sections available to assign as advisory
+  const uniqueSections = [...new Set(db.courses.map(c => `${c.gradeLevel} - Section ${c.section}`))].sort();
+
   $('facultyFormArea').innerHTML = `
     <div class="form-panel">
       <h3 style="color:#5c0000; margin-bottom:15px;">Add New Teacher</h3>
       <div class="form-grid">
         <div class="field"><label>Username</label><input id="t_user" placeholder="e.g., tsmith"></div>
         <div class="field"><label>Password</label><input id="t_pass" type="password" placeholder="e.g., smith123"></div>
-        <div class="field" style="grid-column: span 2;"><label>Full Name</label><input id="t_name" placeholder="e.g., T. John Smith"></div>
+        <div class="field"><label>Full Name</label><input id="t_name" placeholder="e.g., T. John Smith"></div>
+        <div class="field">
+          <label>Advisory Class</label>
+          <select id="t_advisory">
+            <option value="">-- No Advisory Class --</option>
+            ${uniqueSections.map(s => `<option value="${esc(s)}">${esc(s)}</option>`).join('')}
+          </select>
+        </div>
       </div>
       <button class="btn" onclick="saveFaculty()">Create Teacher Account</button>
       <button class="btn secondary" onclick="$('facultyFormArea').innerHTML=''">Cancel</button>
@@ -317,16 +328,41 @@ async function saveFaculty() {
     role: 'Faculty', 
     section: '' 
   };
+  const advisory = $('t_advisory').value;
+
   if(!rec.username || !rec.password || !rec.name) return alert('Fill in all fields');
   
+  // Create user
   const res = await fetch('/api/faculty', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(rec) });
   const data = await res.json();
   if(!res.ok) return alert(data.error);
+
+  // Assign Advisory Class
+  if (advisory) {
+    // Format: "Grade 4 - Section 1"
+    const [gradePart, sectionPart] = advisory.split(' - Section ');
+    const grade = gradePart.trim();
+    const sec = sectionPart.trim();
+
+    // Find courses for this grade and section to assign this teacher
+    const coursesToUpdate = db.courses.filter(c => c.gradeLevel === grade && c.section === sec);
+    
+    // We need to update their adviser in the DB. We can loop and use POST /api/courses to overwrite (since it errors on duplicate code, we'll need a new endpoint for updating adviser or just insert new if we delete first)
+    // For simplicity, let's just create a new endpoint in server.js later. For now, let's just use the existing UPSERT.
+    for(const crs of coursesToUpdate) {
+        await fetch('/api/courses', { 
+            method: 'POST', 
+            headers: { 'Content-Type': 'application/json' }, 
+            body: JSON.stringify({ ...crs, adviser: rec.name }) 
+        });
+    }
+  }
   
   db.users = await (await fetch('/api/users')).json();
+  db.courses = await (await fetch('/api/courses')).json();
   $('facultyFormArea').innerHTML = '';
   renderFacultyDirectory($('content'));
-  alert('Teacher account created!');
+  alert('Teacher account created and advisory assigned!');
 }
 
 /* ---------- ADMIN: COURSES & SECTIONS ---------- */
@@ -334,7 +370,7 @@ function renderCourses(c) {
   c.innerHTML = `<div class="panel"><h2>Course & Section Management</h2>
     <div id="courseFormArea"></div>
     ${simpleTable(['Code','Name','Grade Level','Section','Adviser','Status'],
-      db.courses.map(x => [esc(x.code), esc(x.name), esc(x.gradeLevel), esc(x.section), esc(x.adviser), `<span class="badge active">${esc(x.status)}</span>`]))}
+      db.courses.map(x => [esc(x.code), esc(x.name), esc(x.gradeLevel), esc(x.section), esc(x.adviser), `<span class="badge ${x.status === 'Open' ? 'active' : 'inactive'}">${esc(x.status)}</span>`]))}
     <div style="margin-top:20px; display:flex; gap:10px;">
       <button class="btn" onclick="openCourseForm()">+ Add New Subject</button>
       <button class="btn secondary" onclick="openSectionForm()">+ Add New Section</button>
@@ -509,6 +545,8 @@ function renderRegistration(c) {
     const cr = db.courses.find(x => x.code === e.courseCode);
     return cr ? cr.name : '';
   });
+  
+  // ONLY SHOW IF STATUS IS OPEN
   const avail = db.courses.filter(cr => (cr.gradeLevel === s.yr || s.yr.startsWith(cr.gradeLevel)) && cr.status === 'Open' && !myCourseNames.includes(cr.name));
   
   c.innerHTML = `<div class="panel"><h2>Course Registration</h2>
@@ -521,8 +559,12 @@ async function enroll(code, section) {
   const res = await fetch('/api/enroll', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ studentId: s.id, courseCode: code, section, term: '1st Sem' }) });
   const d = await res.json();
   if (!res.ok) return alert(d.error);
+  
   db.enrollments = await (await fetch('/api/enrollments/' + s.id)).json();
-  renderRegistration($('content')); alert('Enrolled!');
+  db.courses = await (await fetch('/api/courses')).json(); // Refresh courses to see if any closed
+  
+  renderRegistration($('content')); 
+  alert('Enrolled!');
 }
 
 async function renderSchedule(c) {
