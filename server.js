@@ -80,7 +80,7 @@ app.post('/api/login', (req, res) => {
     db.get("SELECT * FROM users WHERE username = ? AND password = ?", [username, password], (err, user) => {
         if (err) return res.status(500).json({ error: err.message });
         if (!user) return res.status(401).json({ error: "Invalid username or password" });
-        res.json(user); // returns { username, name, role, section }
+        res.json(user);
     });
 });
 
@@ -92,6 +92,16 @@ app.get('/api/users', (req, res) => {
         if (err) return res.status(500).json({ error: err.message });
         res.json(rows);
     });
+});
+
+app.post('/api/faculty', (req, res) => {
+    const { username, password, name, role, section } = req.body;
+    db.run(`INSERT INTO users (username, password, name, role, section) VALUES (?,?,?,?,?)`,
+        [username, password, name, role, section],
+        function(e) {
+            if(e) return res.status(400).json({ error: "Username already exists" });
+            res.json({ message: "Faculty created" });
+        });
 });
 
 app.post('/api/users/update', (req, res) => {
@@ -124,14 +134,6 @@ app.get('/api/students', (req, res) => {
     db.all("SELECT * FROM students", [], (err, rows) => {
         if (err) return res.status(500).json({ error: err.message });
         res.json(rows);
-    });
-});
-
-app.get('/api/students/:id', (req, res) => {
-    db.get("SELECT * FROM students WHERE id = ?", [req.params.id], (err, row) => {
-        if (err) return res.status(500).json({ error: err.message });
-        if (!row) return res.status(404).json({ error: "Student not found" });
-        res.json(row);
     });
 });
 
@@ -176,14 +178,6 @@ app.post('/api/students', (req, res) => {
     });
 });
 
-app.delete('/api/students/:id', (req, res) => {
-    db.run("DELETE FROM students WHERE id = ?", [req.params.id], function (e) {
-        if (e) return res.status(400).json({ error: e.message });
-        db.run("DELETE FROM users WHERE username = ?", [req.params.id]);
-        res.json({ message: "Student deleted" });
-    });
-});
-
 /* =========================================================
    COURSES
    ========================================================= */
@@ -191,14 +185,6 @@ app.get('/api/courses', (req, res) => {
     db.all("SELECT * FROM courses", [], (err, rows) => {
         if (err) return res.status(500).json({ error: err.message });
         res.json(rows);
-    });
-});
-
-app.get('/api/courses/:code', (req, res) => {
-    db.get("SELECT * FROM courses WHERE code = ?", [req.params.code], (err, row) => {
-        if (err) return res.status(500).json({ error: err.message });
-        if (!row) return res.status(404).json({ error: "Course not found" });
-        res.json(row);
     });
 });
 
@@ -221,91 +207,8 @@ app.post('/api/courses', (req, res) => {
     });
 });
 
-app.delete('/api/courses/:code', (req, res) => {
-    db.run("DELETE FROM courses WHERE code = ?", [req.params.code], function (e) {
-        if (e) return res.status(400).json({ error: e.message });
-        res.json({ message: "Course deleted" });
-    });
-});
-
 /* =========================================================
-   SCHEDULES
-   ========================================================= */
-app.get('/api/schedules', (req, res) => {
-    db.all("SELECT * FROM schedules", [], (err, rows) => {
-        if (err) return res.status(500).json({ error: err.message });
-        res.json(rows);
-    });
-});
-
-app.get('/api/schedules/:gradeLevel/:section', (req, res) => {
-    db.all(`SELECT s.*, c.name AS courseName, c.adviser
-            FROM schedules s
-            JOIN courses c ON s.courseCode = c.code
-            WHERE c.gradeLevel = ? AND s.section = ?
-            ORDER BY
-                CASE s.day
-                    WHEN 'Monday' THEN 1
-                    WHEN 'Tuesday' THEN 2
-                    WHEN 'Wednesday' THEN 3
-                    WHEN 'Thursday' THEN 4
-                    WHEN 'Friday' THEN 5
-                    WHEN 'Saturday' THEN 6
-                    ELSE 7
-                END,
-                s.startTime`,
-        [req.params.gradeLevel, req.params.section],
-        (err, rows) => {
-            if (err) return res.status(500).json({ error: err.message });
-            res.json(rows);
-        });
-});
-
-app.post('/api/schedules', (req, res) => {
-    const { courseCode, section, day, startTime, endTime } = req.body;
-    if (!courseCode || !section || !day || !startTime || !endTime) {
-        return res.status(400).json({ error: "All schedule fields are required" });
-    }
-
-    db.all(`SELECT * FROM schedules WHERE section = ? AND day = ?`,
-        [section, day],
-        (err, existing) => {
-            if (err) return res.status(500).json({ error: err.message });
-
-            const toMin = t => { const [h,m] = t.split(':').map(Number); return h*60+m; };
-            const newStart = toMin(startTime);
-            const newEnd = toMin(endTime);
-
-            const conflict = existing.find(s => {
-                const sStart = toMin(s.startTime);
-                const sEnd = toMin(s.endTime);
-                return (newStart < sEnd) && (newEnd > sStart);
-            });
-
-            if (conflict) {
-                return res.status(400).json({
-                    error: `Time conflict with ${conflict.courseCode} (${conflict.startTime}-${conflict.endTime}) on ${day} in section ${section}`
-                });
-            }
-
-            db.run(`INSERT INTO schedules (courseCode, section, day, startTime, endTime) VALUES (?,?,?,?,?)`,
-                [courseCode, section, day, startTime, endTime],
-                function (e) {
-                    if (e) return res.status(400).json({ error: e.message });
-                    res.json({ message: "Schedule added" });
-                });
-        });
-});
-
-app.delete('/api/schedules/:id', (req, res) => {
-    db.run("DELETE FROM schedules WHERE id = ?", [req.params.id], function (e) {
-        if (e) return res.status(400).json({ error: e.message });
-        res.json({ message: "Schedule deleted" });
-    });
-});
-
-/* =========================================================
-   ENROLLMENTS
+   ENROLLMENTS & GRADES
    ========================================================= */
 app.get('/api/enrollments/:studentId', (req, res) => {
     db.all("SELECT * FROM enrollments WHERE studentId = ?", [req.params.studentId], (err, rows) => {
@@ -316,168 +219,65 @@ app.get('/api/enrollments/:studentId', (req, res) => {
 
 app.post('/api/enroll', (req, res) => {
     const { studentId, courseCode, section, term } = req.body;
-    if (!studentId || !courseCode) {
-        return res.status(400).json({ error: "studentId and courseCode required" });
-    }
-
     db.get("SELECT name, capacity, status FROM courses WHERE code = ?", [courseCode], (err, course) => {
-        if (err) return res.status(500).json({ error: err.message });
         if (!course) return res.status(404).json({ error: "Course not found" });
         if (course.status === 'Closed') return res.status(400).json({ error: "Course is closed" });
 
-        db.get(`SELECT e.id FROM enrollments e
-                JOIN courses c ON e.courseCode = c.code
-                WHERE e.studentId = ? AND c.name = ?`,
+        db.get(`SELECT e.id FROM enrollments e JOIN courses c ON e.courseCode = c.code WHERE e.studentId = ? AND c.name = ?`,
             [studentId, course.name], (err2, existing) => {
-                if (err2) return res.status(500).json({ error: err2.message });
-                if (existing) return res.status(400).json({ error: "Already enrolled in this subject" });
-
+                if (existing) return res.status(400).json({ error: "Already enrolled" });
                 db.get(`SELECT COUNT(*) as count FROM enrollments WHERE courseCode = ? AND section = ?`,
                     [courseCode, section], (err3, result) => {
-                        if (err3) return res.status(500).json({ error: err3.message });
-                        if (result.count >= course.capacity) {
-                            return res.status(400).json({ error: "Course is full" });
-                        }
-
+                        if (result.count >= course.capacity) return res.status(400).json({ error: "Course is full" });
                         db.run(`INSERT INTO enrollments (studentId, courseCode, section, term) VALUES (?,?,?,?)`,
                             [studentId, courseCode, section, term || '1st Sem'],
-                            function (e) {
-                                if (e) return res.status(400).json({ error: e.message });
-                                db.get(`SELECT COUNT(*) as count FROM enrollments WHERE courseCode = ? AND section = ?`,
-                                    [courseCode, section], (err4, finalCount) => {
-                                        if (finalCount.count >= course.capacity) {
-                                            db.run("UPDATE courses SET status = 'Closed' WHERE code = ?", [courseCode]);
-                                        }
-                                        res.json({ message: "Enrolled successfully" });
-                                    });
-                            });
+                            (e) => res.json({ message: "Enrolled" }));
                     });
             });
     });
 });
 
-app.delete('/api/enroll/:studentId/:courseCode', (req, res) => {
-    db.run(`DELETE FROM enrollments WHERE studentId = ? AND courseCode = ?`,
-        [req.params.studentId, req.params.courseCode],
-        function (e) {
-            if (e) return res.status(400).json({ error: e.message });
-            res.json({ message: "Enrollment removed" });
-        });
-});
-
-/* =========================================================
-   GRADES
-   ========================================================= */
 app.get('/api/grades/check/:studentId/:courseName', (req, res) => {
-    db.get("SELECT * FROM grades WHERE studentId = ? AND courseName = ?",
-        [req.params.studentId, req.params.courseName],
-        (err, row) => {
-            if (err) return res.status(500).json({ error: err.message });
-            res.json(row || null);
-        });
+    db.get("SELECT * FROM grades WHERE studentId = ? AND courseName = ?", [req.params.studentId, req.params.courseName], (err, row) => res.json(row || null));
 });
 
 app.post('/api/grades', (req, res) => {
     const { studentId, courseCode, courseName, grade, term } = req.body;
-    if (!studentId || !courseName || grade === undefined || grade === null) {
-        return res.status(400).json({ error: "studentId, courseName, and grade required" });
-    }
-
-    db.get("SELECT id FROM grades WHERE studentId = ? AND courseName = ?",
-        [studentId, courseName],
-        (err, existing) => {
-            if (err) return res.status(500).json({ error: err.message });
-
-            if (existing) {
-                db.run(`UPDATE grades SET grade=?, term=? WHERE id=?`,
-                    [grade, term, existing.id],
-                    function (e) {
-                        if (e) return res.status(400).json({ error: e.message });
-                        res.json({ message: "Grade updated" });
-                    });
-            } else {
-                db.run(`INSERT INTO grades (studentId, courseCode, courseName, grade, term) VALUES (?,?,?,?,?)`,
-                    [studentId, courseCode || 'N/A', courseName, grade, term || '1st Sem 2026-2027'],
-                    function (e) {
-                        if (e) return res.status(400).json({ error: e.message });
-                        res.json({ message: "Grade submitted" });
-                    });
-            }
-        });
-});
-
-app.get('/api/student/grades/:studentId', (req, res) => {
-    db.all("SELECT * FROM grades WHERE studentId = ?", [req.params.studentId], (err, rows) => {
-        if (err) return res.status(500).json({ error: err.message });
-        res.json(rows);
+    db.get("SELECT id FROM grades WHERE studentId = ? AND courseName = ?", [studentId, courseName], (err, existing) => {
+        if (existing) {
+            db.run(`UPDATE grades SET grade=?, term=? WHERE id=?`, [grade, term, existing.id], (e) => res.json({ message: "Updated" }));
+        } else {
+            db.run(`INSERT INTO grades (studentId, courseCode, courseName, grade, term) VALUES (?,?,?,?,?)`, [studentId, courseCode, courseName, grade, term], (e) => res.json({ message: "Submitted" }));
+        }
     });
 });
 
-/* =========================================================
-   STUDENT RECORDS (Historical)
-   ========================================================= */
-app.get('/api/student/records/:studentId', (req, res) => {
-    db.all("SELECT * FROM student_records WHERE studentId = ? ORDER BY gradeLevel, schoolYear",
-        [req.params.studentId],
-        (err, rows) => {
-            if (err) return res.status(500).json({ error: err.message });
-            res.json(rows);
-        });
-});
-
-app.post('/api/student/records', (req, res) => {
-    const { studentId, gradeLevel, schoolYear, subject, grade, status, remarks } = req.body;
-    if (!studentId || !gradeLevel || !subject) {
-        return res.status(400).json({ error: "studentId, gradeLevel, and subject required" });
-    }
-    db.run(`INSERT INTO student_records (studentId, gradeLevel, schoolYear, subject, grade, status, remarks)
-            VALUES (?,?,?,?,?,?,?)`,
-        [studentId, gradeLevel, schoolYear, subject, grade, status || 'Passed', remarks || ''],
-        function (e) {
-            if (e) return res.status(400).json({ error: e.message });
-            res.json({ message: "Record added" });
-        });
+app.get('/api/student/grades/:studentId', (req, res) => {
+    db.all("SELECT * FROM grades WHERE studentId = ?", [req.params.studentId], (err, rows) => res.json(rows));
 });
 
 /* =========================================================
-   ATTENDANCE
+   SCHEDULES, ATTENDANCE, RECORDS
    ========================================================= */
+app.get('/api/schedules', (req, res) => {
+    db.all("SELECT * FROM schedules", [], (err, rows) => res.json(rows));
+});
+
+app.get('/api/schedules/:gradeLevel/:section', (req, res) => {
+    db.all(`SELECT s.*, c.name AS courseName, c.adviser FROM schedules s JOIN courses c ON s.courseCode = c.code WHERE c.gradeLevel = ? AND s.section = ?`, [req.params.gradeLevel, req.params.section], (err, rows) => res.json(rows));
+});
+
 app.get('/api/attendance/:courseCode/:section/:date', (req, res) => {
-    db.all(`SELECT * FROM attendance WHERE courseCode = ? AND section = ? AND date = ?`,
-        [req.params.courseCode, req.params.section, req.params.date],
-        (err, rows) => {
-            if (err) return res.status(500).json({ error: err.message });
-            res.json(rows);
-        });
+    db.all(`SELECT * FROM attendance WHERE courseCode = ? AND section = ? AND date = ?`, [req.params.courseCode, req.params.section, req.params.date], (err, rows) => res.json(rows));
 });
 
 app.post('/api/attendance', (req, res) => {
     const { courseCode, section, studentId, date, status } = req.body;
-    if (!courseCode || !section || !studentId || !date || !status) {
-        return res.status(400).json({ error: "All attendance fields required" });
-    }
-
-    db.run(`INSERT INTO attendance (courseCode, section, studentId, date, status)
-            VALUES (?,?,?,?,?)
-            ON CONFLICT(courseCode, section, studentId, date)
-            DO UPDATE SET status=excluded.status`,
-        [courseCode, section, studentId, date, status],
-        function (e) {
-            if (e) return res.status(400).json({ error: e.message });
-            res.json({ message: "Attendance recorded" });
-        });
+    db.run(`INSERT INTO attendance (courseCode, section, studentId, date, status) VALUES (?,?,?,?,?) ON CONFLICT(courseCode, section, studentId, date) DO UPDATE SET status=excluded.status`, [courseCode, section, studentId, date, status], (e) => res.json({ message: "Recorded" }));
 });
 
-app.get('/api/attendance/student/:studentId', (req, res) => {
-    db.all(`SELECT * FROM attendance WHERE studentId = ? ORDER BY date DESC`,
-        [req.params.studentId],
-        (err, rows) => {
-            if (err) return res.status(500).json({ error: err.message });
-            res.json(rows);
-        });
+app.get('/api/student/records/:studentId', (req, res) => {
+    db.all("SELECT * FROM student_records WHERE studentId = ? ORDER BY gradeLevel", [req.params.studentId], (err, rows) => res.json(rows));
 });
 
-/* =========================================================
-   START
-   ========================================================= */
-app.listen(port, () => console.log(`✅ Server running at http://localhost:${port}`));
+app.listen(port, () => console.log(`✅ Server running on port ${port}`));

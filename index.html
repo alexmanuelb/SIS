@@ -4,58 +4,82 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>EduTrack SIS</title>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Inter', sans-serif; }
-  body { background-color: #ffffff; color: #333; height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+  body { background-color: #f0f2f5; color: #333; height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
   
   /* TOP NAVBAR */
-  .navbar { background-color: #5c0000; padding: 15px 40px; display: flex; align-items: center; justify-content: space-between; color: white; }
-  .navbar-brand { display: flex; align-items: center; gap: 15px; font-size: 20px; font-weight: 700; letter-spacing: 0.5px; }
-  .navbar-brand svg { width: 35px; height: 35px; fill: #ffcccc; }
-  .navbar-user { font-size: 14px; font-weight: 600; }
+  .navbar { background-color: #5c0000; padding: 15px 30px; display: flex; align-items: center; justify-content: space-between; color: white; height: 70px; }
+  .navbar-brand { display: flex; align-items: center; gap: 12px; font-size: 20px; font-weight: 700; letter-spacing: 0.5px; }
+  .navbar-brand svg { width: 32px; height: 32px; fill: #ffcccc; }
+  .navbar-user { font-size: 14px; font-weight: 600; background: rgba(255,255,255,0.1); padding: 8px 15px; border-radius: 20px; }
 
   /* LOGIN SPLIT SCREEN */
-  .login-container { display: flex; flex: 1; }
-  .login-left { flex: 1; display: flex; flex-direction: column; justify-content: center; padding: 0 10%; }
-  .login-left h1 { font-size: 64px; color: #5c0000; line-height: 1.1; font-weight: 800; letter-spacing: -1px; }
-  .login-right { flex: 1; display: flex; align-items: center; justify-content: center; background-color: #ffffff; padding-right: 10%; }
+  .login-container { display: flex; flex: 1; height: calc(100vh - 70px); }
+  .login-left { flex: 1; display: flex; flex-direction: column; justify-content: center; padding: 0 10%; background: white; }
+  .login-left h1 { font-size: 60px; color: #5c0000; line-height: 1.1; font-weight: 800; letter-spacing: -1px; }
+  .login-right { flex: 1; display: flex; align-items: center; justify-content: center; background-color: #f8f9fa; }
   
-  .login-box { background: white; padding: 40px; border-radius: 12px; width: 100%; max-width: 420px; box-shadow: 0 10px 40px rgba(0,0,0,0.08); border: 1px solid #eee; }
-
-  .login-box label { font-size: 13px; color: #333; font-weight: 600; display: block; margin-bottom: 8px; }
+  .login-box { background: white; padding: 45px; border-radius: 16px; width: 100%; max-width: 420px; box-shadow: 0 10px 30px rgba(0,0,0,0.08); border: 1px solid #eaeaea; }
+  .login-box label { font-size: 13px; color: #444; font-weight: 600; display: block; margin-bottom: 8px; }
   .input-group { position: relative; margin-bottom: 20px; }
-  .login-box input { width: 100%; padding: 14px; border: 1px solid #ccc; border-radius: 6px; font-size: 14px; outline: none; }
-  .login-box input:focus { border-color: #5c0000; }
+  .login-box input { width: 100%; padding: 14px; border: 1px solid #ccc; border-radius: 8px; font-size: 14px; outline: none; transition: 0.2s; }
+  .login-box input:focus { border-color: #5c0000; box-shadow: 0 0 0 3px rgba(92,0,0,0.1); }
   .eye-icon { position: absolute; right: 15px; top: 50%; transform: translateY(-50%); cursor: pointer; color: #888; }
-
-  .login-box button.login-btn { width: 100%; padding: 14px; background: #5c0000; color: white; border: none; border-radius: 6px; font-weight: 700; font-size: 15px; cursor: pointer; display: flex; justify-content: center; align-items: center; gap: 8px; }
+  .login-box button.login-btn { width: 100%; padding: 15px; background: #5c0000; color: white; border: none; border-radius: 8px; font-weight: 700; font-size: 15px; cursor: pointer; display: flex; justify-content: center; align-items: center; gap: 8px; transition: 0.2s; }
   .login-box button.login-btn:hover { background: #450000; }
 
   /* APP SCREEN */
-  #appScreen { display: none; height: 100vh; flex-direction: row; background: #f4f4f4; }
-  #sidebar { width: 230px; background: #5c0000; color: white; padding: 20px 10px; display: flex; flex-direction: column; }
-  .portal-title { font-size: 12px; letter-spacing: 1px; opacity: 0.8; margin-bottom: 20px; padding-left: 10px; font-weight: 600; }
-  #sidebar button { background: transparent; border: none; color: #ffcccc; padding: 12px 15px; text-align: left; cursor: pointer; border-radius: 5px; font-size: 14px; margin-bottom: 5px; width: 100%; }
-  #sidebar button:hover { background: #800000; color: white; }
-  #sidebar .logout-btn { margin-top: auto; background: white; color: #5c0000; font-weight: bold; text-align: center; }
-  #main { flex: 1; padding: 30px; overflow-y: auto; }
-  .topbar { background: white; padding: 15px 20px; border-radius: 8px; margin-bottom: 20px; display: flex; justify-content: space-between; box-shadow: 0 2px 10px rgba(0,0,0,0.05); }
-  .panel { background: white; padding: 20px; border-radius: 8px; margin-bottom: 20px; box-shadow: 0 2px 10px rgba(0,0,0,0.05); }
-  .panel h2 { color: #5c0000; margin-bottom: 15px; }
-  table { width: 100%; border-collapse: collapse; margin-top: 10px; }
-  th, td { padding: 12px; border-bottom: 1px solid #eee; font-size: 13px; text-align: left; }
-  th { background: #5c0000; color: white; }
-  .btn { padding: 8px 14px; background: #800000; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 13px; }
-  .btn.secondary { background: #ccc; color: #333; }
-  .folder { background: #f9eaea; padding: 12px; margin: 8px 0; border-left: 4px solid #800000; border-radius: 4px; cursor: pointer; font-weight: 600; color: #5c0000; }
-  .folder:hover { background: #f0d5d5; }
-  .field { margin-bottom: 15px; }
-  .field label { display: block; font-size: 12px; font-weight: bold; color: #5c0000; margin-bottom: 6px; }
-  .field input, .field select { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 6px; }
-  .badge { padding: 4px 10px; border-radius: 12px; font-size: 11px; font-weight: 600; }
-  .badge.active { background: #d3f2dd; color: #186a3b; }
-  .badge.inactive { background: #fde2e2; color: #9b1c1c; }
+  #appScreen { display: none; height: 100vh; flex-direction: row; background: #f0f2f5; }
+  #sidebar { width: 260px; background: #5c0000; color: white; padding: 20px 0; display: flex; flex-direction: column; box-shadow: 2px 0 10px rgba(0,0,0,0.1); }
+  .portal-title { font-size: 12px; letter-spacing: 1.5px; opacity: 0.7; margin-bottom: 20px; padding-left: 25px; font-weight: 700; }
+  #sidebar button { background: transparent; border: none; color: #ffcccc; padding: 14px 25px; text-align: left; cursor: pointer; border-radius: 0; font-size: 14px; font-weight: 500; width: 100%; transition: 0.2s; border-left: 4px solid transparent; }
+  #sidebar button:hover { background: #4a0000; color: white; }
+  #sidebar button.active { background: #4a0000; color: white; border-left: 4px solid #fff; font-weight: 700; }
+  #sidebar .logout-btn { margin-top: auto; margin: 20px; background: white; color: #5c0000; font-weight: 700; text-align: center; border-radius: 8px; border-left: none; width: calc(100% - 40px); }
+  #sidebar .logout-btn:hover { background: #ffcccc; color: #5c0000; }
+  
+  #main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+  .topbar { background: white; padding: 20px 30px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 2px 10px rgba(0,0,0,0.02); z-index: 10; }
+  .topbar b { color: #5c0000; font-size: 16px; }
+  .topbar #clock { font-weight: 700; color: #888; font-size: 14px; }
+  
+  #content { padding: 30px; overflow-y: auto; flex: 1; }
+  
+  /* CARDS & PANELS */
+  .panel { background: white; padding: 25px; border-radius: 12px; margin-bottom: 25px; box-shadow: 0 4px 15px rgba(0,0,0,0.03); border: 1px solid #eaeaea; }
+  .panel h2 { color: #5c0000; margin-bottom: 20px; font-size: 22px; font-weight: 800; }
+  
+  .dashboard-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 20px; margin-bottom: 30px; }
+  .stat-card { background: linear-gradient(135deg, #800000, #5c0000); color: white; padding: 25px; border-radius: 12px; box-shadow: 0 4px 15px rgba(92,0,0,0.2); }
+  .stat-card h3 { font-size: 32px; margin-bottom: 5px; font-weight: 800; }
+  .stat-card p { font-size: 14px; opacity: 0.9; font-weight: 500; letter-spacing: 0.5px; }
+
+  /* TABLES */
+  table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 14px; }
+  th { background: #f8f9fa; color: #5c0000; font-weight: 700; padding: 15px; text-align: left; border-bottom: 2px solid #eaeaea; }
+  td { padding: 15px; border-bottom: 1px solid #eaeaea; color: #444; }
+  tr:hover td { background: #fcfcfc; }
+  
+  /* BUTTONS & FORMS */
+  .btn { padding: 10px 18px; background: #5c0000; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 13px; transition: 0.2s; }
+  .btn:hover { background: #450000; }
+  .btn.secondary { background: #e0e0e0; color: #333; }
+  .btn.secondary:hover { background: #d0d0d0; }
+  
+  .form-panel { background: #f9f9f9; padding: 20px; border-radius: 8px; border: 1px solid #eaeaea; margin-bottom: 20px; }
+  .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 15px; }
+  .field label { display: block; font-size: 12px; font-weight: 700; color: #555; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.5px; }
+  .field input, .field select { width: 100%; padding: 12px; border: 1px solid #ccc; border-radius: 6px; font-size: 14px; }
+  .field input:focus, .field select:focus { border-color: #5c0000; outline: none; }
+
+  .folder { background: #fff0f0; padding: 15px; margin: 10px 0; border-left: 5px solid #5c0000; border-radius: 6px; cursor: pointer; font-weight: 700; color: #5c0000; display: flex; justify-content: space-between; align-items: center; transition: 0.2s; }
+  .folder:hover { background: #ffe0e0; transform: translateX(5px); }
+  
+  .badge { padding: 5px 12px; border-radius: 20px; font-size: 11px; font-weight: 700; letter-spacing: 0.5px; }
+  .badge.active { background: #d1f2dd; color: #155724; }
+  .badge.inactive { background: #f8d7da; color: #721c24; }
 </style>
 </head>
 <body>
@@ -76,8 +100,6 @@
   </div>
   <div class="login-right">
     <div class="login-box">
-      <!-- Toggle buttons REMOVED -->
-      
       <label>Username</label>
       <input id="loginUser" placeholder="Enter username">
       
