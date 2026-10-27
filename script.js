@@ -172,6 +172,17 @@ function renderActiveDirectory(c) {
   </div>`;
 }
 
+function computeAge() {
+  const bday = document.getElementById('f_birthday').value;
+  if (!bday) return;
+  const birthDate = new Date(bday);
+  const today = new Date();
+  let age = today.getFullYear() - birthDate.getFullYear();
+  const m = today.getMonth() - birthDate.getMonth();
+  if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) age--;
+  document.getElementById('f_age').value = age;
+}
+
 function openStudentForm(id) {
   const s = id ? db.students.find(x => x.id === id) : null;
   const nextId = s ? s.id : '2026-' + Math.floor(1000 + Math.random() * 9000);
@@ -179,19 +190,19 @@ function openStudentForm(id) {
   let currentYear = s ? s.yr : 'Grade 1';
   let currentSem = '1st Sem';
   let currentTrack = 'STEM';
-  let currentSection = '1'; // Default Section 1
+  let currentSection = '1';
   
   if (currentYear && currentYear.includes('-')) {
       const parts = currentYear.split('-');
       currentYear = parts[0].trim();
       currentTrack = parts[1].trim();
       currentSem = parts[2].trim();
-      if(parts[3]) currentSection = parts[3].trim();
+      if(parts[3]) currentSection = parts[3].replace('Sec', '').trim();
   }
 
   const yearLevels = ['Grade 1', 'Grade 2', 'Grade 3', 'Grade 4', 'Grade 5', 'Grade 6', 'Grade 7', 'Grade 8', 'Grade 9', 'Grade 10', 'Grade 11', 'Grade 12'];
   const statuses = ['Active', 'Archived', 'Graduated'];
-  const sections = ['1', '2']; // Available sections
+  const sections = ['1', '2'];
 
   $('enrollFormArea').innerHTML = `
     <div class="form-panel">
@@ -202,6 +213,15 @@ function openStudentForm(id) {
         <div class="field"><label>First Name</label><input id="f_first" value="${esc(s?.first||'')}"></div>
         <div class="field"><label>Middle Initial</label><input id="f_mi" value="${esc(s?.mi||'')}" maxlength="2"></div>
         <div class="field"><label>Email Address</label><input id="f_email" type="email" value="${esc(s?.email||'')}" placeholder="student@email.com"></div>
+        <div class="field"><label>Birthday</label><input id="f_birthday" type="date" value="${esc(s?.birthday||'')}" onchange="computeAge()"></div>
+        <div class="field"><label>Age</label><input id="f_age" type="number" value="${esc(s?.age||'')}" readonly style="background:#e9ecef;"></div>
+        <div class="field"><label>Gender</label><select id="f_gender">
+          <option value="Male" ${s?.gender === 'Male' ? 'selected' : ''}>Male</option>
+          <option value="Female" ${s?.gender === 'Female' ? 'selected' : ''}>Female</option>
+        </select></div>
+        <div class="field"><label>Address</label><input id="f_address" value="${esc(s?.address||'')}" placeholder="Full Address"></div>
+        <div class="field"><label>Guardian Name</label><input id="f_guardianName" value="${esc(s?.guardianName||'')}" placeholder="Parent/Guardian Name"></div>
+        <div class="field"><label>Guardian Contact No.</label><input id="f_guardianContact" value="${esc(s?.guardianContact||'')}" placeholder="09XX-XXX-XXXX"></div>
         <div class="field"><label>Course / Dept</label>
           <select id="f_course" onchange="toggleSHS()">
             <option value="Elem" ${s?.course === 'Elem' ? 'selected' : ''}>Elementary</option>
@@ -263,7 +283,23 @@ async function saveStudent(existingId) {
     yr = `${yr} - Sec ${sec}`;
   }
 
-  const rec = { id: $('f_id').value, last: $('f_last').value, first: first, mi: $('f_mi').value, course: course, yr: yr, status: $('f_status').value, enrol: 'Enrolled', email: email };
+  const rec = { 
+    id: $('f_id').value, 
+    last: $('f_last').value, 
+    first: first, 
+    mi: $('f_mi').value, 
+    course: course, 
+    yr: yr, 
+    status: $('f_status').value, 
+    enrol: 'Enrolled', 
+    email: email,
+    birthday: $('f_birthday').value,
+    age: $('f_age').value,
+    gender: $('f_gender').value,
+    address: $('f_address').value,
+    guardianName: $('f_guardianName').value,
+    guardianContact: $('f_guardianContact').value
+  };
   
   const res = await fetch('/api/students', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(rec) });
   if(!res.ok) return alert('Error saving');
@@ -462,8 +498,9 @@ function renderCoursesTable() {
   const filter = $('courseFilter') ? $('courseFilter').value : 'All';
   const filtered = filter === 'All' ? db.courses : db.courses.filter(c => c.gradeLevel === filter);
 
-  $('courseTableContainer').innerHTML = simpleTable(['Code','Name','Grade Level','Section','Adviser','Subject Teacher','Status'],
-    filtered.map(x => [esc(x.code), esc(x.name), esc(x.gradeLevel), esc(x.section), esc(x.adviser), esc(x.subjectTeacher), `<span class="badge ${x.status === 'Open' ? 'active' : 'inactive'}">${esc(x.status)}</span>`])
+  // STATUS REMOVED
+  $('courseTableContainer').innerHTML = simpleTable(['Code','Name','Grade Level','Section','Adviser','Subject Teacher'],
+    filtered.map(x => [esc(x.code), esc(x.name), esc(x.gradeLevel), esc(x.section), esc(x.adviser), esc(x.subjectTeacher)])
   );
 }
 
@@ -532,7 +569,7 @@ async function saveNewSection() {
   if(templates.length === 0) return alert('No courses found for Section 1 to copy.');
 
   for(const t of templates) {
-    const newCode = t.code.replace('-1', '-' + newSec);
+    const newCode = t.code.replace(/-1$/, '-' + newSec);
     await fetch('/api/courses', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ code: newCode, name: t.name, gradeLevel: t.gradeLevel, section: newSec, capacity: t.capacity, adviser: newAdviser, subjectTeacher: t.subjectTeacher, status: 'Open' })
@@ -550,12 +587,26 @@ function renderUsers(c) {
     esc(u.username), 
     esc(u.name), 
     esc(u.role), 
-    esc(u.section||'—')
+    esc(u.section||'—'),
+    `<div style="display:flex; gap:5px;">
+        ${u.role === 'Student' ? `<button class="btn secondary" onclick="alert('Please edit student details in Student Directory')">Edit</button>` : (u.role === 'Faculty' ? `<button class="btn secondary" onclick="openEditFacultyForm('${esc(u.username)}')">Edit</button>` : '')}
+        ${u.role !== 'Admin' ? `<button class="btn" style="background:#a00;" onclick="deleteUser('${esc(u.username)}')">Delete</button>` : ''}
+     </div>`
   ]);
   c.innerHTML = `<div class="panel"><h2>Users & Access</h2>
     <p style="margin-bottom:15px; color:#666;">Manage system accounts.</p>
-    ${simpleTable(['Username','Name','Role','Section'], rows)}
+    ${simpleTable(['Username','Name','Role','Section','Action'], rows)}
   </div>`;
+}
+
+async function deleteUser(username) {
+  if(!confirm(`Are you sure you want to delete user ${username}? This will also remove their student record if applicable.`)) return;
+  const res = await fetch('/api/users/' + username, { method: 'DELETE' });
+  if(!res.ok) return alert('Error deleting user');
+  alert('User deleted!');
+  db.users = await (await fetch('/api/users')).json();
+  db.students = await (await fetch('/api/students')).json();
+  renderUsers($('content'));
 }
 
 async function renderClassRecords(c) {
@@ -632,7 +683,6 @@ async function markAttendance(courseCode, section, studentId, date, status) {
   await fetch('/api/attendance', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ courseCode, section, studentId, date, status }) });
 }
 
-// --- STUDENT SUBJECTS (READ ONLY) ---
 function renderRegistration(c) {
   const s = currentStudent();
   
@@ -640,7 +690,6 @@ function renderRegistration(c) {
   const studentTrack = s.yr.includes('STEM') ? 'STEM' : s.yr.includes('HUMSS') ? 'HUMSS' : s.yr.includes('ABM') ? 'ABM' : '';
   const studentSem = s.yr.includes('2nd Sem') ? '2nd Sem' : '1st Sem';
   
-  // Kunin ang Section from Student string (Halimbawa: "Grade 11 - STEM - 1st Sem - Sec 1")
   let studentSec = '1'; 
   if (s.yr.includes('Sec ')) {
       studentSec = s.yr.split('Sec ')[1].trim();
@@ -651,7 +700,7 @@ function renderRegistration(c) {
       return cr.gradeLevel.includes(studentYear) && 
              cr.gradeLevel.includes(studentTrack) && 
              cr.gradeLevel.includes(studentSem) && 
-             cr.section === studentSec && // Dito natin fifilter base sa section ng student
+             cr.section === studentSec && 
              cr.status === 'Open';
     } else {
       return cr.gradeLevel.startsWith(studentYear) && cr.section === studentSec && cr.status === 'Open';
@@ -664,7 +713,6 @@ function renderRegistration(c) {
   </div>`;
 }
 
-// --- STUDENT SCHEDULE ---
 async function renderSchedule(c) {
   const s = currentStudent();
   
@@ -752,5 +800,10 @@ function renderStudentProfile(c) {
     <div><small style="color:#888; font-weight:bold;">STUDENT NO.</small><div style="font-size:16px; font-weight:600; margin-top:5px;">${esc(s.id)}</div></div>
     <div><small style="color:#888; font-weight:bold;">YEAR LEVEL</small><div style="font-size:16px; font-weight:600; margin-top:5px;">${esc(s.yr)}</div></div>
     <div><small style="color:#888; font-weight:bold;">ADDRESS</small><div style="font-size:16px; font-weight:600; margin-top:5px;">${esc(s.address)}</div></div>
+    <div><small style="color:#888; font-weight:bold;">BIRTHDAY</small><div style="font-size:16px; font-weight:600; margin-top:5px;">${esc(s.birthday || 'N/A')}</div></div>
+    <div><small style="color:#888; font-weight:bold;">AGE</small><div style="font-size:16px; font-weight:600; margin-top:5px;">${esc(s.age || 'N/A')}</div></div>
+    <div><small style="color:#888; font-weight:bold;">GENDER</small><div style="font-size:16px; font-weight:600; margin-top:5px;">${esc(s.gender || 'N/A')}</div></div>
+    <div><small style="color:#888; font-weight:bold;">GUARDIAN</small><div style="font-size:16px; font-weight:600; margin-top:5px;">${esc(s.guardianName || 'N/A')}</div></div>
+    <div><small style="color:#888; font-weight:bold;">GUARDIAN CONTACT</small><div style="font-size:16px; font-weight:600; margin-top:5px;">${esc(s.guardianContact || 'N/A')}</div></div>
   </div></div>`;
 }

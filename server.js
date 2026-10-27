@@ -19,15 +19,16 @@ const db = new sqlite3.Database(dbPath, (err) => {
     else console.log("Connected to SQLite DB");
 });
 
-// AUTO-SEED
+// AUTO-SEED CHECK
 db.serialize(() => {
     db.get("SELECT name FROM sqlite_master WHERE type='table' AND name='users'", (err, row) => {
         if (!row) {
             buildDatabase();
         } else {
             db.all("PRAGMA table_info(students)", (err, cols) => {
-                const hasEmail = cols.some(c => c.name === 'email');
-                if (!hasEmail) {
+                const hasNewFields = cols.some(c => c.name === 'guardianName');
+                if (!hasNewFields) {
+                    console.log("⚠️ Old schema detected. Rebuilding database...");
                     db.run("DROP TABLE IF EXISTS attendance");
                     db.run("DROP TABLE IF EXISTS student_records");
                     db.run("DROP TABLE IF EXISTS enrollments");
@@ -49,7 +50,7 @@ db.serialize(() => {
 function buildDatabase() {
     db.serialize(() => {
         db.run(`CREATE TABLE users (username TEXT PRIMARY KEY, password TEXT, name TEXT, role TEXT, section TEXT)`);
-        db.run(`CREATE TABLE students (id TEXT PRIMARY KEY, last TEXT, first TEXT, mi TEXT, address TEXT, course TEXT, yr TEXT, status TEXT, enrol TEXT, username TEXT, password TEXT, birthday TEXT, email TEXT)`);
+        db.run(`CREATE TABLE students (id TEXT PRIMARY KEY, last TEXT, first TEXT, mi TEXT, address TEXT, course TEXT, yr TEXT, status TEXT, enrol TEXT, username TEXT, password TEXT, birthday TEXT, email TEXT, age TEXT, gender TEXT, guardianName TEXT, guardianContact TEXT)`);
         db.run(`CREATE TABLE courses (code TEXT PRIMARY KEY, name TEXT, gradeLevel TEXT, section TEXT, capacity INTEGER, adviser TEXT, subjectTeacher TEXT, status TEXT)`);
         db.run(`CREATE TABLE enrollments (id INTEGER PRIMARY KEY AUTOINCREMENT, studentId TEXT, courseCode TEXT, section TEXT, term TEXT)`);
         db.run(`CREATE TABLE grades (id INTEGER PRIMARY KEY AUTOINCREMENT, studentId TEXT, courseCode TEXT, courseName TEXT, grade REAL, term TEXT)`);
@@ -75,9 +76,10 @@ function buildDatabase() {
         });
         insertUser.finalize();
 
-        const insertStudent = db.prepare(`INSERT INTO students (id, last, first, mi, address, course, yr, status, enrol, username, password, birthday, email) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
-        insertStudent.run('2023-0006', 'Dela Cruz', 'Juan', 'A', 'Mariveles, Bataan', 'Elem', 'Grade 4', 'Active', 'Enrolled', 'juandc', 'juan123', '2017-05-14', 'juan@example.com');
-        insertStudent.run('2026-01523', 'Reyes', 'Maria', 'B', 'Limay, Bataan', 'SHS', 'Grade 11 - STEM - 1st Sem', 'Active', 'Enrolled', 'mariar', 'maria123', '2010-08-22', 'maria@example.com');
+        const insertStudent = db.prepare(`INSERT INTO students (id, last, first, mi, address, course, yr, status, enrol, username, password, birthday, email, age, gender, guardianName, guardianContact) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
+        insertStudent.run('2023-0006', 'Dela Cruz', 'Juan', 'A', 'Mariveles, Bataan', 'Elem', 'Grade 4', 'Active', 'Enrolled', 'juandc', 'juan123', '2017-05-14', 'juan@example.com', '8', 'Male', 'Maria Dela Cruz', '0917-111-2222');
+        insertStudent.run('2026-01523', 'Reyes', 'Maria', 'B', 'Limay, Bataan', 'SHS', 'Grade 11 - STEM - 1st Sem', 'Active', 'Enrolled', 'mariar', 'maria123', '2010-08-22', 'maria@example.com', '15', 'Female', 'Jose Reyes', '0918-333-4444');
+        insertStudent.run('2026-0011', 'Manuel', 'Alexandra', 'B.', 'Mariveles, Bataan', 'SHS', 'Grade 12 - STEM - 1st Sem', 'Active', 'Enrolled', 'alexandram', 'alexandra123', '2009-03-30', 'alexandra@example.com', '17', 'Female', 'Rosa Manuel', '0921-999-0000');
         insertStudent.finalize();
 
         const insertCourse = db.prepare(`INSERT INTO courses (code, name, gradeLevel, section, capacity, adviser, subjectTeacher, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`);
@@ -95,15 +97,7 @@ function buildDatabase() {
             { level: 'Grade 11 - STEM - 1st Sem', subjects: [['ORAL', 'Oral Communication'], ['KOMU', 'Komunikasyon'], ['GENM', 'General Math'], ['EALS', 'Earth & Life Science'], ['PERD', 'Personal Dev'], ['EMPW', 'Empowerment Tech'], ['PE11', 'PE & Health 1'], ['PREC', 'Pre-Calculus'], ['CHEM1', 'Gen Chem 1']], capacity: 40 },
             { level: 'Grade 11 - STEM - 2nd Sem', subjects: [['READ', 'Reading & Writing'], ['PAGB', 'Pagbasa'], ['STAT', 'Statistics'], ['PHYS', 'Physical Science'], ['PE11B', 'PE & Health 2'], ['PR1', 'Practical Research 1'], ['BASC', 'Basic Calculus'], ['CHEM2', 'Gen Chem 2']], capacity: 40 },
             { level: 'Grade 12 - STEM - 1st Sem', subjects: [['21ST', '21st Century Lit'], ['UCSP', 'UCSP'], ['PHIL', 'Philosophy'], ['PE12', 'PE & Health 3'], ['EAPP', 'EAPP'], ['PR2', 'Practical Research 2'], ['CPAR', 'Contemporary Arts'], ['MIL', 'Media & Info Lit'], ['PHY1', 'Gen Physics 1'], ['BIO1', 'Gen Biology 1']], capacity: 40 },
-            { level: 'Grade 12 - STEM - 2nd Sem', subjects: [['PAGS', 'Pagsulat'], ['PE12B', 'PE & Health 4'], ['ENTR', 'Entrepreneurship'], ['INQ', 'Inquiries'], ['PHY2', 'Gen Physics 2'], ['BIO2', 'Gen Biology 2'], ['STEMW', 'Work Immersion']], capacity: 40 },
-            { level: 'Grade 11 - HUMSS - 1st Sem', subjects: [['ORAL', 'Oral Communication'], ['KOMU', 'Komunikasyon'], ['PERD', 'Personal Dev'], ['UCSP', 'UCSP'], ['DISS', 'Disciplines & Ideas'], ['HUM1', 'Humanities 1'], ['PE11', 'PE & Health 1']], capacity: 40 },
-            { level: 'Grade 11 - HUMSS - 2nd Sem', subjects: [['READ', 'Reading & Writing'], ['PAGB', 'Pagbasa'], ['STAT', 'Statistics'], ['PHYS', 'Physical Science'], ['PE11B', 'PE & Health 2'], ['PR1', 'Practical Research 1'], ['HUM2', 'Humanities 2'], ['POLG', 'Politics & Governance']], capacity: 40 },
-            { level: 'Grade 12 - HUMSS - 1st Sem', subjects: [['21ST', '21st Century Lit'], ['PHIL', 'Philosophy'], ['PE12', 'PE & Health 3'], ['EAPP', 'EAPP'], ['PR2', 'Practical Research 2'], ['CPAR', 'Contemporary Arts'], ['MIL', 'Media & Info Lit']], capacity: 40 },
-            { level: 'Grade 12 - HUMSS - 2nd Sem', subjects: [['PAGS', 'Pagsulat'], ['PE12B', 'PE & Health 4'], ['ENTR', 'Entrepreneurship'], ['INQ', 'Inquiries'], ['CULM', 'Culminating Activity']], capacity: 40 },
-            { level: 'Grade 11 - ABM - 1st Sem', subjects: [['ORAL', 'Oral Communication'], ['KOMU', 'Komunikasyon'], ['PERD', 'Personal Dev'], ['FABM1', 'Fundamentals of ABM 1'], ['BUSM', 'Business Math'], ['PE11', 'PE & Health 1']], capacity: 40 },
-            { level: 'Grade 11 - ABM - 2nd Sem', subjects: [['READ', 'Reading & Writing'], ['PAGB', 'Pagbasa'], ['STAT', 'Statistics'], ['PE11B', 'PE & Health 2'], ['PR1', 'Practical Research 1'], ['FABM2', 'Fundamentals of ABM 2'], ['BUSF', 'Business Finance']], capacity: 40 },
-            { level: 'Grade 12 - ABM - 1st Sem', subjects: [['21ST', '21st Century Lit'], ['PHIL', 'Philosophy'], ['PE12', 'PE & Health 3'], ['EAPP', 'EAPP'], ['PR2', 'Practical Research 2'], ['CPAR', 'Contemporary Arts'], ['MIL', 'Media & Info Lit']], capacity: 40 },
-            { level: 'Grade 12 - ABM - 2nd Sem', subjects: [['PAGS', 'Pagsulat'], ['PE12B', 'PE & Health 4'], ['ENTR', 'Entrepreneurship'], ['INQ', 'Inquiries'], ['BUSR', 'Business Research']], capacity: 40 }
+            { level: 'Grade 12 - STEM - 2nd Sem', subjects: [['PAGS', 'Pagsulat'], ['PE12B', 'PE & Health 4'], ['ENTR', 'Entrepreneurship'], ['INQ', 'Inquiries'], ['PHY2', 'Gen Physics 2'], ['BIO2', 'Gen Biology 2'], ['STEMW', 'Work Immersion']], capacity: 40 }
         ];
 
         let teacherIndex = 0;
@@ -129,62 +123,60 @@ function buildDatabase() {
     });
 }
 
-// GENERATE SCHEDULES (NON-OVERLAPPING)
+// GENERATE SCHEDULES (2x a week, no overlap, until 3PM)
 function generateSchedules() {
     db.all("SELECT * FROM courses", [], (err, courses) => {
         if (err || !courses) return;
-        const insertSchedule = db.prepare(`INSERT INTO schedules (courseCode, section, day, startTime, endTime) VALUES (?, ?, ?, ?, ?)`);
-        
-        const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
-        
-        // Group by Section para hindi mag-overlap ang bawat section
-        const groupedBySection = {};
-        courses.forEach(c => {
-            const key = `${c.gradeLevel}|${c.section}`;
-            if (!groupedBySection[key]) groupedBySection[key] = [];
-            groupedBySection[key].push(c);
-        });
-
-        Object.keys(groupedBySection).forEach(key => {
-            const [gradeLevel, section] = key.split('|');
-            const isSHS = gradeLevel.includes('Grade 11') || gradeLevel.includes('Grade 12');
-            const isElem = gradeLevel.includes('Grade 1') || gradeLevel.includes('Grade 2') || gradeLevel.includes('Grade 3') || gradeLevel.includes('Grade 4') || gradeLevel.includes('Grade 5') || gradeLevel.includes('Grade 6');
+        db.run("DELETE FROM schedules", () => {
+            const insertSchedule = db.prepare(`INSERT INTO schedules (courseCode, section, day, startTime, endTime) VALUES (?, ?, ?, ?, ?)`);
+            const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
             
-            let subjectList = groupedBySection[key];
-            
-            // Setup time slots (Para sure na walang overlap sa loob ng parehong section)
-            let timeSlots = isSHS 
-                ? ['07:00', '09:00', '11:00', '13:00', '15:00'] // SHS: 2 hours each
-                : ['07:00', '08:00', '09:00', '10:00', '13:00', '14:00']; // JHS/Elem: 1 hour each
-
-            let currentDayIdx = 0;
-            let slotIdx = 0;
-            let maxSubjectsPerDay = isSHS ? 3 : 5; // SHS max 3, JHS/Elem max 5
-
-            subjectList.forEach(sub => {
-                // Move to next day if max subjects reached or time slots exhausted
-                if (slotIdx >= maxSubjectsPerDay || slotIdx >= timeSlots.length) {
-                    currentDayIdx = (currentDayIdx + 1) % 5; // Next day (Mon-Fri)
-                    slotIdx = 0;
-                }
-
-                const day = days[currentDayIdx];
-                const startTime = timeSlots[slotIdx];
-                
-                // Calculate end time
-                let endTimeMins = parseInt(startTime.split(':')[0]) * 60 + parseInt(startTime.split(':')[1]) + (isSHS ? 120 : 60);
-                let h = Math.floor(endTimeMins / 60).toString().padStart(2, '0');
-                let m = (endTimeMins % 60).toString().padStart(2, '0');
-                const endTime = `${h}:${m}`;
-
-                insertSchedule.run(sub.code, section, day, startTime, endTime);
-                
-                slotIdx++;
+            const groupedBySection = {};
+            courses.forEach(c => {
+                const key = `${c.gradeLevel}|${c.section}`;
+                if (!groupedBySection[key]) groupedBySection[key] = [];
+                groupedBySection[key].push(c);
             });
-        });
 
-        insertSchedule.finalize(() => {
-            console.log("✅ Schedules successfully generated (No overlaps).");
+            const teacherSchedule = {}; // Prevents overlap
+
+            Object.keys(groupedBySection).forEach(key => {
+                const [gradeLevel, section] = key.split('|');
+                const subjectList = groupedBySection[key];
+                
+                const slots = [
+                    { start: '07:00', end: '09:00' },
+                    { start: '09:00', end: '11:00' },
+                    { start: '11:00', end: '13:00' },
+                    { start: '13:00', end: '15:00' }
+                ];
+
+                subjectList.forEach((sub, index) => {
+                    const isFirstSession = index % 2 === 0;
+                    const assignedDays = isFirstSession ? ['Monday', 'Wednesday'] : ['Tuesday', 'Thursday'];
+                    const teacher = sub.subjectTeacher || 'Unassigned';
+
+                    let assignedSlot = null;
+                    for (let s of slots) {
+                        let isFree = true;
+                        for (let d of assignedDays) {
+                            if (teacherSchedule[`${teacher}-${d}-${s.start}`]) { isFree = false; break; }
+                        }
+                        if (isFree) { assignedSlot = s; break; }
+                    }
+
+                    if (!assignedSlot) assignedSlot = slots[0]; 
+
+                    assignedDays.forEach(d => {
+                        teacherSchedule[`${teacher}-${d}-${assignedSlot.start}`] = true;
+                        insertSchedule.run(sub.code, section, d, assignedSlot.start, assignedSlot.end);
+                    });
+                });
+            });
+
+            insertSchedule.finalize(() => {
+                console.log("✅ Schedules generated (2x/week, until 3PM, no overlaps).");
+            });
         });
     });
 }
@@ -228,16 +220,18 @@ app.delete('/api/users/:username', (req, res) => {
 
 app.get('/api/students', (req, res) => db.all("SELECT * FROM students", [], (err, rows) => res.json(err ? [] : rows)));
 app.post('/api/students', (req, res) => {
-    const { id, last, first, mi, address, course, yr, status, enrol, birthday, email } = req.body;
+    const { id, last, first, mi, address, course, yr, status, enrol, birthday, email, age, gender, guardianName, guardianContact } = req.body;
     if (!id) return res.status(400).json({ error: "Student ID required" });
     const fullName = `${first} ${last}`;
     const generatedPass = `${first.toLowerCase()}123`;
 
     db.get("SELECT id FROM students WHERE id = ?", [id], async (err, row) => {
         if (row) {
-            db.run(`UPDATE students SET last=?, first=?, mi=?, address=?, course=?, yr=?, status=?, enrol=?, birthday=?, email=? WHERE id=?`, [last, first, mi, address, course, yr, status, enrol, birthday, email, id], (e) => res.json({ message: e ? e.message : "Updated" }));
+            db.run(`UPDATE students SET last=?, first=?, mi=?, address=?, course=?, yr=?, status=?, enrol=?, birthday=?, email=?, age=?, gender=?, guardianName=?, guardianContact=? WHERE id=?`, 
+            [last, first, mi, address, course, yr, status, enrol, birthday, email, age, gender, guardianName, guardianContact, id], (e) => res.json({ message: e ? e.message : "Updated" }));
         } else {
-            db.run(`INSERT INTO students (id, last, first, mi, address, course, yr, status, enrol, username, password, birthday, email) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`, [id, last, first, mi, address, course, yr, status, enrol, id, generatedPass, birthday, email], async (e) => {
+            db.run(`INSERT INTO students (id, last, first, mi, address, course, yr, status, enrol, username, password, birthday, email, age, gender, guardianName, guardianContact) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, 
+            [id, last, first, mi, address, course, yr, status, enrol, id, generatedPass, birthday, email, age, gender, guardianName, guardianContact], async (e) => {
                 if (e) return res.status(400).json({ error: e.message });
                 
                 db.run(`INSERT INTO users (username, password, name, role, section) VALUES (?,?,?,'Student',?)`, [id, generatedPass, fullName, yr], async () => {
@@ -255,13 +249,10 @@ app.post('/api/students', (req, res) => {
                                                 <tr><td style="padding: 5px; font-weight: bold;">Username:</td><td style="padding: 5px;">${id}</td></tr>
                                                 <tr><td style="padding: 5px; font-weight: bold;">Password:</td><td style="padding: 5px;">${generatedPass}</td></tr>
                                             </table>
-                                            <p style="margin-top: 20px;">Please keep this information safe.</p>
                                         </div>`
                                 });
                             }
-                        } catch (error) {
-                            console.error("❌ Failed to send email:", error);
-                        }
+                        } catch (error) { console.error("❌ Failed to send email:", error); }
                     }
                     res.json({ message: "Student created!" });
                 });

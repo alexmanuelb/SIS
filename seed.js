@@ -15,9 +15,9 @@ db.serialize(() => {
     db.run("DROP TABLE IF EXISTS grades");
     db.run("DROP TABLE IF EXISTS schedules");
 
-    // CREATE TABLES (May Email column na ang students)
+    // CREATE TABLES (Updated Students table with new fields)
     db.run(`CREATE TABLE users (username TEXT PRIMARY KEY, password TEXT, name TEXT, role TEXT, section TEXT)`);
-    db.run(`CREATE TABLE students (id TEXT PRIMARY KEY, last TEXT, first TEXT, mi TEXT, address TEXT, course TEXT, yr TEXT, status TEXT, enrol TEXT, username TEXT, password TEXT, birthday TEXT, email TEXT)`);
+    db.run(`CREATE TABLE students (id TEXT PRIMARY KEY, last TEXT, first TEXT, mi TEXT, address TEXT, course TEXT, yr TEXT, status TEXT, enrol TEXT, username TEXT, password TEXT, birthday TEXT, email TEXT, age TEXT, gender TEXT, guardianName TEXT, guardianContact TEXT)`);
     db.run(`CREATE TABLE courses (code TEXT PRIMARY KEY, name TEXT, gradeLevel TEXT, section TEXT, capacity INTEGER, adviser TEXT, subjectTeacher TEXT, status TEXT)`);
     db.run(`CREATE TABLE enrollments (id INTEGER PRIMARY KEY AUTOINCREMENT, studentId TEXT, courseCode TEXT, section TEXT, term TEXT)`);
     db.run(`CREATE TABLE grades (id INTEGER PRIMARY KEY AUTOINCREMENT, studentId TEXT, courseCode TEXT, courseName TEXT, grade REAL, term TEXT)`);
@@ -29,7 +29,7 @@ db.serialize(() => {
     db.run(`INSERT INTO users (username, password, name, role, section) VALUES ('admin', 'admin123', 'Admin User', 'Admin', '')`);
     db.run(`INSERT INTO users (username, password, name, role, section) VALUES ('registrar', 'reg123', 'Registrar Staff', 'Registrar', '')`);
 
-    // INSERT 30 TEACHERS (Pareho sa binigay mo)
+    // INSERT 30 TEACHERS
     const insertUser = db.prepare(`INSERT INTO users (username, password, name, role, section) VALUES (?, ?, ?, ?, ?)`);
     const teachers = [
         'T. John Emmanuel S.', 'T. Emily Bronte', 'T. Alan Turing', 'T. Liza Soberano', 'T. Andres Bonifacio',
@@ -45,20 +45,19 @@ db.serialize(() => {
     });
     insertUser.finalize();
 
-    // INSERT STUDENTS (May Email na)
-    const insertStudent = db.prepare(`INSERT INTO students (id, last, first, mi, address, course, yr, status, enrol, username, password, birthday, email) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
-    insertStudent.run('2023-0006', 'Dela Cruz', 'Juan', 'A', 'Mariveles, Bataan', 'Elem', 'Grade 4', 'Active', 'Enrolled', 'juandc', 'juan123', '2017-05-14', 'juan@example.com');
-    insertStudent.run('2026-01523', 'Reyes', 'Maria', 'B', 'Limay, Bataan', 'SHS', 'Grade 11 - STEM - 1st Sem', 'Active', 'Enrolled', 'mariar', 'maria123', '2010-08-22', 'maria@example.com');
-    insertStudent.run('2026-0163', 'Santos', 'Pedro', 'C', 'Mariveles, Bataan', 'Elem', 'Grade 1', 'Active', 'Enrolled', 'pedros', 'pedro123', '2021-02-10', 'pedro@example.com');
-    insertStudent.run('2026', 'Reyes', 'Katie Mae', '', 'Mariveles, Bataan', 'JHS', 'Grade 7', 'Inactive', 'Enrolled', 'katiemaer', 'katie123', '2014-11-05', 'katie@example.com');
-    insertStudent.run('2026-0011', 'Manuel', 'Alexandra', 'B.', 'Mariveles, Bataan', 'SHS', 'Grade 12 - STEM - 1st Sem', 'Active', 'Enrolled', 'alexandram', 'alexandra123', '2009-03-30', 'alexandra@example.com');
+    // INSERT STUDENTS (Updated to include new fields: age, gender, guardianName, guardianContact)
+    const insertStudent = db.prepare(`INSERT INTO students (id, last, first, mi, address, course, yr, status, enrol, username, password, birthday, email, age, gender, guardianName, guardianContact) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
+    insertStudent.run('2023-0006', 'Dela Cruz', 'Juan', 'A', 'Mariveles, Bataan', 'Elem', 'Grade 4', 'Active', 'Enrolled', 'juandc', 'juan123', '2017-05-14', 'juan@example.com', '8', 'Male', 'Maria Dela Cruz', '0917-111-2222');
+    insertStudent.run('2026-01523', 'Reyes', 'Maria', 'B', 'Limay, Bataan', 'SHS', 'Grade 11 - STEM - 1st Sem', 'Active', 'Enrolled', 'mariar', 'maria123', '2010-08-22', 'maria@example.com', '15', 'Female', 'Jose Reyes', '0918-333-4444');
+    insertStudent.run('2026-0163', 'Santos', 'Pedro', 'C', 'Mariveles, Bataan', 'Elem', 'Grade 1', 'Active', 'Enrolled', 'pedros', 'pedro123', '2021-02-10', 'pedro@example.com', '5', 'Male', 'Ana Santos', '0919-555-6666');
+    insertStudent.run('2026', 'Reyes', 'Katie Mae', '', 'Mariveles, Bataan', 'JHS', 'Grade 7', 'Inactive', 'Enrolled', 'katiemaer', 'katie123', '2014-11-05', 'katie@example.com', '11', 'Female', 'Mark Reyes', '0920-777-8888');
+    insertStudent.run('2026-0011', 'Manuel', 'Alexandra', 'B.', 'Mariveles, Bataan', 'SHS', 'Grade 12 - STEM - 1st Sem', 'Active', 'Enrolled', 'alexandram', 'alexandra123', '2009-03-30', 'alexandra@example.com', '17', 'Female', 'Rosa Manuel', '0921-999-0000');
     insertStudent.finalize();
 
     // GENERATE COURSES & SCHEDULES
     const insertCourse = db.prepare(`INSERT INTO courses (code, name, gradeLevel, section, capacity, adviser, subjectTeacher, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`);
     const insertSchedule = db.prepare(`INSERT INTO schedules (courseCode, section, day, startTime, endTime) VALUES (?, ?, ?, ?, ?)`);
 
-    // Grade 1 to 12 lang (Walang Kinder)
     const gradeConfigs = [
         { level: 'Grade 1', subjects: [['LANG', 'Language'], ['READ', 'Reading'], ['MATH', 'Mathematics'], ['GMRC', 'Good Manners'], ['MAK', 'Makabansa']], capacity: 30 },
         { level: 'Grade 2', subjects: [['ENG', 'English'], ['FIL', 'Filipino'], ['MATH', 'Mathematics'], ['GMRC', 'Good Manners'], ['MAK', 'Makabansa']], capacity: 30 },
@@ -77,9 +76,15 @@ db.serialize(() => {
     ];
 
     const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
-    const timeSlots = [ ['07:00','08:00'], ['08:00','09:00'], ['09:00','10:00'], ['10:00','11:00'], ['13:00','14:00'], ['14:00','15:00'], ['15:00','16:00'] ];
+    
+    // Time slots up to 3:00 PM only
+    const timeSlots = [ 
+        ['07:00','09:00'], ['09:00','11:00'], ['11:00','13:00'], 
+        ['13:00','15:00'] 
+    ];
 
     let teacherIndex = 0;
+    const teacherScheduleMap = {}; // Prevents teacher overlap
 
     gradeConfigs.forEach(config => {
         for (let sec = 1; sec <= 2; sec++) {
@@ -87,7 +92,6 @@ db.serialize(() => {
             const gradePrefix = config.level.replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
             const advisoryTeacher = teachers[teacherIndex % teachers.length];
             teacherIndex++;
-            let timeIndex = 0;
 
             config.subjects.forEach((sub, idx) => {
                 const subCode = sub[0];
@@ -97,10 +101,35 @@ db.serialize(() => {
 
                 insertCourse.run(courseCode, `${subName} (${config.level})`, config.level, sectionStr, config.capacity, advisoryTeacher, subjectTeacher, 'Open');
 
-                const day = days[timeIndex % 5];
-                const time = timeSlots[Math.floor(timeIndex / 5) % timeSlots.length];
-                insertSchedule.run(courseCode, sectionStr, day, time[0], time[1]);
-                timeIndex++;
+                // Schedule Logic: 2x a week per subject, no overlaps
+                const isFirstSession = idx % 2 === 0;
+                const day1 = isFirstSession ? 'Monday' : 'Tuesday';
+                const day2 = isFirstSession ? 'Wednesday' : 'Thursday';
+                const assignedDays = [day1, day2];
+
+                let chosenSlot = null;
+                for (let slot of timeSlots) {
+                    let isFree = true;
+                    for (let day of assignedDays) {
+                        const mapKey = `${subjectTeacher}-${day}-${slot[0]}`;
+                        if (teacherScheduleMap[mapKey]) {
+                            isFree = false;
+                            break;
+                        }
+                    }
+                    if (isFree) {
+                        chosenSlot = slot;
+                        break;
+                    }
+                }
+
+                // Fallback if all slots are taken for this teacher (shouldn't happen with 4 slots)
+                if (!chosenSlot) chosenSlot = timeSlots[0];
+
+                assignedDays.forEach(day => {
+                    teacherScheduleMap[`${subjectTeacher}-${day}-${chosenSlot[0]}`] = true;
+                    insertSchedule.run(courseCode, sectionStr, day, chosenSlot[0], chosenSlot[1]);
+                });
             });
         }
     });
@@ -109,5 +138,3 @@ db.serialize(() => {
     insertSchedule.finalize();
     console.log("✅ Database successfully created with all courses, teachers, and students.");
 });
-
-db.close();
