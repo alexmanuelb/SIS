@@ -23,7 +23,6 @@ db.get("SELECT name FROM sqlite_master WHERE type='table' AND name='users'", (er
     if (!row) {
         console.log("⚠️ No tables found. Auto-seeding database...");
         db.serialize(() => {
-            // CREATE ALL TABLES
             db.run(`CREATE TABLE users (username TEXT PRIMARY KEY, password TEXT, name TEXT, role TEXT, section TEXT)`);
             db.run(`CREATE TABLE students (id TEXT PRIMARY KEY, last TEXT, first TEXT, mi TEXT, address TEXT, course TEXT, yr TEXT, status TEXT, enrol TEXT, username TEXT, password TEXT, birthday TEXT)`);
             db.run(`CREATE TABLE courses (code TEXT PRIMARY KEY, name TEXT, gradeLevel TEXT, section TEXT, capacity INTEGER, adviser TEXT, status TEXT)`);
@@ -33,7 +32,6 @@ db.get("SELECT name FROM sqlite_master WHERE type='table' AND name='users'", (er
             db.run(`CREATE TABLE attendance (id INTEGER PRIMARY KEY AUTOINCREMENT, courseCode TEXT, section TEXT, studentId TEXT, date TEXT, status TEXT, UNIQUE(courseCode, section, studentId, date))`);
             db.run(`CREATE TABLE student_records (id INTEGER PRIMARY KEY AUTOINCREMENT, studentId TEXT, gradeLevel TEXT, schoolYear TEXT, subject TEXT, grade REAL, status TEXT, remarks TEXT)`);
 
-            // INSERT SEED DATA
             const insertUser = db.prepare(`INSERT INTO users (username, password, name, role, section) VALUES (?, ?, ?, ?, ?)`);
             [
                 ['admin', 'admin123', 'Admin User', 'Admin', ''],
@@ -66,7 +64,6 @@ db.get("SELECT name FROM sqlite_master WHERE type='table' AND name='users'", (er
                 ['ORAL11-1', '1', 'Monday', '08:00', '09:00']
             ].forEach(s => insertSchedule.run(s));
             insertSchedule.finalize();
-
             console.log("✅ Auto-seed complete! Database is ready.");
         });
     } else {
@@ -150,7 +147,6 @@ app.post('/api/students', (req, res) => {
         if (err) return res.status(500).json({ error: err.message });
 
         if (row) {
-            // UPDATE existing
             db.run(`UPDATE students SET last=?, first=?, mi=?, address=?, course=?, yr=?, status=?, enrol=?, birthday=? WHERE id=?`,
                 [last, first, mi, address, course, yr, status, enrol, birthday, id],
                 function (e) {
@@ -158,7 +154,6 @@ app.post('/api/students', (req, res) => {
                     res.json({ message: "Student updated" });
                 });
         } else {
-            // INSERT new + auto-create user account
             db.run(`INSERT INTO students (id, last, first, mi, address, course, yr, status, enrol, username, password, birthday)
                     VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
                 [id, last, first, mi, address, course, yr, status, enrol, username, password, birthday],
@@ -272,7 +267,6 @@ app.post('/api/schedules', (req, res) => {
         return res.status(400).json({ error: "All schedule fields are required" });
     }
 
-    // Conflict check: same section, same day, overlapping time
     db.all(`SELECT * FROM schedules WHERE section = ? AND day = ?`,
         [section, day],
         (err, existing) => {
@@ -331,7 +325,6 @@ app.post('/api/enroll', (req, res) => {
         if (!course) return res.status(404).json({ error: "Course not found" });
         if (course.status === 'Closed') return res.status(400).json({ error: "Course is closed" });
 
-        // Check duplicate subject enrollment (same course name)
         db.get(`SELECT e.id FROM enrollments e
                 JOIN courses c ON e.courseCode = c.code
                 WHERE e.studentId = ? AND c.name = ?`,
@@ -339,7 +332,6 @@ app.post('/api/enroll', (req, res) => {
                 if (err2) return res.status(500).json({ error: err2.message });
                 if (existing) return res.status(400).json({ error: "Already enrolled in this subject" });
 
-                // Check capacity
                 db.get(`SELECT COUNT(*) as count FROM enrollments WHERE courseCode = ? AND section = ?`,
                     [courseCode, section], (err3, result) => {
                         if (err3) return res.status(500).json({ error: err3.message });
@@ -351,8 +343,6 @@ app.post('/api/enroll', (req, res) => {
                             [studentId, courseCode, section, term || '1st Sem'],
                             function (e) {
                                 if (e) return res.status(400).json({ error: e.message });
-
-                                // Auto-close if full
                                 db.get(`SELECT COUNT(*) as count FROM enrollments WHERE courseCode = ? AND section = ?`,
                                     [courseCode, section], (err4, finalCount) => {
                                         if (finalCount.count >= course.capacity) {
@@ -393,7 +383,6 @@ app.post('/api/grades', (req, res) => {
         return res.status(400).json({ error: "studentId, courseName, and grade required" });
     }
 
-    // UPSERT — update existing or insert new
     db.get("SELECT id FROM grades WHERE studentId = ? AND courseName = ?",
         [studentId, courseName],
         (err, existing) => {
@@ -468,7 +457,6 @@ app.post('/api/attendance', (req, res) => {
         return res.status(400).json({ error: "All attendance fields required" });
     }
 
-    // UPSERT — one record per student/course/date
     db.run(`INSERT INTO attendance (courseCode, section, studentId, date, status)
             VALUES (?,?,?,?,?)
             ON CONFLICT(courseCode, section, studentId, date)

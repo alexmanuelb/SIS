@@ -22,12 +22,6 @@
   .login-right { flex: 1; display: flex; align-items: center; justify-content: center; background-color: #ffffff; padding-right: 10%; }
   
   .login-box { background: white; padding: 40px; border-radius: 12px; width: 100%; max-width: 420px; box-shadow: 0 10px 40px rgba(0,0,0,0.08); border: 1px solid #eee; }
-  
-  /* TOGGLE BUTTONS */
-  .role-toggle { display: flex; gap: 10px; margin-bottom: 25px; }
-  .role-btn { flex: 1; padding: 12px; border: none; border-radius: 6px; font-weight: 600; font-size: 14px; cursor: pointer; transition: 0.3s; }
-  .role-btn.active { background: #5c0000; color: white; }
-  .role-btn.inactive { background: #a0a0a0; color: white; }
 
   .login-box label { font-size: 13px; color: #333; font-weight: 600; display: block; margin-bottom: 8px; }
   .input-group { position: relative; margin-bottom: 20px; }
@@ -82,13 +76,8 @@
   </div>
   <div class="login-right">
     <div class="login-box">
+      <!-- Toggle buttons REMOVED -->
       
-      <!-- Role Toggle -->
-      <div class="role-toggle">
-        <button class="role-btn active" id="btn-faculty" onclick="setRole('Faculty')">Faculty</button>
-        <button class="role-btn inactive" id="btn-student" onclick="setRole('Student')">Student</button>
-      </div>
-
       <label>Username</label>
       <input id="loginUser" placeholder="Enter username">
       

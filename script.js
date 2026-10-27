@@ -1,20 +1,8 @@
 let db = { students: [], courses: [], users: [], enrollments: [], grades: [], schedules: [], attendance: [], records: [] };
 let session = null;
-let loginRole = 'Faculty'; 
 
 const $ = id => document.getElementById(id);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-
-function setRole(role) {
-  loginRole = role;
-  const btnF = $('btn-faculty');
-  const btnS = $('btn-student');
-  if (role === 'Faculty') {
-    btnF.className = 'role-btn active'; btnS.className = 'role-btn inactive';
-  } else {
-    btnS.className = 'role-btn active'; btnF.className = 'role-btn inactive';
-  }
-}
 
 function togglePassword() {
   const p = $('loginPass');
@@ -58,6 +46,7 @@ async function doLogin() {
     
     buildSidebar();
     
+    // AUTO REDIRECT BASED ON ROLE
     if (session.role === 'Admin') navigate('adminDashboard');
     else if (session.role === 'Faculty') navigate('facultyDashboard');
     else navigate('studentDashboard');
