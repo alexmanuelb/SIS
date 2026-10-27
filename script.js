@@ -178,12 +178,15 @@ function renderStudentDashboard(c) {
 /* ---------- ADMIN: STUDENT DIRECTORY ---------- */
 function renderActiveDirectory(c) {
   const active = db.students.filter(s => s.status !== 'Archived' && s.status !== 'Graduated');
-  c.innerHTML = `<div class="panel"><h2>Student Directory</h2>
+  c.innerHTML = `<div class="panel">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+      <h2 style="margin:0;">Student Directory</h2>
+      <button class="btn" onclick="openStudentForm()">+ Add New Student</button>
+    </div>
     <div id="enrollFormArea"></div>
     ${simpleTable(['Student ID','Last Name','First Name','Year Level','Status','Action'],
       active.map(s => [esc(s.id), esc(s.last), esc(s.first), esc(s.yr), `<span class="badge ${s.status === 'Active' ? 'active' : 'inactive'}">${esc(s.status)}</span>`,
-        `<button class="btn" onclick="openStudentForm('${esc(s.id)}')">Edit</button>`]))}
-    <button class="btn" style="margin-top:20px;" onclick="openStudentForm()">+ Add New Student</button>
+        `<button class="btn secondary" onclick="openStudentForm('${esc(s.id)}')">Edit</button>`]))}
   </div>`;
 }
 
@@ -239,12 +242,47 @@ function renderFacultyDirectory(c) {
   const rows = facultyList.map(f => {
     const advised = db.courses.filter(crs => crs.adviser === f.name).map(crs => `${crs.gradeLevel} (Sec ${crs.section})`);
     const advisoryDisplay = advised.length > 0 ? advised[0] : '<span style="color:#999;">None</span>';
-    return [`<b>${esc(f.username)}</b>`, esc(f.name), advisoryDisplay, `<button class="btn" onclick="alert('Edit via Users & Access')">Edit</button>`];
+    return [`<b>${esc(f.username)}</b>`, esc(f.name), advisoryDisplay, `<button class="btn secondary" onclick="alert('Edit via Users & Access')">Edit</button>`];
   });
-  c.innerHTML = `<div class="panel"><h2>Faculty Directory</h2>${simpleTable(['Username', 'Full Name', 'Advisory Class', 'Action'], rows)}</div>`;
+
+  c.innerHTML = `<div class="panel">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+      <h2 style="margin:0;">Faculty Directory</h2>
+      <button class="btn" onclick="openAddFacultyForm()">+ Add New Teacher</button>
+    </div>
+    <div id="facultyFormArea"></div>
+    ${simpleTable(['Username', 'Full Name', 'Advisory Class', 'Action'], rows)}
+  </div>`;
 }
 
-/* ---------- ADMIN: COURSES & SECTIONS (UPDATED) ---------- */
+function openAddFacultyForm() {
+  $('facultyFormArea').innerHTML = `
+    <div class="form-panel" style="border-left: 4px solid #5c0000;">
+      <h3 style="color:#5c0000; margin-bottom:15px;">Add New Teacher</h3>
+      <div class="form-grid">
+        <div class="field"><label>Username</label><input id="t_user"></div>
+        <div class="field"><label>Password</label><input id="t_pass" type="password"></div>
+        <div class="field" style="grid-column: span 2;"><label>Full Name (e.g., T. John Doe)</label><input id="t_name"></div>
+      </div>
+      <button class="btn" onclick="saveFaculty()">Create Teacher</button>
+      <button class="btn secondary" onclick="$('facultyFormArea').innerHTML=''">Cancel</button>
+    </div>`;
+}
+
+async function saveFaculty() {
+  const rec = { username: $('t_user').value.trim(), password: $('t_pass').value.trim(), name: $('t_name').value.trim(), role: 'Faculty', section: '' };
+  if(!rec.username || !rec.password || !rec.name) return alert('Fill all fields');
+  
+  const res = await fetch('/api/faculty', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(rec) });
+  if(!res.ok) return alert('Username already exists');
+  
+  db.users = await (await fetch('/api/users')).json();
+  $('facultyFormArea').innerHTML = '';
+  renderFacultyDirectory($('content'));
+  alert('Teacher created!');
+}
+
+/* ---------- ADMIN: COURSES & SECTIONS ---------- */
 function renderCourses(c) {
   c.innerHTML = `<div class="panel">
     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
@@ -269,8 +307,7 @@ function openAddCourseForm() {
         <div class="field"><label>Course Name</label><input id="c_name" placeholder="e.g., Mathematics 7"></div>
         <div class="field"><label>Grade Level</label><input id="c_grade" placeholder="e.g., Grade 7"></div>
         <div class="field"><label>Section</label><input id="c_section" placeholder="e.g., 3"></div>
-        <div class="field"><label>Advisory Teacher</label><input id="c_adviser" placeholder="e.g., T. Maria Clara"></div>
-        <div class="field"><label>Subject Teacher</label><input id="c_subjectTeacher" placeholder="e.g., T. Jose Rizal"></div>
+        <div class="field" style="grid-column: span 2;"><label>Subject Teacher</label><input id="c_subjectTeacher" placeholder="e.g., T. Jose Rizal"></div>
       </div>
       <button class="btn" onclick="saveNewCourse()">Save Course</button>
       <button class="btn secondary" onclick="$('courseFormArea').innerHTML=''">Cancel</button>
@@ -283,7 +320,7 @@ async function saveNewCourse() {
     name: $('c_name').value, 
     gradeLevel: $('c_grade').value, 
     section: $('c_section').value, 
-    adviser: $('c_adviser').value,
+    adviser: '', // Optional
     subjectTeacher: $('c_subjectTeacher').value,
     capacity: 30, 
     status: 'Open' 
@@ -303,8 +340,7 @@ function openAddSectionForm() {
       <div class="form-grid">
         <div class="field"><label>Grade Level</label><input id="s_grade" placeholder="e.g., Grade 7"></div>
         <div class="field"><label>New Section Name</label><input id="s_section" placeholder="e.g., 3"></div>
-        <div class="field"><label>Advisory Teacher</label><input id="s_adviser" placeholder="e.g., T. Maria Clara"></div>
-        <div class="field"><label>Subject Teacher</label><input id="s_subjectTeacher" placeholder="e.g., T. Jose Rizal"></div>
+        <div class="field" style="grid-column: span 2;"><label>Advisory Teacher</label><input id="s_adviser" placeholder="e.g., T. Maria Clara"></div>
       </div>
       <button class="btn" onclick="saveNewSection()">Create Section</button>
       <button class="btn secondary" onclick="$('courseFormArea').innerHTML=''">Cancel</button>
@@ -315,9 +351,8 @@ async function saveNewSection() {
   const grade = $('s_grade').value.trim();
   const newSec = $('s_section').value.trim();
   const newAdviser = $('s_adviser').value.trim();
-  const newSubjectTeacher = $('s_subjectTeacher').value.trim();
 
-  if(!grade || !newSec || !newAdviser || !newSubjectTeacher) return alert('Fill in all fields');
+  if(!grade || !newSec || !newAdviser) return alert('Fill in all fields');
 
   // Find all courses for this grade in Section 1 to copy as template
   const templates = db.courses.filter(c => c.gradeLevel === grade && c.section === '1');
@@ -334,7 +369,7 @@ async function saveNewSection() {
         section: newSec, 
         capacity: t.capacity, 
         adviser: newAdviser, 
-        subjectTeacher: newSubjectTeacher, 
+        subjectTeacher: t.subjectTeacher, 
         status: 'Open' 
       })
     });
