@@ -152,7 +152,7 @@ function renderAdminDashboard(c) {
 
 async function updateGlobalTerm() {
   const newTerm = $('globalTermSelect').value;
-  await fetch('/api/settings/term', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ term: newTerm }) });
+  await fetch('/api/settings/term', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ term: newTerm }) });
   db.activeTerm = newTerm;
   alert('Global School Term updated to ' + newTerm + '. Student records and schedules will now reflect this term.');
 }
@@ -389,7 +389,6 @@ function generateFacultyCredentials() {
   window._generatedUser = `t.${firstName}${lastName}`;
   window._generatedPass = `${firstName}123`;
   
-  // Auto-fill email kung gmail format
   const emailInput = $('t_email');
   if (emailInput && !emailInput.value) {
       emailInput.value = `t${firstName}${lastName}@gmail.com`;
@@ -669,19 +668,105 @@ async function showClassFolder(key) {
   $('classFolderView').innerHTML = `<div class="panel" style="margin-top:20px; border:2px solid #5c0000;"><h3>${esc(key)} — Enrolled Students</h3>${simpleTable(['ID','Name','Year'], rows.map(s => [esc(s.id), esc(s.last+', '+s.first), esc(s.yr)]))}</div>`;
 }
 
+// --- UPDATED GRADE ENTRY ---
 function renderGradeEntry(c) {
-  c.innerHTML = `<div class="panel"><h2>Grade Entry</h2><div class="form-panel"><div class="form-grid">
-    <div class="field"><label>Student ID</label><input id="g_sid"></div>
-    <div class="field"><label>Course Name</label><input id="g_cname"></div>
-    <div class="field"><label>Grade (1.0 - 5.0)</label><input id="g_grade" type="number" step="0.25"></div>
-    <div class="field"><label>Term</label><input id="g_term" value="${db.activeTerm} 2026-2027"></div>
-  </div><button class="btn" onclick="submitGrade()">Submit Grade</button></div></div>`;
+  const myCourses = db.courses.filter(x => x.adviser === session.name || x.subjectTeacher === session.name);
+  const sections = [...new Set(myCourses.map(x => x.gradeLevel + ' | Section ' + x.section))];
+
+  let html = `<div class="panel"><h2>Grade Entry</h2><p>Select a section folder to view students and enter grades.</p>`;
+  
+  if(sections.length === 0) {
+      html += `<p style="color:#999;">No classes assigned to you.</p>`;
+  } else {
+      sections.forEach(sec => {
+          html += `<div class="folder" onclick="showGradeEntryFolder('${esc(sec)}')"><span>📁 ${esc(sec)}</span> <span>&rarr;</span></div>`;
+      });
+  }
+  html += `<div id="gradeEntryView"></div></div>`;
+  c.innerHTML = html;
 }
 
-async function submitGrade() {
-  const rec = { studentId: $('g_sid').value, courseCode: 'N/A', courseName: $('g_cname').value, grade: parseFloat($('g_grade').value), term: $('g_term').value };
-  await fetch('/api/grades', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(rec) });
-  alert('Grade submitted!'); $('g_sid').value = ''; $('g_cname').value = ''; $('g_grade').value = '';
+async function showGradeEntryFolder(key) {
+  const [gradeLevel, sectionPart] = key.split(' | Section ');
+  const section = sectionPart.trim();
+  
+  const myCourses = db.courses.filter(x => (x.adviser === session.name || x.subjectTeacher === session.name) && x.gradeLevel === gradeLevel && x.section === section);
+  const codes = myCourses.map(c => c.code);
+  
+  let students = [];
+  for (const s of db.students) {
+    if (s.yr.includes(gradeLevel) && s.yr.includes('Sec ' + section)) {
+        students.push(s);
+    }
+  }
+
+  // Group by gender and sort alphabetically
+  const males = students.filter(s => s.gender === 'Male').sort((a, b) => a.last.localeCompare(b.last));
+  const females = students.filter(s => s.gender === 'Female').sort((a, b) => a.last.localeCompare(b.last));
+
+  let html = `<div class="panel" style="margin-top:20px; border:2px solid #5c0000;">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+      <h3 style="margin:0; color:#5c0000;">${esc(key)} — Grade Entry</h3>
+      <select id="ge_course" style="padding:8px; border-radius:6px; border:1px solid #ccc; font-weight:bold;">
+        ${myCourses.map(c => `<option value="${esc(c.name)}">${esc(c.name)}</option>`).join('')}
+      </select>
+    </div>
+    
+    <div style="display:grid; grid-template-columns: 1fr 1fr; gap:20px;">
+      <div>
+        <h4 style="color:#333; border-bottom:2px solid #ccc; padding-bottom:5px; margin-bottom:10px;">Male Students</h4>
+        ${males.length === 0 ? '<p style="color:#999;">No male students</p>' : `
+        <table style="width:100%; font-size:14px;">
+          <thead><tr style="background:#f0f0f0;"><th style="padding:8px; text-align:left;">Name</th><th style="padding:8px; text-align:left;">Grade</th></tr></thead>
+          <tbody>
+            ${males.map(s => `<tr><td style="padding:8px; border-bottom:1px solid #eee;">${esc(s.last)}, ${esc(s.first)}</td><td style="padding:8px; border-bottom:1px solid #eee;"><input type="number" step="0.25" min="1" max="5" placeholder="1.0" style="width:80px; padding:5px;" id="grade_${s.id}"></td></tr>`).join('')}
+          </tbody>
+        </table>`}
+      </div>
+      
+      <div>
+        <h4 style="color:#333; border-bottom:2px solid #ccc; padding-bottom:5px; margin-bottom:10px;">Female Students</h4>
+        ${females.length === 0 ? '<p style="color:#999;">No female students</p>' : `
+        <table style="width:100%; font-size:14px;">
+          <thead><tr style="background:#f0f0f0;"><th style="padding:8px; text-align:left;">Name</th><th style="padding:8px; text-align:left;">Grade</th></tr></thead>
+          <tbody>
+            ${females.map(s => `<tr><td style="padding:8px; border-bottom:1px solid #eee;">${esc(s.last)}, ${esc(s.first)}</td><td style="padding:8px; border-bottom:1px solid #eee;"><input type="number" step="0.25" min="1" max="5" placeholder="1.0" style="width:80px; padding:5px;" id="grade_${s.id}"></td></tr>`).join('')}
+          </tbody>
+        </table>`}
+      </div>
+    </div>
+    
+    <div style="margin-top:20px; text-align:right;">
+        <button class="btn" onclick="submitBulkGrades()">Submit All Grades for ${esc(key)}</button>
+    </div>
+  </div>`;
+  
+  $('gradeEntryView').innerHTML = html;
+  window._currentGradeSectionStudents = students;
+}
+
+async function submitBulkGrades() {
+  const courseName = $('ge_course').value;
+  const students = window._currentGradeSectionStudents || [];
+  let successCount = 0;
+  
+  for(const s of students) {
+      const input = $(`grade_${s.id}`);
+      if(input && input.value.trim() !== "") {
+          const gradeVal = parseFloat(input.value);
+          if(gradeVal >= 1 && gradeVal <= 5) {
+              const rec = { studentId: s.id, courseCode: 'N/A', courseName: courseName, grade: gradeVal, term: `${db.activeTerm} 2026-2027` };
+              await fetch('/api/grades', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(rec) });
+              successCount++;
+          }
+      }
+  }
+  
+  if(successCount > 0) {
+      alert(`Successfully submitted ${successCount} grades for ${courseName}.`);
+  } else {
+      alert('No grades entered.');
+  }
 }
 
 function renderAttendance(c) {
