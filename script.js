@@ -179,16 +179,19 @@ function openStudentForm(id) {
   let currentYear = s ? s.yr : 'Grade 1';
   let currentSem = '1st Sem';
   let currentTrack = 'STEM';
+  let currentSection = '1'; // Default Section 1
   
   if (currentYear && currentYear.includes('-')) {
       const parts = currentYear.split('-');
       currentYear = parts[0].trim();
       currentTrack = parts[1].trim();
       currentSem = parts[2].trim();
+      if(parts[3]) currentSection = parts[3].trim();
   }
 
   const yearLevels = ['Grade 1', 'Grade 2', 'Grade 3', 'Grade 4', 'Grade 5', 'Grade 6', 'Grade 7', 'Grade 8', 'Grade 9', 'Grade 10', 'Grade 11', 'Grade 12'];
   const statuses = ['Active', 'Archived', 'Graduated'];
+  const sections = ['1', '2']; // Available sections
 
   $('enrollFormArea').innerHTML = `
     <div class="form-panel">
@@ -208,6 +211,9 @@ function openStudentForm(id) {
         </div>
         <div class="field"><label>Year Level</label>
           <select id="f_yr">${yearLevels.map(y => `<option value="${y}" ${currentYear === y ? 'selected' : ''}>${y}</option>`).join('')}</select>
+        </div>
+        <div class="field"><label>Section</label>
+          <select id="f_section">${sections.map(sec => `<option value="${sec}" ${currentSection === sec ? 'selected' : ''}>Section ${sec}</option>`).join('')}</select>
         </div>
         <div class="field" id="shs_track_group" style="display: ${s?.course === 'SHS' ? 'block' : 'none'};">
           <label>SHS Track</label>
@@ -249,9 +255,12 @@ async function saveStudent(existingId) {
   const first = $('f_first').value;
   const course = $('f_course').value;
   let yr = $('f_yr').value;
+  const sec = $('f_section').value;
   
   if (course === 'SHS') {
-    yr = `${yr} - ${$('f_track').value} - ${$('f_sem').value}`;
+    yr = `${yr} - ${$('f_track').value} - ${$('f_sem').value} - Sec ${sec}`;
+  } else {
+    yr = `${yr} - Sec ${sec}`;
   }
 
   const rec = { id: $('f_id').value, last: $('f_last').value, first: first, mi: $('f_mi').value, course: course, yr: yr, status: $('f_status').value, enrol: 'Enrolled', email: email };
@@ -627,23 +636,28 @@ async function markAttendance(courseCode, section, studentId, date, status) {
 function renderRegistration(c) {
   const s = currentStudent();
   
-  // Kunin lahat ng subjects na tugma sa grade level at track ni student
   const studentYear = s.yr.split('-')[0].trim(); 
   const studentTrack = s.yr.includes('STEM') ? 'STEM' : s.yr.includes('HUMSS') ? 'HUMSS' : s.yr.includes('ABM') ? 'ABM' : '';
   const studentSem = s.yr.includes('2nd Sem') ? '2nd Sem' : '1st Sem';
+  
+  // Kunin ang Section from Student string (Halimbawa: "Grade 11 - STEM - 1st Sem - Sec 1")
+  let studentSec = '1'; 
+  if (s.yr.includes('Sec ')) {
+      studentSec = s.yr.split('Sec ')[1].trim();
+  }
 
   const mySubjects = db.courses.filter(cr => {
     if (s.course === 'SHS') {
       return cr.gradeLevel.includes(studentYear) && 
              cr.gradeLevel.includes(studentTrack) && 
              cr.gradeLevel.includes(studentSem) && 
+             cr.section === studentSec && // Dito natin fifilter base sa section ng student
              cr.status === 'Open';
     } else {
-      return (cr.gradeLevel === s.yr || s.yr.startsWith(cr.gradeLevel)) && cr.status === 'Open';
+      return cr.gradeLevel.startsWith(studentYear) && cr.section === studentSec && cr.status === 'Open';
     }
   });
   
-  // Tinanggal ang "Enroll" button. Read-only list na lang.
   c.innerHTML = `<div class="panel"><h2>My Subjects</h2>
     <p style="margin-bottom:15px; color:#666;">These are the subjects you are officially enrolled in for <b>${esc(s.yr)}</b>.</p>
     ${simpleTable(['Code','Name','Section','Teacher'], mySubjects.map(x => [esc(x.code), esc(x.name), esc(x.section), esc(x.subjectTeacher)]))}
@@ -653,14 +667,27 @@ function renderRegistration(c) {
 // --- STUDENT SCHEDULE ---
 async function renderSchedule(c) {
   const s = currentStudent();
-  const sched = await (await fetch(`/api/schedules/${encodeURIComponent(s.yr)}/1`)).json();
+  
+  let studentYear = s.yr.split('-')[0].trim(); 
+  let queryYr = s.yr;
+  if (s.course === 'SHS') {
+     const studentTrack = s.yr.includes('STEM') ? 'STEM' : s.yr.includes('HUMSS') ? 'HUMSS' : s.yr.includes('ABM') ? 'ABM' : '';
+     const studentSem = s.yr.includes('2nd Sem') ? '2nd Sem' : '1st Sem';
+     queryYr = `${studentYear} - ${studentTrack} - ${studentSem}`;
+  }
+  
+  let studentSec = '1'; 
+  if (s.yr.includes('Sec ')) {
+      studentSec = s.yr.split('Sec ')[1].trim();
+  }
+
+  const sched = await (await fetch(`/api/schedules/${encodeURIComponent(queryYr)}/${studentSec}`)).json();
   
   if (sched.length === 0) {
     c.innerHTML = `<div class="panel"><h2>Class Schedule</h2><p style="color:#999;">No schedule found for your section.</p></div>`;
     return;
   }
 
-  // Group by Day para magmukhang weekly calendar
   const daysOrder = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
   let html = `<div class="panel"><h2>Class Schedule</h2><p style="margin-bottom:15px; color:#666;">Weekly schedule for <b>${esc(s.yr)}</b></p>
     <div style="display:grid; gap:20px;">`;
