@@ -2,13 +2,13 @@ const express = require('express');
 const sqlite3 = require('sqlite3').verbose();
 const path = require('path');
 const cors = require('cors');
-const { Resend } = require('resend'); // Idinagdag para sa email
+const { Resend } = require('resend');
 
 const app = express();
 const port = process.env.PORT || 10000;
 
-// ⚠️ ANG API KEY MO
-const resend = new Resend(process.env.RESEND_API_KEY);
+// Siguraduhing nasa Render Environment Variables ang RESEND_API_KEY
+const resend = new Resend(process.env.RESEND_API_KEY || 're_dummy_key_for_local');
 
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
@@ -20,7 +20,7 @@ const db = new sqlite3.Database(dbPath, (err) => {
     else console.log("Connected to SQLite DB");
 });
 
-// AUTO-SEED
+// AUTO-SEED / REBUILD
 db.serialize(() => {
     db.get("SELECT name FROM sqlite_master WHERE type='table' AND name='users'", (err, row) => {
         if (!row) {
@@ -41,6 +41,13 @@ db.serialize(() => {
                     db.run("DROP TABLE IF EXISTS schedules", () => buildDatabase());
                 } else {
                     console.log("✅ Database is up to date.");
+                    // Check if schedules are empty, if so, auto-generate
+                    db.get("SELECT COUNT(*) as count FROM schedules", (e, r) => {
+                        if(r && r.count === 0) {
+                            console.log("Generating schedules...");
+                            generateSchedules();
+                        }
+                    });
                 }
             });
         }
@@ -79,18 +86,16 @@ function buildDatabase() {
         });
         insertUser.finalize();
 
-        // STUDENTS (May email at specific na yr para sa sem)
+        // STUDENTS
         const insertStudent = db.prepare(`INSERT INTO students (id, last, first, mi, address, course, yr, status, enrol, username, password, birthday, email) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
         insertStudent.run('2023-0006', 'Dela Cruz', 'Juan', 'A', 'Mariveles, Bataan', 'Elem', 'Grade 4', 'Active', 'Enrolled', 'juandc', 'juan123', '2017-05-14', 'juan@example.com');
         insertStudent.run('2026-01523', 'Reyes', 'Maria', 'B', 'Limay, Bataan', 'SHS', 'Grade 11 - STEM - 1st Sem', 'Active', 'Enrolled', 'mariar', 'maria123', '2010-08-22', 'maria@example.com');
         insertStudent.finalize();
 
-        // COURSES & SCHEDULES
+        // COURSES
         const insertCourse = db.prepare(`INSERT INTO courses (code, name, gradeLevel, section, capacity, adviser, subjectTeacher, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`);
-        const insertSchedule = db.prepare(`INSERT INTO schedules (courseCode, section, day, startTime, endTime) VALUES (?, ?, ?, ?, ?)`);
 
         const gradeConfigs = [
-            // JHS
             { level: 'Grade 1', subjects: [['LANG', 'Language'], ['READ', 'Reading'], ['MATH', 'Mathematics'], ['GMRC', 'Good Manners'], ['MAK', 'Makabansa']], capacity: 30 },
             { level: 'Grade 2', subjects: [['ENG', 'English'], ['FIL', 'Filipino'], ['MATH', 'Mathematics'], ['GMRC', 'Good Manners'], ['MAK', 'Makabansa']], capacity: 30 },
             { level: 'Grade 3', subjects: [['ENG', 'English'], ['FIL', 'Filipino'], ['MATH', 'Mathematics'], ['SCI', 'Science'], ['GMRC', 'Good Manners'], ['MAK', 'Makabansa']], capacity: 30 },
@@ -102,66 +107,107 @@ function buildDatabase() {
             { level: 'Grade 9', subjects: [['ENG', 'English'], ['FIL', 'Filipino'], ['MATH', 'Mathematics'], ['SCI', 'Science'], ['AP', 'Araling Panlipunan'], ['ESP', 'Values Ed'], ['MAPEH', 'MAPEH'], ['TLE', 'TLE']], capacity: 35 },
             { level: 'Grade 10', subjects: [['ENG', 'English'], ['FIL', 'Filipino'], ['MATH', 'Mathematics'], ['SCI', 'Science'], ['AP', 'Araling Panlipunan'], ['ESP', 'Values Ed'], ['MAPEH', 'MAPEH'], ['TLE', 'TLE']], capacity: 35 },
             
-            // SHS STEM 1st Sem
             { level: 'Grade 11 - STEM - 1st Sem', subjects: [['ORAL', 'Oral Communication'], ['KOMU', 'Komunikasyon'], ['GENM', 'General Math'], ['EALS', 'Earth & Life Science'], ['PERD', 'Personal Dev'], ['EMPW', 'Empowerment Tech'], ['PE11', 'PE & Health 1'], ['PREC', 'Pre-Calculus'], ['CHEM1', 'Gen Chem 1']], capacity: 40 },
-            // SHS STEM 2nd Sem
             { level: 'Grade 11 - STEM - 2nd Sem', subjects: [['READ', 'Reading & Writing'], ['PAGB', 'Pagbasa'], ['STAT', 'Statistics'], ['PHYS', 'Physical Science'], ['PE11B', 'PE & Health 2'], ['PR1', 'Practical Research 1'], ['BASC', 'Basic Calculus'], ['CHEM2', 'Gen Chem 2']], capacity: 40 },
-            // SHS STEM 1st Sem (Gr 12)
             { level: 'Grade 12 - STEM - 1st Sem', subjects: [['21ST', '21st Century Lit'], ['UCSP', 'UCSP'], ['PHIL', 'Philosophy'], ['PE12', 'PE & Health 3'], ['EAPP', 'EAPP'], ['PR2', 'Practical Research 2'], ['CPAR', 'Contemporary Arts'], ['MIL', 'Media & Info Lit'], ['PHY1', 'Gen Physics 1'], ['BIO1', 'Gen Biology 1']], capacity: 40 },
-            // SHS STEM 2nd Sem (Gr 12)
             { level: 'Grade 12 - STEM - 2nd Sem', subjects: [['PAGS', 'Pagsulat'], ['PE12B', 'PE & Health 4'], ['ENTR', 'Entrepreneurship'], ['INQ', 'Inquiries'], ['PHY2', 'Gen Physics 2'], ['BIO2', 'Gen Biology 2'], ['STEMW', 'Work Immersion']], capacity: 40 },
             
-            // SHS HUMSS 1st Sem (Gr 11)
             { level: 'Grade 11 - HUMSS - 1st Sem', subjects: [['ORAL', 'Oral Communication'], ['KOMU', 'Komunikasyon'], ['PERD', 'Personal Dev'], ['UCSP', 'UCSP'], ['DISS', 'Disciplines & Ideas'], ['HUM1', 'Humanities 1'], ['PE11', 'PE & Health 1']], capacity: 40 },
-            // SHS HUMSS 2nd Sem (Gr 11)
             { level: 'Grade 11 - HUMSS - 2nd Sem', subjects: [['READ', 'Reading & Writing'], ['PAGB', 'Pagbasa'], ['STAT', 'Statistics'], ['PHYS', 'Physical Science'], ['PE11B', 'PE & Health 2'], ['PR1', 'Practical Research 1'], ['HUM2', 'Humanities 2'], ['POLG', 'Politics & Governance']], capacity: 40 },
-            // SHS HUMSS 1st Sem (Gr 12)
             { level: 'Grade 12 - HUMSS - 1st Sem', subjects: [['21ST', '21st Century Lit'], ['PHIL', 'Philosophy'], ['PE12', 'PE & Health 3'], ['EAPP', 'EAPP'], ['PR2', 'Practical Research 2'], ['CPAR', 'Contemporary Arts'], ['MIL', 'Media & Info Lit']], capacity: 40 },
-            // SHS HUMSS 2nd Sem (Gr 12)
             { level: 'Grade 12 - HUMSS - 2nd Sem', subjects: [['PAGS', 'Pagsulat'], ['PE12B', 'PE & Health 4'], ['ENTR', 'Entrepreneurship'], ['INQ', 'Inquiries'], ['CULM', 'Culminating Activity']], capacity: 40 },
 
-            // SHS ABM 1st Sem (Gr 11)
             { level: 'Grade 11 - ABM - 1st Sem', subjects: [['ORAL', 'Oral Communication'], ['KOMU', 'Komunikasyon'], ['PERD', 'Personal Dev'], ['FABM1', 'Fundamentals of ABM 1'], ['BUSM', 'Business Math'], ['PE11', 'PE & Health 1']], capacity: 40 },
-            // SHS ABM 2nd Sem (Gr 11)
             { level: 'Grade 11 - ABM - 2nd Sem', subjects: [['READ', 'Reading & Writing'], ['PAGB', 'Pagbasa'], ['STAT', 'Statistics'], ['PE11B', 'PE & Health 2'], ['PR1', 'Practical Research 1'], ['FABM2', 'Fundamentals of ABM 2'], ['BUSF', 'Business Finance']], capacity: 40 },
-            // SHS ABM 1st Sem (Gr 12)
             { level: 'Grade 12 - ABM - 1st Sem', subjects: [['21ST', '21st Century Lit'], ['PHIL', 'Philosophy'], ['PE12', 'PE & Health 3'], ['EAPP', 'EAPP'], ['PR2', 'Practical Research 2'], ['CPAR', 'Contemporary Arts'], ['MIL', 'Media & Info Lit']], capacity: 40 },
-            // SHS ABM 2nd Sem (Gr 12)
             { level: 'Grade 12 - ABM - 2nd Sem', subjects: [['PAGS', 'Pagsulat'], ['PE12B', 'PE & Health 4'], ['ENTR', 'Entrepreneurship'], ['INQ', 'Inquiries'], ['BUSR', 'Business Research']], capacity: 40 }
         ];
 
-        const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
-        const timeSlots = [ ['07:00','08:00'], ['08:00','09:00'], ['09:00','10:00'], ['10:00','11:00'], ['13:00','14:00'], ['14:00','15:00'], ['15:00','16:00'] ];
-
         let teacherIndex = 0;
-
         gradeConfigs.forEach(config => {
             for (let sec = 1; sec <= 2; sec++) {
                 const sectionStr = sec.toString();
                 const gradePrefix = config.level.replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
                 const advisoryTeacher = teachers[teacherIndex % teachers.length];
                 teacherIndex++;
-                let timeIndex = 0;
 
                 config.subjects.forEach((sub, idx) => {
                     const subCode = sub[0];
                     const subName = sub[1];
                     const courseCode = `${subCode}-${gradePrefix}-${sec}`;
                     const subjectTeacher = teachers[(teacherIndex + idx) % teachers.length];
-
                     insertCourse.run(courseCode, `${subName} (${config.level})`, config.level, sectionStr, config.capacity, advisoryTeacher, subjectTeacher, 'Open');
-
-                    const day = days[timeIndex % 5];
-                    const time = timeSlots[Math.floor(timeIndex / 5) % timeSlots.length];
-                    insertSchedule.run(courseCode, sectionStr, day, time[0], time[1]);
-                    timeIndex++;
                 });
             }
         });
+        insertCourse.finalize(() => {
+            console.log("✅ Database initialized.");
+            generateSchedules();
+        });
+    });
+}
 
-        insertCourse.finalize();
+function generateSchedules() {
+    db.all("SELECT * FROM courses", [], (err, courses) => {
+        if (err || !courses) return;
+        const insertSchedule = db.prepare(`INSERT INTO schedules (courseCode, section, day, startTime, endTime) VALUES (?, ?, ?, ?, ?)`);
+        
+        const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
+        
+        // Group courses by Grade Level & Section
+        const grouped = {};
+        courses.forEach(c => {
+            const key = `${c.gradeLevel}|${c.section}`;
+            if (!grouped[key]) grouped[key] = [];
+            grouped[key].push(c);
+        });
+
+        Object.keys(grouped).forEach(key => {
+            const [gradeLevel, section] = key.split('|');
+            const isSHS = gradeLevel.includes('Grade 11') || gradeLevel.includes('Grade 12');
+            const isElem = gradeLevel.includes('Grade 1') || gradeLevel.includes('Grade 2') || gradeLevel.includes('Grade 3') || gradeLevel.includes('Grade 4') || gradeLevel.includes('Grade 5') || gradeLevel.includes('Grade 6');
+            
+            let subjectList = grouped[key];
+            let currentDayIdx = 0;
+            let timeSlots = [];
+
+            if (isSHS) {
+                // SHS: Max 3 subjects per day, 2 hours per subject
+                timeSlots = ['07:00', '09:00', '11:00']; 
+            } else {
+                // JHS / Elem: 4-5 subjects per day, 1 hour per subject
+                timeSlots = ['07:00', '08:00', '09:00', '10:00', '13:00']; 
+            }
+
+            let slotIdx = 0;
+            let subjectsToday = 0;
+            let maxSubjectsPerDay = isSHS ? 3 : 5;
+
+            subjectList.forEach(sub => {
+                // If naubos na ang slots ngayong araw, lipat sa susunod na araw
+                if (subjectsToday >= maxSubjectsPerDay || slotIdx >= timeSlots.length) {
+                    currentDayIdx = (currentDayIdx + 1) % 5; // Lipat sa susunod na araw (Mon-Fri)
+                    slotIdx = 0;
+                    subjectsToday = 0;
+                }
+
+                const day = days[currentDayIdx];
+                const startTime = timeSlots[slotIdx];
+                
+                let endTimeMins = parseInt(startTime.split(':')[0]) * 60 + parseInt(startTime.split(':')[1]) + (isSHS ? 120 : 60);
+                let h = Math.floor(endTimeMins / 60).toString().padStart(2, '0');
+                let m = (endTimeMins % 60).toString().padStart(2, '0');
+                const endTime = `${h}:${m}`;
+
+                insertSchedule.run(sub.code, section, day, startTime, endTime);
+                
+                slotIdx++;
+                subjectsToday++;
+            });
+        });
+
         insertSchedule.finalize(() => {
-            console.log("✅ Database successfully created with 1st and 2nd Semester configurations.");
+            console.log("✅ Schedules successfully generated.");
         });
     });
 }
@@ -203,7 +249,6 @@ app.delete('/api/users/:username', (req, res) => {
     });
 });
 
-// DITO YUNG UPDATED NA /api/students PARA SA EMAIL
 app.get('/api/students', (req, res) => db.all("SELECT * FROM students", [], (err, rows) => res.json(err ? [] : rows)));
 app.post('/api/students', (req, res) => {
     const { id, last, first, mi, address, course, yr, status, enrol, birthday, email } = req.body;
@@ -219,35 +264,31 @@ app.post('/api/students', (req, res) => {
                 if (e) return res.status(400).json({ error: e.message });
                 
                 db.run(`INSERT INTO users (username, password, name, role, section) VALUES (?,?,?,'Student',?)`, [id, generatedPass, fullName, yr], async () => {
-                    
-                    // RESEND EMAIL SENDING
                     if (email && email.trim() !== "") {
                         try {
-                            const response = await resend.emails.send({
-                                from: 'EduTrack <onboarding@resend.dev>', 
-                                to: [email],
-                                subject: 'Your EduTrack SIS Account',
-                                html: `
-                                    <div style="font-family: Arial, sans-serif; padding: 20px; color: #333;">
-                                        <h2 style="color: #5c0000;">Welcome to EduTrack, ${first}!</h2>
-                                        <p>Your student account has been successfully created. Here are your login credentials:</p>
-                                        <table style="margin-top: 15px; border-collapse: collapse;">
-                                            <tr><td style="padding: 5px; font-weight: bold;">Username:</td><td style="padding: 5px;">${id}</td></tr>
-                                            <tr><td style="padding: 5px; font-weight: bold;">Password:</td><td style="padding: 5px;">${generatedPass}</td></tr>
-                                        </table>
-                                        <p style="margin-top: 20px;">Please keep this information safe and change your password upon your first login.</p>
-                                        <br>
-                                        <p>Best regards,<br>EduTrack Admin</p>
-                                    </div>
-                                `
-                            });
-                            console.log(`📧 Email sent to ${email}. ID: ${response.data?.id}`);
+                            if(process.env.RESEND_API_KEY) {
+                                await resend.emails.send({
+                                    from: 'EduTrack <onboarding@resend.dev>', 
+                                    to: [email],
+                                    subject: 'Your EduTrack SIS Account',
+                                    html: `<div style="font-family: Arial, sans-serif; padding: 20px; color: #333;">
+                                            <h2 style="color: #5c0000;">Welcome to EduTrack, ${first}!</h2>
+                                            <p>Your student account has been successfully created. Here are your login credentials:</p>
+                                            <table style="margin-top: 15px; border-collapse: collapse;">
+                                                <tr><td style="padding: 5px; font-weight: bold;">Username:</td><td style="padding: 5px;">${id}</td></tr>
+                                                <tr><td style="padding: 5px; font-weight: bold;">Password:</td><td style="padding: 5px;">${generatedPass}</td></tr>
+                                            </table>
+                                            <p style="margin-top: 20px;">Please keep this information safe.</p>
+                                        </div>`
+                                });
+                            } else {
+                                console.log("Email skipped: No RESEND_API_KEY set.");
+                            }
                         } catch (error) {
                             console.error("❌ Failed to send email:", error);
                         }
                     }
-
-                    res.json({ message: "Student created and email process completed!" });
+                    res.json({ message: "Student created!" });
                 });
             });
         }

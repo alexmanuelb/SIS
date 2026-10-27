@@ -76,7 +76,7 @@ const MENUS = {
   ],
   Student: [
     { key: 'studentDashboard', label: 'Dashboard' },
-    { key: 'registration', label: 'Course Registration' },
+    { key: 'registration', label: 'My Subjects' },
     { key: 'schedule', label: 'Class Schedule' },
     { key: 'profileGrades', label: 'Academic Profile' },
     { key: 'studentRecords', label: 'My Records' },
@@ -259,7 +259,6 @@ async function saveStudent(existingId) {
   const res = await fetch('/api/students', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(rec) });
   if(!res.ok) return alert('Error saving');
   
-  // Pinalitan ang mailto para hindi na mag-open ng email app
   if (!existingId && email) {
     alert('Student added! An email containing their login credentials has been sent to ' + email);
   }
@@ -624,44 +623,74 @@ async function markAttendance(courseCode, section, studentId, date, status) {
   await fetch('/api/attendance', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ courseCode, section, studentId, date, status }) });
 }
 
+// --- STUDENT SUBJECTS (READ ONLY) ---
 function renderRegistration(c) {
   const s = currentStudent();
-  const myCourseNames = db.enrollments.map(e => { const cr = db.courses.find(x => x.code === e.courseCode); return cr ? cr.name : ''; });
   
+  // Kunin lahat ng subjects na tugma sa grade level at track ni student
   const studentYear = s.yr.split('-')[0].trim(); 
   const studentTrack = s.yr.includes('STEM') ? 'STEM' : s.yr.includes('HUMSS') ? 'HUMSS' : s.yr.includes('ABM') ? 'ABM' : '';
   const studentSem = s.yr.includes('2nd Sem') ? '2nd Sem' : '1st Sem';
 
-  const avail = db.courses.filter(cr => {
+  const mySubjects = db.courses.filter(cr => {
     if (s.course === 'SHS') {
       return cr.gradeLevel.includes(studentYear) && 
              cr.gradeLevel.includes(studentTrack) && 
              cr.gradeLevel.includes(studentSem) && 
-             cr.status === 'Open' && 
-             !myCourseNames.includes(cr.name);
+             cr.status === 'Open';
     } else {
-      return (cr.gradeLevel === s.yr || s.yr.startsWith(cr.gradeLevel)) && cr.status === 'Open' && !myCourseNames.includes(cr.name);
+      return (cr.gradeLevel === s.yr || s.yr.startsWith(cr.gradeLevel)) && cr.status === 'Open';
     }
   });
   
-  c.innerHTML = `<div class="panel"><h2>Course Registration</h2>${simpleTable(['Code','Name','Section','Action'], avail.map(x => [esc(x.code), esc(x.name), esc(x.section), `<button class="btn" onclick="enroll('${esc(x.code)}','${esc(x.section)}')">Enroll</button>`]))}</div>`;
+  // Tinanggal ang "Enroll" button. Read-only list na lang.
+  c.innerHTML = `<div class="panel"><h2>My Subjects</h2>
+    <p style="margin-bottom:15px; color:#666;">These are the subjects you are officially enrolled in for <b>${esc(s.yr)}</b>.</p>
+    ${simpleTable(['Code','Name','Section','Teacher'], mySubjects.map(x => [esc(x.code), esc(x.name), esc(x.section), esc(x.subjectTeacher)]))}
+  </div>`;
 }
 
-async function enroll(code, section) {
-  const s = currentStudent();
-  const res = await fetch('/api/enroll', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ studentId: s.id, courseCode: code, section, term: '1st Sem' }) });
-  const d = await res.json();
-  if (!res.ok) return alert(d.error);
-  db.enrollments = await (await fetch('/api/enrollments/' + s.id)).json();
-  db.courses = await (await fetch('/api/courses')).json();
-  renderRegistration($('content')); alert('Enrolled!');
-}
-
+// --- STUDENT SCHEDULE ---
 async function renderSchedule(c) {
   const s = currentStudent();
   const sched = await (await fetch(`/api/schedules/${encodeURIComponent(s.yr)}/1`)).json();
-  c.innerHTML = `<div class="panel"><h2>Class Schedule</h2>${sched.length === 0 ? '<p style="color:#999;">No schedule found.</p>' : `<table><thead><tr><th>Day</th><th>Time</th><th>Course</th><th>Teacher</th></tr></thead><tbody>
-    ${sched.map(x => `<tr><td>${esc(x.day)}</td><td>${esc(x.startTime)} - ${esc(x.endTime)}</td><td><b>${esc(x.courseName)}</b></td><td>${esc(x.adviser)}</td></tr>`).join('')}</tbody></table>`}</div>`;
+  
+  if (sched.length === 0) {
+    c.innerHTML = `<div class="panel"><h2>Class Schedule</h2><p style="color:#999;">No schedule found for your section.</p></div>`;
+    return;
+  }
+
+  // Group by Day para magmukhang weekly calendar
+  const daysOrder = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
+  let html = `<div class="panel"><h2>Class Schedule</h2><p style="margin-bottom:15px; color:#666;">Weekly schedule for <b>${esc(s.yr)}</b></p>
+    <div style="display:grid; gap:20px;">`;
+
+  daysOrder.forEach(day => {
+    const daySched = sched.filter(x => x.day === day).sort((a,b) => a.startTime.localeCompare(b.startTime));
+    if (daySched.length > 0) {
+      html += `<div style="background:#f9eaea; padding:15px; border-radius:8px; border-left:4px solid #5c0000;">
+        <h3 style="color:#5c0000; margin-bottom:10px; text-transform:uppercase; font-size:14px;">${day}</h3>
+        <table style="width:100%; background:white; border-radius:6px; overflow:hidden; box-shadow:0 2px 5px rgba(0,0,0,0.05);">
+          <thead><tr style="background:#5c0000; color:white; font-size:12px;">
+            <th style="padding:8px; text-align:left;">TIME</th>
+            <th style="padding:8px; text-align:left;">SUBJECT</th>
+            <th style="padding:8px; text-align:left;">TEACHER</th>
+          </tr></thead>
+          <tbody>`;
+      
+      daySched.forEach(item => {
+        html += `<tr style="border-bottom:1px solid #eee;">
+          <td style="padding:10px; font-weight:bold; color:#5c0000; font-size:13px;">${item.startTime} - ${item.endTime}</td>
+          <td style="padding:10px; font-size:14px;"><b>${esc(item.courseName)}</b></td>
+          <td style="padding:10px; font-size:13px; color:#555;">${esc(item.adviser)}</td>
+        </tr>`;
+      });
+      html += `</tbody></table></div>`;
+    }
+  });
+
+  html += `</div></div>`;
+  c.innerHTML = html;
 }
 
 async function renderProfileGrades(c) {
