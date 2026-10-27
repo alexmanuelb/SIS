@@ -53,7 +53,8 @@ function buildDatabase() {
         db.run(`CREATE TABLE settings (key TEXT PRIMARY KEY, value TEXT)`);
         db.run(`INSERT INTO settings (key, value) VALUES ('active_term', '1st Semester')`);
 
-        db.run(`CREATE TABLE users (username TEXT PRIMARY KEY, password TEXT, name TEXT, role TEXT, section TEXT)`);
+        // Added email column to users
+        db.run(`CREATE TABLE users (username TEXT PRIMARY KEY, password TEXT, name TEXT, role TEXT, section TEXT, email TEXT)`);
         db.run(`CREATE TABLE students (id TEXT PRIMARY KEY, last TEXT, first TEXT, mi TEXT, address TEXT, course TEXT, yr TEXT, status TEXT, enrol TEXT, username TEXT, password TEXT, birthday TEXT, email TEXT, age TEXT, gender TEXT, guardianName TEXT, guardianContact TEXT)`);
         db.run(`CREATE TABLE courses (code TEXT PRIMARY KEY, name TEXT, gradeLevel TEXT, section TEXT, capacity INTEGER, adviser TEXT, subjectTeacher TEXT, status TEXT)`);
         db.run(`CREATE TABLE enrollments (id INTEGER PRIMARY KEY AUTOINCREMENT, studentId TEXT, courseCode TEXT, section TEXT, term TEXT)`);
@@ -62,10 +63,10 @@ function buildDatabase() {
         db.run(`CREATE TABLE attendance (id INTEGER PRIMARY KEY AUTOINCREMENT, courseCode TEXT, section TEXT, studentId TEXT, date TEXT, status TEXT, UNIQUE(courseCode, section, studentId, date))`);
         db.run(`CREATE TABLE student_records (id INTEGER PRIMARY KEY AUTOINCREMENT, studentId TEXT, gradeLevel TEXT, schoolYear TEXT, subject TEXT, grade REAL, status TEXT, remarks TEXT)`);
 
-        db.run(`INSERT INTO users (username, password, name, role, section) VALUES ('admin', 'admin123', 'Admin User', 'Admin', '')`);
-        db.run(`INSERT INTO users (username, password, name, role, section) VALUES ('registrar', 'reg123', 'Registrar Staff', 'Registrar', '')`);
+        db.run(`INSERT INTO users (username, password, name, role, section, email) VALUES ('admin', 'admin123', 'Admin User', 'Admin', '', 'admin@edutrack.com')`);
+        db.run(`INSERT INTO users (username, password, name, role, section, email) VALUES ('registrar', 'reg123', 'Registrar Staff', 'Registrar', '', 'registrar@edutrack.com')`);
 
-        const insertUser = db.prepare(`INSERT INTO users (username, password, name, role, section) VALUES (?, ?, ?, ?, ?)`);
+        const insertUser = db.prepare(`INSERT INTO users (username, password, name, role, section, email) VALUES (?, ?, ?, ?, ?, ?)`);
         const teachers = [
             'T. John Emmanuel S.', 'T. Emily Bronte', 'T. Alan Turing', 'T. Liza Soberano', 'T. Andres Bonifacio',
             'T. Enrique Gil', 'T. Kathryn Bernardo', 'T. Marie Curie', 'T. Daniel Padilla', 'T. Angel Locsin',
@@ -76,7 +77,8 @@ function buildDatabase() {
         ];
         teachers.forEach((name, i) => {
             const firstName = name.split(' ')[1] || 'Teacher';
-            insertUser.run(`t${firstName.toLowerCase()}${i}`, `${firstName.toLowerCase()}123`, name, 'Faculty', '');
+            const email = `t${firstName.toLowerCase()}${i}@edutrack.com`;
+            insertUser.run(`t${firstName.toLowerCase()}${i}`, `${firstName.toLowerCase()}123`, name, 'Faculty', '', email);
         });
         insertUser.finalize();
 
@@ -133,7 +135,6 @@ function generateSchedules() {
         if (err || !courses) return;
         db.run("DELETE FROM schedules", () => {
             const insertSchedule = db.prepare(`INSERT INTO schedules (courseCode, section, day, startTime, endTime) VALUES (?, ?, ?, ?, ?)`);
-            const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
             
             const groupedBySection = {};
             courses.forEach(c => {
@@ -182,7 +183,7 @@ function generateSchedules() {
             });
 
             insertSchedule.finalize(() => {
-                console.log("✅ Schedules generated (Mon-Fri, 2x/week, until 3PM).");
+                console.log("✅ Schedules generated.");
             });
         });
     });
@@ -199,7 +200,7 @@ app.post('/api/login', (req, res) => {
     });
 });
 
-// School Term Settings
+// Settings Route for Global Term
 app.get('/api/settings/term', (req, res) => {
     db.get("SELECT value FROM settings WHERE key = 'active_term'", [], (err, row) => {
         if(err || !row) return res.json({ term: '1st Semester' });
@@ -214,14 +215,44 @@ app.post('/api/settings/term', (req, res) => {
     });
 });
 
-app.get('/api/users', (req, res) => db.all("SELECT username, name, role, section FROM users", [], (err, rows) => res.json(err ? [] : rows)));
+// Updated Users API to include email
+app.get('/api/users', (req, res) => db.all("SELECT username, name, role, section, email FROM users", [], (err, rows) => res.json(err ? [] : rows)));
+
+// Updated Faculty Creation with Email Sending
 app.post('/api/faculty', (req, res) => {
-    const { username, password, name, role, section } = req.body;
-    db.run(`INSERT INTO users (username, password, name, role, section) VALUES (?,?,?,?,?)`, [username, password, name, role, section], function(e) {
+    const { username, password, name, role, section, email } = req.body;
+    
+    db.run(`INSERT INTO users (username, password, name, role, section, email) VALUES (?,?,?,?,?,?)`, 
+    [username, password, name, role, section, email], async function(e) {
         if(e) return res.status(400).json({ error: "Username already exists" });
-        res.json({ message: "Faculty created" });
+        
+        if (email && email.trim() !== "") {
+            try {
+                if(process.env.RESEND_API_KEY) {
+                    await resend.emails.send({
+                        from: 'EduTrack <onboarding@resend.dev>', 
+                        to: [email],
+                        subject: 'Your EduTrack Faculty Account',
+                        html: `<div style="font-family: Arial, sans-serif; padding: 20px; color: #333;">
+                                <h2 style="color: #5c0000;">Welcome to EduTrack, ${name}!</h2>
+                                <p>Your faculty account has been successfully created by the Administrator. Here are your login credentials:</p>
+                                <table style="margin-top: 15px; border-collapse: collapse;">
+                                    <tr><td style="padding: 5px; font-weight: bold;">Username:</td><td style="padding: 5px;">${username}</td></tr>
+                                    <tr><td style="padding: 5px; font-weight: bold;">Password:</td><td style="padding: 5px;">${password}</td></tr>
+                                </table>
+                                <p style="margin-top: 20px;">Please log in to the portal to manage your classes and students.</p>
+                            </div>`
+                    });
+                }
+            } catch (error) {
+                console.error("❌ Failed to send faculty email:", error);
+            }
+        }
+        
+        res.json({ message: "Faculty created and email sent!" });
     });
 });
+
 app.post('/api/users/update', (req, res) => {
     const { username, password, name, role, section } = req.body;
     if (password && password.trim() !== '') {
@@ -256,7 +287,7 @@ app.post('/api/students', (req, res) => {
             [id, last, first, mi, address, course, yr, status, enrol, id, generatedPass, birthday, email, age, gender, guardianName, guardianContact], async (e) => {
                 if (e) return res.status(400).json({ error: e.message });
                 
-                db.run(`INSERT INTO users (username, password, name, role, section) VALUES (?,?,?,'Student',?)`, [id, generatedPass, fullName, yr], async () => {
+                db.run(`INSERT INTO users (username, password, name, role, section, email) VALUES (?,?,?,'Student',?,?)`, [id, generatedPass, fullName, yr, email], async () => {
                     if (email && email.trim() !== "") {
                         try {
                             if(process.env.RESEND_API_KEY) {

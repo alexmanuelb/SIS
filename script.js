@@ -16,7 +16,6 @@ async function doLogin() {
     if (status !== 200) return alert(data.error);
     session = data;
     
-    // Fetch active term globally
     const termRes = await (await fetch('/api/settings/term')).json();
     db.activeTerm = termRes.term;
 
@@ -124,7 +123,6 @@ function currentStudent() {
   return db.students.find(s => s.username === session.username) || null;
 }
 
-// Admin Dashboard with Global School Term
 function renderAdminDashboard(c) {
   const totalFaculty = db.users.filter(u => u.role === 'Faculty').length;
   c.innerHTML = `
@@ -341,7 +339,7 @@ function renderFacultyDirectory(c) {
   const rows = facultyList.map(f => {
     const advised = db.courses.filter(crs => crs.adviser === f.name).map(crs => `${crs.gradeLevel} (Sec ${crs.section})`);
     const advisoryDisplay = advised.length > 0 ? advised[0] : '<span style="color:#999;">None</span>';
-    return [`<b>${esc(f.username)}</b>`, esc(f.name), advisoryDisplay, `<button class="btn secondary" onclick="openEditFacultyForm('${esc(f.username)}')">Edit</button>`];
+    return [`<b>${esc(f.username)}</b>`, esc(f.name), esc(f.email || 'N/A'), advisoryDisplay, `<button class="btn secondary" onclick="openEditFacultyForm('${esc(f.username)}')">Edit</button>`];
   });
 
   c.innerHTML = `<div class="panel">
@@ -350,7 +348,7 @@ function renderFacultyDirectory(c) {
       <button class="btn" onclick="openAddFacultyForm()">+ Add New Teacher</button>
     </div>
     <div id="facultyFormArea"></div>
-    ${simpleTable(['Username', 'Full Name', 'Advisory Class', 'Action'], rows)}
+    ${simpleTable(['Username', 'Full Name', 'Email', 'Advisory Class', 'Action'], rows)}
   </div>`;
 }
 
@@ -365,6 +363,9 @@ function openAddFacultyForm() {
       <h3 style="color:#5c0000; margin-bottom:15px;">Add New Teacher</h3>
       <div class="form-grid">
         <div class="field" style="grid-column: span 2;"><label>Full Name (e.g., T. John Doe)</label><input id="t_name" onkeyup="generateFacultyCredentials()"></div>
+        
+        <div class="field" style="grid-column: span 2;"><label>Email Address (for credentials)</label><input id="t_email" type="email" placeholder="teacher@email.com"></div>
+
         <div class="field"><label>System Generated Username</label><input id="t_user" readonly style="background:#e9ecef;"></div>
         <div class="field"><label>System Generated Password</label><input id="t_pass" readonly style="background:#e9ecef;"></div>
         <div class="field"><label>Department</label><input id="t_dept" placeholder="e.g., Math Dept"></div>
@@ -401,7 +402,8 @@ async function saveFaculty() {
     password: $('t_pass').value.trim(), 
     name: $('t_name').value.trim(), 
     role: 'Faculty', 
-    section: $('t_dept').value.trim() 
+    section: $('t_dept').value.trim(),
+    email: $('t_email').value.trim()
   };
   const advisory = $('t_advisory').value;
 
@@ -424,7 +426,12 @@ async function saveFaculty() {
   db.courses = await (await fetch('/api/courses')).json();
   $('facultyFormArea').innerHTML = '';
   renderFacultyDirectory($('content'));
-  alert('Teacher created!');
+  
+  if (rec.email) {
+      alert('Teacher created! Login credentials have been sent to ' + rec.email);
+  } else {
+      alert('Teacher created!');
+  }
 }
 
 function openEditFacultyForm(username) {
@@ -735,7 +742,6 @@ function renderRegistration(c) {
   </div>`;
 }
 
-// UPDATED SCHEDULE (Follows Global Term)
 async function renderSchedule(c) {
   const s = currentStudent();
   
@@ -743,7 +749,6 @@ async function renderSchedule(c) {
   let queryYr = s.yr;
   if (s.course === 'SHS') {
      const studentTrack = s.yr.includes('STEM') ? 'STEM' : s.yr.includes('HUMSS') ? 'HUMSS' : s.yr.includes('ABM') ? 'ABM' : '';
-     // Use the active term set by the Admin
      queryYr = `${studentYear} - ${studentTrack} - ${db.activeTerm}`;
   }
   
@@ -791,7 +796,6 @@ async function renderSchedule(c) {
   c.innerHTML = html;
 }
 
-// UPDATED REPORT OF GRADES (Follows Global Term, no Print COR button)
 async function renderProfileGrades(c) {
   const s = currentStudent();
   
@@ -800,7 +804,6 @@ async function renderProfileGrades(c) {
   let studentSec = '1';
   if (s.yr.includes('Sec ')) studentSec = s.yr.split('Sec ')[1].trim();
 
-  // Filter subjects based on the Global Active Term
   const mySubjects = db.courses.filter(cr => {
     if (s.course === 'SHS') {
       return cr.gradeLevel.includes(studentYear) && 
