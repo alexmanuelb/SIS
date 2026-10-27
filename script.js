@@ -236,13 +236,19 @@ async function saveStudent(existingId) {
   $('enrollFormArea').innerHTML = ''; renderActiveDirectory($('content')); alert('Saved!');
 }
 
-/* ---------- ADMIN: FACULTY DIRECTORY ---------- */
+/* ---------- ADMIN: FACULTY DIRECTORY (FULLY EDITABLE) ---------- */
 function renderFacultyDirectory(c) {
   const facultyList = db.users.filter(u => u.role === 'Faculty');
   const rows = facultyList.map(f => {
     const advised = db.courses.filter(crs => crs.adviser === f.name).map(crs => `${crs.gradeLevel} (Sec ${crs.section})`);
     const advisoryDisplay = advised.length > 0 ? advised[0] : '<span style="color:#999;">None</span>';
-    return [`<b>${esc(f.username)}</b>`, esc(f.name), advisoryDisplay, `<button class="btn secondary" onclick="alert('Edit via Users & Access')">Edit</button>`];
+    return [
+      `<b>${esc(f.username)}</b>`, 
+      esc(f.name), 
+      advisoryDisplay, 
+      `<button class="btn secondary" onclick="openEditFacultyForm('${esc(f.username)}')">Edit</button>
+       <button class="btn" style="background:#c00; margin-left:5px;" onclick="deleteUser('${esc(f.username)}')">Delete</button>`
+    ];
   });
 
   c.innerHTML = `<div class="panel">
@@ -256,13 +262,21 @@ function renderFacultyDirectory(c) {
 }
 
 function openAddFacultyForm() {
+  const uniqueSections = [...new Set(db.courses.map(c => `${c.gradeLevel} - Section ${c.section}`))].sort();
   $('facultyFormArea').innerHTML = `
     <div class="form-panel" style="border-left: 4px solid #5c0000;">
       <h3 style="color:#5c0000; margin-bottom:15px;">Add New Teacher</h3>
       <div class="form-grid">
         <div class="field"><label>Username</label><input id="t_user"></div>
         <div class="field"><label>Password</label><input id="t_pass" type="password"></div>
-        <div class="field" style="grid-column: span 2;"><label>Full Name (e.g., T. John Doe)</label><input id="t_name"></div>
+        <div class="field"><label>Full Name (e.g., T. John Doe)</label><input id="t_name"></div>
+        <div class="field"><label>Department</label><input id="t_dept" placeholder="e.g., Math Dept"></div>
+        <div class="field" style="grid-column: span 2;"><label>Advisory Class</label>
+          <select id="t_advisory">
+            <option value="">-- No Advisory Class --</option>
+            ${uniqueSections.map(s => `<option value="${esc(s)}">${esc(s)}</option>`).join('')}
+          </select>
+        </div>
       </div>
       <button class="btn" onclick="saveFaculty()">Create Teacher</button>
       <button class="btn secondary" onclick="$('facultyFormArea').innerHTML=''">Cancel</button>
@@ -270,16 +284,98 @@ function openAddFacultyForm() {
 }
 
 async function saveFaculty() {
-  const rec = { username: $('t_user').value.trim(), password: $('t_pass').value.trim(), name: $('t_name').value.trim(), role: 'Faculty', section: '' };
-  if(!rec.username || !rec.password || !rec.name) return alert('Fill all fields');
+  const rec = { 
+    username: $('t_user').value.trim(), 
+    password: $('t_pass').value.trim(), 
+    name: $('t_name').value.trim(), 
+    role: 'Faculty', 
+    section: $('t_dept').value.trim() // Using section column for department
+  };
+  const advisory = $('t_advisory').value;
+
+  if(!rec.username || !rec.password || !rec.name) return alert('Fill in required fields');
   
   const res = await fetch('/api/faculty', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(rec) });
   if(!res.ok) return alert('Username already exists');
+
+  // Assign Advisory Class
+  if (advisory) {
+    const [gradePart, sectionPart] = advisory.split(' - Section ');
+    const grade = gradePart.trim();
+    const sec = sectionPart.trim();
+    const coursesToUpdate = db.courses.filter(c => c.gradeLevel === grade && c.section === sec);
+    for(const crs of coursesToUpdate) {
+        await fetch('/api/courses', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...crs, adviser: rec.name }) });
+    }
+  }
   
   db.users = await (await fetch('/api/users')).json();
+  db.courses = await (await fetch('/api/courses')).json();
   $('facultyFormArea').innerHTML = '';
   renderFacultyDirectory($('content'));
   alert('Teacher created!');
+}
+
+function openEditFacultyForm(username) {
+  const user = db.users.find(u => u.username === username);
+  if(!user) return;
+  
+  const currentAdvisory = db.courses.filter(crs => crs.adviser === user.name).map(crs => `${crs.gradeLevel} - Section ${crs.section}`);
+  const currentAdvisoryStr = currentAdvisory.length > 0 ? currentAdvisory[0] : "";
+  const uniqueSections = [...new Set(db.courses.map(c => `${c.gradeLevel} - Section ${c.section}`))].sort();
+
+  $('facultyFormArea').innerHTML = `
+    <div class="form-panel" style="border-left: 4px solid #5c0000;">
+      <h3 style="color:#5c0000; margin-bottom:15px;">Edit Teacher: ${esc(user.name)}</h3>
+      <div class="form-grid">
+        <div class="field"><label>Username (Read-only)</label><input value="${esc(user.username)}" readonly style="background:#e9ecef;"></div>
+        <div class="field"><label>New Password (Leave blank to keep)</label><input id="et_pass" type="password"></div>
+        <div class="field"><label>Full Name</label><input id="et_name" value="${esc(user.name)}"></div>
+        <div class="field"><label>Department</label><input id="et_dept" value="${esc(user.section||'')}"></div>
+        <div class="field" style="grid-column: span 2;"><label>Advisory Class</label>
+          <select id="et_advisory">
+            <option value="">-- No Advisory Class --</option>
+            ${uniqueSections.map(s => `<option value="${esc(s)}" ${currentAdvisoryStr === s ? 'selected' : ''}>${esc(s)}</option>`).join('')}
+          </select>
+        </div>
+      </div>
+      <button class="btn" onclick="updateFaculty('${esc(user.username)}')">Save Changes</button>
+      <button class="btn secondary" onclick="$('facultyFormArea').innerHTML=''">Cancel</button>
+    </div>`;
+}
+
+async function updateFaculty(username) {
+  const newName = $('et_name').value.trim();
+  const newPass = $('et_pass').value.trim();
+  const newDept = $('et_dept').value.trim();
+  const newAdvisory = $('et_advisory').value;
+  const oldUser = db.users.find(u => u.username === username);
+
+  const rec = { username, password: newPass, name: newName, role: 'Faculty', section: newDept };
+  await fetch('/api/users/update', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(rec) });
+
+  // Clear old advisory
+  const oldCourses = db.courses.filter(c => c.adviser === oldUser.name);
+  for(const c of oldCourses) {
+      await fetch('/api/courses', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...c, adviser: '' }) });
+  }
+
+  // Set new advisory
+  if (newAdvisory) {
+    const [gradePart, sectionPart] = newAdvisory.split(' - Section ');
+    const grade = gradePart.trim();
+    const sec = sectionPart.trim();
+    const newCourses = db.courses.filter(c => c.gradeLevel === grade && c.section === sec);
+    for(const c of newCourses) {
+        await fetch('/api/courses', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...c, adviser: newName }) });
+    }
+  }
+
+  db.users = await (await fetch('/api/users')).json();
+  db.courses = await (await fetch('/api/courses')).json();
+  $('facultyFormArea').innerHTML = '';
+  renderFacultyDirectory($('content'));
+  alert('Teacher updated successfully!');
 }
 
 /* ---------- ADMIN: COURSES & SECTIONS ---------- */
@@ -320,7 +416,7 @@ async function saveNewCourse() {
     name: $('c_name').value, 
     gradeLevel: $('c_grade').value, 
     section: $('c_section').value, 
-    adviser: '', // Optional
+    adviser: '', 
     subjectTeacher: $('c_subjectTeacher').value,
     capacity: 30, 
     status: 'Open' 
@@ -336,7 +432,6 @@ function openAddSectionForm() {
   $('courseFormArea').innerHTML = `
     <div class="form-panel" style="border-left: 4px solid #5c0000;">
       <h3 style="color:#5c0000; margin-bottom:15px;">Add New Section</h3>
-      <p style="font-size:13px; color:#666; margin-bottom:15px;">This will copy subjects from Section 1 and assign the new Section.</p>
       <div class="form-grid">
         <div class="field"><label>Grade Level</label><input id="s_grade" placeholder="e.g., Grade 7"></div>
         <div class="field"><label>New Section Name</label><input id="s_section" placeholder="e.g., 3"></div>
@@ -354,24 +449,14 @@ async function saveNewSection() {
 
   if(!grade || !newSec || !newAdviser) return alert('Fill in all fields');
 
-  // Find all courses for this grade in Section 1 to copy as template
   const templates = db.courses.filter(c => c.gradeLevel === grade && c.section === '1');
-  if(templates.length === 0) return alert('No courses found for Section 1 in this grade to copy.');
+  if(templates.length === 0) return alert('No courses found for Section 1 to copy.');
 
   for(const t of templates) {
     const newCode = t.code.replace('-1', '-' + newSec);
     await fetch('/api/courses', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ 
-        code: newCode, 
-        name: t.name, 
-        gradeLevel: t.gradeLevel, 
-        section: newSec, 
-        capacity: t.capacity, 
-        adviser: newAdviser, 
-        subjectTeacher: t.subjectTeacher, 
-        status: 'Open' 
-      })
+      body: JSON.stringify({ code: newCode, name: t.name, gradeLevel: t.gradeLevel, section: newSec, capacity: t.capacity, adviser: newAdviser, subjectTeacher: t.subjectTeacher, status: 'Open' })
     });
   }
   
@@ -381,8 +466,29 @@ async function saveNewSection() {
   alert(`Section ${newSec} created for ${grade}!`);
 }
 
+/* ---------- ADMIN: USERS & ACCESS (WITH DELETE) ---------- */
 function renderUsers(c) {
-  c.innerHTML = `<div class="panel"><h2>Users & Access</h2>${simpleTable(['Username','Name','Role','Section'], db.users.map(u => [esc(u.username), esc(u.name), esc(u.role), esc(u.section||'—')]))}</div>`;
+  const rows = db.users.map(u => [
+    esc(u.username), 
+    esc(u.name), 
+    esc(u.role), 
+    esc(u.section||'—'),
+    `<button class="btn" style="background:#c00;" onclick="deleteUser('${esc(u.username)}')">Delete</button>`
+  ]);
+  c.innerHTML = `<div class="panel"><h2>Users & Access</h2>
+    <p style="margin-bottom:15px; color:#666;">Manage system accounts and remove access.</p>
+    ${simpleTable(['Username','Name','Role','Section','Action'], rows)}
+  </div>`;
+}
+
+async function deleteUser(username) {
+  if(!confirm(`Are you sure you want to delete the account for ${username}?`)) return;
+  const res = await fetch(`/api/users/${username}`, { method: 'DELETE' });
+  if(!res.ok) return alert('Failed to delete user.');
+  
+  db.users = await (await fetch('/api/users')).json();
+  renderUsers($('content'));
+  alert('User deleted!');
 }
 
 /* ---------- FACULTY PAGES ---------- */

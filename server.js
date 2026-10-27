@@ -256,4 +256,16 @@ app.post('/api/attendance', (req, res) => {
 });
 app.get('/api/student/records/:studentId', (req, res) => db.all("SELECT * FROM student_records WHERE studentId = ? ORDER BY gradeLevel", [req.params.studentId], (err, rows) => res.json(err ? [] : rows)));
 
+app.delete('/api/users/:username', (req, res) => {
+    const username = req.params.username;
+    if (username === 'admin') return res.status(403).json({ error: "Cannot delete admin" });
+    
+    db.run("DELETE FROM users WHERE username = ?", [username], function(e) {
+        if (e) return res.status(400).json({ error: e.message });
+        db.run("DELETE FROM students WHERE id = ?", [username]); // Optional: delete student record too
+        res.json({ message: "User deleted" });
+    });
+});
+
 app.listen(port, () => console.log(`✅ Server running on port ${port}`));
+
