@@ -1,9 +1,9 @@
-let db = { students: [], courses: [], users: [], enrollments: [], grades: [], schedules: [], attendance: [], records: [] };
+let db = { students: [], courses: [], users: [], enrollments: [], grades: [], schedules: [], attendance: [], records: [], activeTerm: '1st Sem' };
 let session = null;
 const $ = id => document.getElementById(id);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 
-function doLogin() {
+async function doLogin() {
   const username = $('loginUser').value.trim();
   const password = $('loginPass').value.trim();
   if (!username || !password) return alert('Enter username and password');
@@ -16,6 +16,10 @@ function doLogin() {
     if (status !== 200) return alert(data.error);
     session = data;
     
+    // Fetch all necessary data including the active term
+    const termRes = await (await fetch('/api/settings/term')).json();
+    db.activeTerm = termRes.term;
+
     db.students = await (await fetch('/api/students')).json();
     db.courses = await (await fetch('/api/courses')).json();
     db.users = await (await fetch('/api/users')).json();
@@ -78,9 +82,8 @@ const MENUS = {
     { key: 'studentDashboard', label: 'Dashboard' },
     { key: 'registration', label: 'My Subjects' },
     { key: 'schedule', label: 'Class Schedule' },
-    { key: 'profileGrades', label: 'Report of Grades' }, // Changed Label
+    { key: 'profileGrades', label: 'Report of Grades' }, 
     { key: 'profile', label: 'Student Profile' }
-    // Removed 'My Records'
   ]
 };
 
@@ -121,6 +124,7 @@ function currentStudent() {
   return db.students.find(s => s.username === session.username) || null;
 }
 
+// Admin Dashboard with Global Term Settings
 function renderAdminDashboard(c) {
   const totalFaculty = db.users.filter(u => u.role === 'Faculty').length;
   c.innerHTML = `
@@ -130,10 +134,29 @@ function renderAdminDashboard(c) {
       <div class="stat-card"><h3>${db.courses.length}</h3><p>TOTAL COURSES</p></div>
       <div class="stat-card"><h3>${db.users.length}</h3><p>REGISTERED USERS</p></div>
     </div>
-    <div class="panel">
-      <h2>Admin Dashboard</h2>
-      <p style="color:#666; font-size:15px;">Welcome back, <b>${esc(session.name)}</b>. Use the sidebar to manage records.</p>
+    <div class="panel" style="display:flex; justify-content:space-between; align-items:center;">
+      <div>
+        <h2 style="margin-bottom:5px;">Admin Dashboard</h2>
+        <p style="color:#666; font-size:15px;">Welcome back, <b>${esc(session.name)}</b>.</p>
+      </div>
+      <div style="background:#f9eaea; padding:15px 20px; border-radius:8px; border-left:4px solid #5c0000;">
+        <label style="font-size:12px; font-weight:bold; color:#5c0000; text-transform:uppercase;">Active Enrollment Term:</label>
+        <div style="display:flex; gap:10px; margin-top:5px;">
+          <select id="globalTermSelect" style="padding:8px; border-radius:6px; border:1px solid #ccc; font-weight:bold; color:#5c0000;">
+            <option value="1st Sem" ${db.activeTerm === '1st Sem' ? 'selected' : ''}>1st Semester</option>
+            <option value="2nd Sem" ${db.activeTerm === '2nd Sem' ? 'selected' : ''}>2nd Semester</option>
+          </select>
+          <button class="btn" onclick="updateGlobalTerm()">Update</button>
+        </div>
+      </div>
     </div>`;
+}
+
+async function updateGlobalTerm() {
+  const newTerm = $('globalTermSelect').value;
+  await fetch('/api/settings/term', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ term: newTerm }) });
+  db.activeTerm = newTerm;
+  alert('Active Enrollment Term updated to ' + newTerm + '. Student report of grades will now reflect this term.');
 }
 
 function renderFacultyDashboard(c) {
@@ -498,7 +521,6 @@ function renderCoursesTable() {
   const filter = $('courseFilter') ? $('courseFilter').value : 'All';
   const filtered = filter === 'All' ? db.courses : db.courses.filter(c => c.gradeLevel === filter);
 
-  // STATUS REMOVED
   $('courseTableContainer').innerHTML = simpleTable(['Code','Name','Grade Level','Section','Adviser','Subject Teacher'],
     filtered.map(x => [esc(x.code), esc(x.name), esc(x.gradeLevel), esc(x.section), esc(x.adviser), esc(x.subjectTeacher)])
   );
@@ -642,7 +664,7 @@ function renderGradeEntry(c) {
     <div class="field"><label>Student ID</label><input id="g_sid"></div>
     <div class="field"><label>Course Name</label><input id="g_cname"></div>
     <div class="field"><label>Grade (1.0 - 5.0)</label><input id="g_grade" type="number" step="0.25"></div>
-    <div class="field"><label>Term</label><input id="g_term" value="1st Sem 2026-2027"></div>
+    <div class="field"><label>Term</label><input id="g_term" value="${db.activeTerm} 2026-2027"></div>
   </div><button class="btn" onclick="submitGrade()">Submit Grade</button></div></div>`;
 }
 
@@ -713,7 +735,6 @@ function renderRegistration(c) {
   </div>`;
 }
 
-// --- STUDENT SCHEDULE (Updated to include Friday) ---
 async function renderSchedule(c) {
   const s = currentStudent();
   
@@ -737,7 +758,7 @@ async function renderSchedule(c) {
     return;
   }
 
-  const daysOrder = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday']; // Added Friday
+  const daysOrder = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday']; 
   let html = `<div class="panel"><h2>Class Schedule</h2><p style="margin-bottom:15px; color:#666;">Weekly schedule for <b>${esc(s.yr)}</b></p>
     <div style="display:grid; gap:20px;">`;
 
@@ -769,30 +790,31 @@ async function renderSchedule(c) {
   c.innerHTML = html;
 }
 
-// --- REPORT OF GRADES (Print COR) ---
+// UPDATED REPORT OF GRADES (Filters by active term, no Print COR button)
 async function renderProfileGrades(c) {
   const s = currentStudent();
   
-  // Fetch enrolled courses and grades
+  // Get term from student's year level, but filter by the Admin's active term
   const studentYear = s.yr.split('-')[0].trim(); 
   const studentTrack = s.yr.includes('STEM') ? 'STEM' : s.yr.includes('HUMSS') ? 'HUMSS' : s.yr.includes('ABM') ? 'ABM' : '';
-  const studentSem = s.yr.includes('2nd Sem') ? '2nd Sem' : '1st Sem';
+  
   let studentSec = '1';
   if (s.yr.includes('Sec ')) studentSec = s.yr.split('Sec ')[1].trim();
 
-  // Get all subjects for their section
+  // Filter subjects based on the Active Term set by Admin
   const mySubjects = db.courses.filter(cr => {
     if (s.course === 'SHS') {
-      return cr.gradeLevel.includes(studentYear) && cr.gradeLevel.includes(studentTrack) && cr.gradeLevel.includes(studentSem) && cr.section === studentSec;
+      return cr.gradeLevel.includes(studentYear) && 
+             cr.gradeLevel.includes(studentTrack) && 
+             cr.gradeLevel.includes(db.activeTerm) && // Filter using active term
+             cr.section === studentSec;
     } else {
       return cr.gradeLevel.startsWith(studentYear) && cr.section === studentSec;
     }
   });
 
-  // Get grades
   const grades = await (await fetch('/api/student/grades/' + s.id)).json();
   
-  // Combine subjects with their grades
   const rows = mySubjects.map(sub => {
     const gradeRec = grades.find(g => g.courseName === sub.name);
     const gradeVal = gradeRec ? gradeRec.grade : '--';
@@ -801,17 +823,13 @@ async function renderProfileGrades(c) {
   });
 
   c.innerHTML = `<div class="panel">
-    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
-      <h2 style="margin:0;">Report of Grades</h2>
-      <button class="btn" onclick="window.print()">Print COR</button>
-    </div>
-    <p style="margin-bottom:15px; color:#666;">Your official enrolled courses and grades for <b>${esc(s.yr)}</b>.</p>
+    <h2 style="margin-bottom:10px;">Report of Grades</h2>
+    <p style="margin-bottom:20px; color:#666;">Showing subjects for <b>${esc(db.activeTerm)}</b>.</p>
     ${simpleTable(['Course Code','Subject Name','Teacher','Grade','Remarks'], rows)}
   </div>`;
 }
 
 async function renderStudentRecords(c) {
-  // This function is kept but removed from the menu.
   const s = currentStudent();
   const records = await (await fetch('/api/student/records/' + s.id)).json();
   const groups = {};
@@ -830,7 +848,6 @@ function showRecordFolder(grade) {
   $('recordView').innerHTML = `<div class="panel" style="margin-top:20px; border:2px solid #5c0000;"><h3>${esc(grade)} — Records</h3>${simpleTable(['School Year','Subject','Grade','Status'], rows.map(r => [esc(r.schoolYear), esc(r.subject), `<b>${esc(r.grade)}</b>`, esc(r.status)]))}</div>`;
 }
 
-// --- NEW STUDENT PROFILE LAYOUT ---
 function renderStudentProfile(c) {
   const s = currentStudent();
   c.innerHTML = `

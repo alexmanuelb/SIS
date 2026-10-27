@@ -36,7 +36,8 @@ db.serialize(() => {
                     db.run("DROP TABLE IF EXISTS users");
                     db.run("DROP TABLE IF EXISTS courses");
                     db.run("DROP TABLE IF EXISTS grades");
-                    db.run("DROP TABLE IF EXISTS schedules", () => buildDatabase());
+                    db.run("DROP TABLE IF EXISTS schedules");
+                    db.run("DROP TABLE IF EXISTS settings", () => buildDatabase());
                 } else {
                     db.get("SELECT COUNT(*) as count FROM schedules", (e, r) => {
                         if(r && r.count === 0) generateSchedules();
@@ -49,6 +50,9 @@ db.serialize(() => {
 
 function buildDatabase() {
     db.serialize(() => {
+        db.run(`CREATE TABLE settings (key TEXT PRIMARY KEY, value TEXT)`);
+        db.run(`INSERT INTO settings (key, value) VALUES ('active_term', '1st Sem')`);
+
         db.run(`CREATE TABLE users (username TEXT PRIMARY KEY, password TEXT, name TEXT, role TEXT, section TEXT)`);
         db.run(`CREATE TABLE students (id TEXT PRIMARY KEY, last TEXT, first TEXT, mi TEXT, address TEXT, course TEXT, yr TEXT, status TEXT, enrol TEXT, username TEXT, password TEXT, birthday TEXT, email TEXT, age TEXT, gender TEXT, guardianName TEXT, guardianContact TEXT)`);
         db.run(`CREATE TABLE courses (code TEXT PRIMARY KEY, name TEXT, gradeLevel TEXT, section TEXT, capacity INTEGER, adviser TEXT, subjectTeacher TEXT, status TEXT)`);
@@ -144,7 +148,6 @@ function generateSchedules() {
                 const [gradeLevel, section] = key.split('|');
                 const subjectList = groupedBySection[key];
                 
-                // Slots ending at or before 3:00 PM
                 const slots = [
                     { start: '07:00', end: '09:00' },
                     { start: '09:00', end: '11:00' },
@@ -153,7 +156,6 @@ function generateSchedules() {
                 ];
 
                 subjectList.forEach((sub, index) => {
-                    // Distribute sessions across Mon-Fri
                     let assignedDays = [];
                     if (index % 3 === 0) assignedDays = ['Monday', 'Wednesday'];
                     else if (index % 3 === 1) assignedDays = ['Tuesday', 'Thursday'];
@@ -180,7 +182,7 @@ function generateSchedules() {
             });
 
             insertSchedule.finalize(() => {
-                console.log("✅ Schedules generated (Mon-Fri, 2x/week, until 3PM, no overlaps).");
+                console.log("✅ Schedules generated (Mon-Fri, 2x/week, until 3PM).");
             });
         });
     });
@@ -194,6 +196,21 @@ app.post('/api/login', (req, res) => {
         if (err) return res.status(500).json({ error: err.message });
         if (!user) return res.status(401).json({ error: "Invalid credentials" });
         res.json(user);
+    });
+});
+
+// Settings Route for Global Term
+app.get('/api/settings/term', (req, res) => {
+    db.get("SELECT value FROM settings WHERE key = 'active_term'", [], (err, row) => {
+        if(err || !row) return res.json({ term: '1st Sem' });
+        res.json({ term: row.value });
+    });
+});
+app.post('/api/settings/term', (req, res) => {
+    const { term } = req.body;
+    db.run("UPDATE settings SET value = ? WHERE key = 'active_term'", [term], (err) => {
+        if(err) return res.status(500).json({ error: err.message });
+        res.json({ message: "Term updated" });
     });
 });
 
