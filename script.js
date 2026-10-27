@@ -397,16 +397,29 @@ function renderStudentBilling(c) {
     const miscFee = 1500;
     const totalAssessment = tuitionFee + miscFee;
 
+    // Calculate total approved payments
+    const approvedPayments = db.payments.filter(p => p.status === 'Approved');
+    const totalPaid = approvedPayments.reduce((sum, p) => sum + p.amount, 0);
+
+    const isFullyPaid = totalPaid >= totalAssessment;
+
     const currentBill = db.billing.find(b => b.status === 'Unpaid');
     const displayAmount = totalAssessment; 
     const displayDueDate = currentBill ? currentBill.dueDate : '2026-11-15';
     const billId = currentBill ? currentBill.id : 'new';
 
-    c.innerHTML = `
-        <div class="panel">
-            <h2>Billing & Payment</h2>
-            <p style="margin-bottom: 20px; color: #666;">View your assessment and payment history.</p>
-            
+    // Build the assessment section conditionally
+    let assessmentSection = '';
+    if (isFullyPaid) {
+        assessmentSection = `
+            <div style="background: #e8f5e9; border: 1px solid #28a745; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
+                <h3 style="color: #28a745; margin-top: 0;">✓ Fully Paid</h3>
+                <p style="margin: 0; color: #333;">Your total assessment of <b>PHP ${totalAssessment.toLocaleString('en-US', {minimumFractionDigits: 2})}</b> has been fully paid.</p>
+                <p style="margin: 5px 0 0 0; color: #666;">Thank you for your payment!</p>
+            </div>
+        `;
+    } else {
+        assessmentSection = `
             <div style="background: #fff0f0; border: 1px solid #800000; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
                 <h3 style="color: #800000; margin-top: 0;">Assessment Breakdown</h3>
                 
@@ -435,6 +448,15 @@ function renderStudentBilling(c) {
                     </button>
                 </div>
             </div>
+        `;
+    }
+
+    c.innerHTML = `
+        <div class="panel">
+            <h2>Billing & Payment</h2>
+            <p style="margin-bottom: 20px; color: #666;">View your assessment and payment history.</p>
+            
+            ${assessmentSection}
 
             <h3>Payment History</h3>
             ${simpleTable(
@@ -449,7 +471,7 @@ function renderStudentBilling(c) {
             )}
         </div>
 
-        <!-- PAYMENT MODAL -->
+        <!-- PAYMENT MODAL (still included for non-fully-paid students) -->
         <div id="paymentModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000; align-items: center; justify-content: center;">
             <div style="background: white; width: 400px; padding: 30px; border-radius: 12px; position: relative;">
                 <span onclick="$('paymentModal').style.display='none'" style="position: absolute; top: 10px; right: 15px; cursor: pointer; font-size: 20px;">&times;</span>
