@@ -16,16 +16,19 @@ const db = new sqlite3.Database(dbPath, (err) => {
     else console.log("Connected to SQLite DB");
 });
 
-// FORCE REBUILD LOGIC
+// ==========================================
+// AUTO-SEED (Bubuo ng bagong database tuwing mag-restart ang Render)
+// ==========================================
 db.serialize(() => {
     db.get("SELECT name FROM sqlite_master WHERE type='table' AND name='users'", (err, row) => {
         if (!row) {
             console.log("⚠️ No tables found. Building database from scratch...");
             buildDatabase();
         } else {
-            db.all("PRAGMA table_info(courses)", (err, cols) => {
-                const hasSubjectTeacher = cols.some(c => c.name === 'subjectTeacher');
-                if (!hasSubjectTeacher) {
+            // Check kung may email column na (para sa bagong features)
+            db.all("PRAGMA table_info(students)", (err, cols) => {
+                const hasEmail = cols.some(c => c.name === 'email');
+                if (!hasEmail) {
                     console.log("⚠️ Old structure detected. Dropping tables and rebuilding...");
                     db.run("DROP TABLE IF EXISTS attendance");
                     db.run("DROP TABLE IF EXISTS student_records");
@@ -34,9 +37,7 @@ db.serialize(() => {
                     db.run("DROP TABLE IF EXISTS users");
                     db.run("DROP TABLE IF EXISTS courses");
                     db.run("DROP TABLE IF EXISTS grades");
-                    db.run("DROP TABLE IF EXISTS schedules", () => {
-                        buildDatabase();
-                    });
+                    db.run("DROP TABLE IF EXISTS schedules", () => buildDatabase());
                 } else {
                     console.log("✅ Database is up to date.");
                 }
@@ -49,7 +50,7 @@ function buildDatabase() {
     db.serialize(() => {
         // 1. CREATE TABLES
         db.run(`CREATE TABLE users (username TEXT PRIMARY KEY, password TEXT, name TEXT, role TEXT, section TEXT)`);
-        db.run(`CREATE TABLE students (id TEXT PRIMARY KEY, last TEXT, first TEXT, mi TEXT, address TEXT, course TEXT, yr TEXT, status TEXT, enrol TEXT, username TEXT, password TEXT, birthday TEXT)`);
+        db.run(`CREATE TABLE students (id TEXT PRIMARY KEY, last TEXT, first TEXT, mi TEXT, address TEXT, course TEXT, yr TEXT, status TEXT, enrol TEXT, username TEXT, password TEXT, birthday TEXT, email TEXT)`);
         db.run(`CREATE TABLE courses (code TEXT PRIMARY KEY, name TEXT, gradeLevel TEXT, section TEXT, capacity INTEGER, adviser TEXT, subjectTeacher TEXT, status TEXT)`);
         db.run(`CREATE TABLE enrollments (id INTEGER PRIMARY KEY AUTOINCREMENT, studentId TEXT, courseCode TEXT, section TEXT, term TEXT)`);
         db.run(`CREATE TABLE grades (id INTEGER PRIMARY KEY AUTOINCREMENT, studentId TEXT, courseCode TEXT, courseName TEXT, grade REAL, term TEXT)`);
@@ -57,69 +58,38 @@ function buildDatabase() {
         db.run(`CREATE TABLE attendance (id INTEGER PRIMARY KEY AUTOINCREMENT, courseCode TEXT, section TEXT, studentId TEXT, date TEXT, status TEXT, UNIQUE(courseCode, section, studentId, date))`);
         db.run(`CREATE TABLE student_records (id INTEGER PRIMARY KEY AUTOINCREMENT, studentId TEXT, gradeLevel TEXT, schoolYear TEXT, subject TEXT, grade REAL, status TEXT, remarks TEXT)`);
 
-        // 2. INSERT USERS (ADMIN & TEACHERS)
+        // 2. INSERT ADMIN & REGISTRAR
+        db.run(`INSERT INTO users (username, password, name, role, section) VALUES ('admin', 'admin123', 'Admin User', 'Admin', '')`);
+        db.run(`INSERT INTO users (username, password, name, role, section) VALUES ('registrar', 'reg123', 'Registrar Staff', 'Registrar', '')`);
+
+        // 3. INSERT 30 TEACHERS
         const insertUser = db.prepare(`INSERT INTO users (username, password, name, role, section) VALUES (?, ?, ?, ?, ?)`);
-        
-        // Admin
-        insertUser.run('admin', 'admin123', 'Admin User', 'Admin', '');
-
-        // Teachers (1 Teacher per section, 2 Sections per grade = 24 Teachers total for Grade 1-12)
-        const teacherNames = [
-            // Grade 1
-            'T. Maria Clara', 'T. Jose Rizal', 
-            // Grade 2
-            'T. Andres Bonifacio', 'T. Emilio Aguinaldo',
-            // Grade 3
-            'T. Gabriela Silang', 'T. Lapu-Lapu',
-            // Grade 4
-            'T. Melchora Aquino', 'T. Apolinario Mabini',
-            // Grade 5
-            'T. Gregorio del Pilar', 'T. Antonio Luna',
-            // Grade 6
-            'T. Juan Luna', 'T. Marcelo del Pilar',
-            // Grade 7
-            'T. Francisco Balagtas', 'T. Graciano Lopez Jaena',
-            // Grade 8
-            'T. Pedro Paterno', 'T. Maximo Gomez',
-            // Grade 9
-            'T. Emilio Jacinto', 'T. Gregoria de Jesus',
-            // Grade 10
-            'T. Isabelo de los Reyes', 'T. Diego Silang',
-            // Grade 11
-            'T. Alan Turing', 'T. Marie Curie',
-            // Grade 12
-            'T. Albert Einstein', 'T. Isaac Newton'
+        const teachers = [
+            'T. John Emmanuel S.', 'T. Emily Bronte', 'T. Alan Turing', 'T. Liza Soberano', 'T. Andres Bonifacio',
+            'T. Enrique Gil', 'T. Kathryn Bernardo', 'T. Marie Curie', 'T. Daniel Padilla', 'T. Angel Locsin',
+            'T. Coco Martin', 'T. Francisco Balagtas', 'T. Gabriela Silang', 'T. Jane C. Villa', 'T. Warren Buffet',
+            'T. Michael Smith', 'T. Sarah Johnson', 'T. David Williams', 'T. Mary Brown', 'T. James Davis',
+            'T. Smith V. Cruz', 'T. Albert Einstein', 'T. Isaac Newton', 'T. Charles Darwin', 'T. Nikola Tesla',
+            'T. Rosalind Franklin', 'T. Stephen Hawking', 'T. Ada Lovelace', 'T. Galileo Galilei', 'T. Aristotle'
         ];
-
-        teacherNames.forEach((name, i) => {
+        teachers.forEach((name, i) => {
             const firstName = name.split(' ')[1] || 'Teacher';
-            const username = `t${firstName.toLowerCase()}${i}`;
-            const pass = `${firstName.toLowerCase()}123`;
-            insertUser.run(username, pass, name, 'Faculty', '');
+            insertUser.run(`t${firstName.toLowerCase()}${i}`, `${firstName.toLowerCase()}123`, name, 'Faculty', '');
         });
         insertUser.finalize();
 
-        // 3. INSERT STUDENTS (The specific ones you provided)
-        const insertStudent = db.prepare(`INSERT INTO students (id, last, first, mi, address, course, yr, status, enrol, username, password, birthday) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
-        const students = [
-            ['2023-0006', 'Dela Cruz', 'Juan', 'A', 'Mariveles, Bataan', 'Elem', 'Grade 4', 'Active', 'Enrolled', 'juandc', 'juan123', '2017-05-14'],
-            ['2026-01523', 'Reyes', 'Maria', 'B', 'Limay, Bataan', 'SHS', 'Grade 11 - STEM - 1st Sem', 'Active', 'Enrolled', 'mariar', 'maria123', '2010-08-22'],
-            ['2026-0163', 'Santos', 'Pedro', 'C', 'Mariveles, Bataan', 'Kinder', 'Kindergarten', 'Active', 'Enrolled', 'pedros', 'pedro123', '2021-02-10'],
-            ['2026', 'Reyes', 'Katie Mae', '', 'Mariveles, Bataan', 'High School', 'Grade 7', 'Inactive', 'Enrolled', 'katiemaer', 'katie123', '2014-11-05'],
-            ['2026-0011', 'Manuel', 'Alexandra', 'B.', 'Mariveles, Bataan', 'SHS', 'Grade 12 - STEM - 1st Sem', 'Active', 'Enrolled', 'alexandram', 'alexandra123', '2009-03-30'],
-            ['2024-2235', 'Cruz', 'Justine', 'D.', 'Mariveles, Bataan', 'Elem', 'Grade 2', 'Active', 'Enrolled', 'justinec', 'justine123', '2019-07-12'],
-            ['2023-0391', 'Braine', 'Leah', 'H.', 'Limay, Bataan', 'Elem', 'Grade 4', 'Active', 'Enrolled', 'leahb', 'leah123', '2017-09-21'],
-            ['2022-0212', 'Marquez', 'Chris John', 'N.', 'Mariveles, Bataan', 'SHS', 'Grade 12 - STEM - 1st Sem', 'Archived', 'Enrolled', 'chrisjohnm', 'chris123', '2009-01-18']
-        ];
-        students.forEach(s => insertStudent.run(s));
+        // 4. INSERT STUDENTS
+        const insertStudent = db.prepare(`INSERT INTO students (id, last, first, mi, address, course, yr, status, enrol, username, password, birthday, email) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
+        insertStudent.run('2023-0006', 'Dela Cruz', 'Juan', 'A', 'Mariveles, Bataan', 'Elem', 'Grade 4', 'Active', 'Enrolled', 'juandc', 'juan123', '2017-05-14', 'juan@example.com');
+        insertStudent.run('2026-01523', 'Reyes', 'Maria', 'B', 'Limay, Bataan', 'SHS', 'Grade 11 - STEM - 1st Sem', 'Active', 'Enrolled', 'mariar', 'maria123', '2010-08-22', 'maria@example.com');
+        insertStudent.run('2026-0163', 'Santos', 'Pedro', 'C', 'Mariveles, Bataan', 'Elem', 'Grade 1', 'Active', 'Enrolled', 'pedros', 'pedro123', '2021-02-10', 'pedro@example.com');
         insertStudent.finalize();
 
-        // 4. GENERATE COURSES (2 Sections per Grade)
+        // 5. GENERATE COURSES & SCHEDULES (Grades 1-12 only)
         const insertCourse = db.prepare(`INSERT INTO courses (code, name, gradeLevel, section, capacity, adviser, subjectTeacher, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`);
         const insertSchedule = db.prepare(`INSERT INTO schedules (courseCode, section, day, startTime, endTime) VALUES (?, ?, ?, ?, ?)`);
 
         const gradeConfigs = [
-            { level: 'Kinder', subjects: [['VAL', 'Values Ed'], ['PHY', 'Physical Health'], ['SOC', 'Socio-Emotional'], ['LAN', 'Language'], ['MAT', 'Math & Science']], capacity: 20 },
             { level: 'Grade 1', subjects: [['LANG', 'Language'], ['READ', 'Reading'], ['MATH', 'Mathematics'], ['GMRC', 'Good Manners'], ['MAK', 'Makabansa']], capacity: 30 },
             { level: 'Grade 2', subjects: [['ENG', 'English'], ['FIL', 'Filipino'], ['MATH', 'Mathematics'], ['GMRC', 'Good Manners'], ['MAK', 'Makabansa']], capacity: 30 },
             { level: 'Grade 3', subjects: [['ENG', 'English'], ['FIL', 'Filipino'], ['MATH', 'Mathematics'], ['SCI', 'Science'], ['GMRC', 'Good Manners'], ['MAK', 'Makabansa']], capacity: 30 },
@@ -145,7 +115,7 @@ function buildDatabase() {
             for (let sec = 1; sec <= 2; sec++) {
                 const sectionStr = sec.toString();
                 const gradePrefix = config.level.replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
-                const advisoryTeacher = teacherNames[teacherIndex % teacherNames.length];
+                const advisoryTeacher = teachers[teacherIndex % teachers.length];
                 teacherIndex++;
                 let timeIndex = 0;
 
@@ -153,7 +123,7 @@ function buildDatabase() {
                     const subCode = sub[0];
                     const subName = sub[1];
                     const courseCode = `${subCode}-${gradePrefix}-${sec}`;
-                    const subjectTeacher = teacherNames[(teacherIndex + idx) % teacherNames.length];
+                    const subjectTeacher = teachers[(teacherIndex + idx) % teachers.length];
 
                     insertCourse.run(courseCode, `${subName} (${config.level})`, config.level, sectionStr, config.capacity, advisoryTeacher, subjectTeacher, 'Open');
 
@@ -172,7 +142,9 @@ function buildDatabase() {
     });
 }
 
+// ==========================================
 // API ROUTES
+// ==========================================
 app.post('/api/login', (req, res) => {
     const { username, password } = req.body;
     if (!username || !password) return res.status(400).json({ error: "Username and password required" });
@@ -191,19 +163,38 @@ app.post('/api/faculty', (req, res) => {
         res.json({ message: "Faculty created" });
     });
 });
+app.post('/api/users/update', (req, res) => {
+    const { username, password, name, role, section } = req.body;
+    if (password && password.trim() !== '') {
+        db.run(`UPDATE users SET password=?, name=?, role=?, section=? WHERE username=?`, [password, name, role, section, username], (e) => res.json({ message: e ? e.message : "Updated" }));
+    } else {
+        db.run(`UPDATE users SET name=?, role=?, section=? WHERE username=?`, [name, role, section, username], (e) => res.json({ message: e ? e.message : "Updated" }));
+    }
+});
+app.delete('/api/users/:username', (req, res) => {
+    const username = req.params.username;
+    if (username === 'admin') return res.status(403).json({ error: "Cannot delete admin" });
+    db.run("DELETE FROM users WHERE username = ?", [username], function(e) {
+        if (e) return res.status(400).json({ error: e.message });
+        db.run("DELETE FROM students WHERE id = ?", [username]); 
+        res.json({ message: "User deleted" });
+    });
+});
 
 app.get('/api/students', (req, res) => db.all("SELECT * FROM students", [], (err, rows) => res.json(err ? [] : rows)));
 app.post('/api/students', (req, res) => {
-    const { id, last, first, mi, address, course, yr, status, enrol, birthday } = req.body;
+    const { id, last, first, mi, address, course, yr, status, enrol, birthday, email } = req.body;
     if (!id) return res.status(400).json({ error: "Student ID required" });
-    const username = id, password = "password123", fullName = `${first} ${last}`;
+    const fullName = `${first} ${last}`;
+    const generatedPass = `${first.toLowerCase()}123`;
+
     db.get("SELECT id FROM students WHERE id = ?", [id], (err, row) => {
         if (row) {
-            db.run(`UPDATE students SET last=?, first=?, mi=?, address=?, course=?, yr=?, status=?, enrol=?, birthday=? WHERE id=?`, [last, first, mi, address, course, yr, status, enrol, birthday, id], (e) => res.json({ message: e ? e.message : "Updated" }));
+            db.run(`UPDATE students SET last=?, first=?, mi=?, address=?, course=?, yr=?, status=?, enrol=?, birthday=?, email=? WHERE id=?`, [last, first, mi, address, course, yr, status, enrol, birthday, email, id], (e) => res.json({ message: e ? e.message : "Updated" }));
         } else {
-            db.run(`INSERT INTO students (id, last, first, mi, address, course, yr, status, enrol, username, password, birthday) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`, [id, last, first, mi, address, course, yr, status, enrol, username, password, birthday], (e) => {
+            db.run(`INSERT INTO students (id, last, first, mi, address, course, yr, status, enrol, username, password, birthday, email) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`, [id, last, first, mi, address, course, yr, status, enrol, id, generatedPass, birthday, email], (e) => {
                 if (e) return res.status(400).json({ error: e.message });
-                db.run(`INSERT INTO users (username, password, name, role, section) VALUES (?,?,?,'Student',?)`, [username, password, fullName, yr], () => res.json({ message: "Created" }));
+                db.run(`INSERT INTO users (username, password, name, role, section) VALUES (?,?,?,'Student',?)`, [id, generatedPass, fullName, yr], () => res.json({ message: "Created" }));
             });
         }
     });
@@ -256,16 +247,4 @@ app.post('/api/attendance', (req, res) => {
 });
 app.get('/api/student/records/:studentId', (req, res) => db.all("SELECT * FROM student_records WHERE studentId = ? ORDER BY gradeLevel", [req.params.studentId], (err, rows) => res.json(err ? [] : rows)));
 
-app.delete('/api/users/:username', (req, res) => {
-    const username = req.params.username;
-    if (username === 'admin') return res.status(403).json({ error: "Cannot delete admin" });
-    
-    db.run("DELETE FROM users WHERE username = ?", [username], function(e) {
-        if (e) return res.status(400).json({ error: e.message });
-        db.run("DELETE FROM students WHERE id = ?", [username]); // Optional: delete student record too
-        res.json({ message: "User deleted" });
-    });
-});
-
 app.listen(port, () => console.log(`✅ Server running on port ${port}`));
-

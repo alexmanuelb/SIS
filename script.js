@@ -47,6 +47,7 @@ async function doLogin() {
     buildSidebar();
     
     if (session.role === 'Admin') navigate('adminDashboard');
+    else if (session.role === 'Registrar') navigate('activeDirectory'); // Registrar goes straight to students
     else if (session.role === 'Faculty') navigate('facultyDashboard');
     else navigate('studentDashboard');
     
@@ -71,6 +72,10 @@ const MENUS = {
     { key: 'facultyDirectory', label: 'Faculty Directory' },
     { key: 'courses', label: 'Course Management' },
     { key: 'users', label: 'Users & Access' }
+  ],
+  Registrar: [
+    { key: 'activeDirectory', label: 'Student Directory' },
+    { key: 'courses', label: 'Course Management' }
   ],
   Faculty: [
     { key: 'facultyDashboard', label: 'Dashboard' },
@@ -175,7 +180,7 @@ function renderStudentDashboard(c) {
   setInterval(() => { if($('dash-clock')) $('dash-clock').textContent = new Date().toLocaleTimeString(); }, 1000);
 }
 
-/* ---------- ADMIN: STUDENT DIRECTORY ---------- */
+/* ---------- ADMIN/REGISTRAR: STUDENT DIRECTORY (With Email) ---------- */
 function renderActiveDirectory(c) {
   const active = db.students.filter(s => s.status !== 'Archived' && s.status !== 'Graduated');
   c.innerHTML = `<div class="panel">
@@ -197,7 +202,6 @@ function openStudentForm(id) {
   let currentYear = s ? s.yr : 'Grade 1';
   if (currentYear && currentYear.includes('-')) currentYear = currentYear.split('-')[0].trim();
 
-  // WALANG KINDER
   const yearLevels = ['Grade 1', 'Grade 2', 'Grade 3', 'Grade 4', 'Grade 5', 'Grade 6', 'Grade 7', 'Grade 8', 'Grade 9', 'Grade 10', 'Grade 11', 'Grade 12'];
   const statuses = ['Active', 'Archived', 'Graduated'];
 
@@ -209,6 +213,7 @@ function openStudentForm(id) {
         <div class="field"><label>Last Name</label><input id="f_last" value="${esc(s?.last||'')}"></div>
         <div class="field"><label>First Name</label><input id="f_first" value="${esc(s?.first||'')}"></div>
         <div class="field"><label>Middle Initial</label><input id="f_mi" value="${esc(s?.mi||'')}" maxlength="2"></div>
+        <div class="field"><label>Email Address</label><input id="f_email" type="email" value="${esc(s?.email||'')}" placeholder="student@email.com"></div>
         <div class="field"><label>Course / Dept</label>
           <select id="f_course">
             <option value="Elem" ${s?.course === 'Elem' ? 'selected' : ''}>Elementary</option>
@@ -229,22 +234,34 @@ function openStudentForm(id) {
 }
 
 async function saveStudent(existingId) {
-  const rec = { id: $('f_id').value, last: $('f_last').value, first: $('f_first').value, mi: $('f_mi').value, course: $('f_course').value, yr: $('f_yr').value, status: $('f_status').value, enrol: 'Enrolled' };
+  const email = $('f_email').value;
+  const first = $('f_first').value;
+  const rec = { id: $('f_id').value, last: $('f_last').value, first: first, mi: $('f_mi').value, course: $('f_course').value, yr: $('f_yr').value, status: $('f_status').value, enrol: 'Enrolled', email: email };
+  
   const res = await fetch('/api/students', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(rec) });
   if(!res.ok) return alert('Error saving');
+  
+  if (!existingId && email) {
+    // Auto-generate email link
+    const username = rec.id;
+    const password = `${first.toLowerCase()}123`;
+    const subject = `Your EduTrack SIS Account`;
+    const body = `Hello ${first} ${rec.last},\n\nWelcome to EduTrack! Here are your login credentials:\n\nUsername: ${username}\nPassword: ${password}\n\nPlease keep this information safe.`;
+    window.location.href = `mailto:${email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+  }
+
   db.students = await (await fetch('/api/students')).json();
   db.users = await (await fetch('/api/users')).json();
   $('enrollFormArea').innerHTML = ''; renderActiveDirectory($('content')); alert('Saved!');
 }
 
-/* ---------- ADMIN: FACULTY DIRECTORY (No Delete, Auto User/Pass) ---------- */
+/* ---------- ADMIN: FACULTY DIRECTORY (Name-based Password) ---------- */
 function renderFacultyDirectory(c) {
   const facultyList = db.users.filter(u => u.role === 'Faculty');
   const rows = facultyList.map(f => {
     const advised = db.courses.filter(crs => crs.adviser === f.name).map(crs => `${crs.gradeLevel} (Sec ${crs.section})`);
     const advisoryDisplay = advised.length > 0 ? advised[0] : '<span style="color:#999;">None</span>';
     
-    // Walang Delete Button
     return [
       `<b>${esc(f.username)}</b>`, 
       esc(f.name), 
@@ -264,7 +281,6 @@ function renderFacultyDirectory(c) {
 }
 
 function openAddFacultyForm() {
-  // Grade 1 to 12 lang
   const grades = ['Grade 1', 'Grade 2', 'Grade 3', 'Grade 4', 'Grade 5', 'Grade 6', 'Grade 7', 'Grade 8', 'Grade 9', 'Grade 10', 'Grade 11', 'Grade 12'];
   const sections = ['1', '2'];
   let uniqueSections = [];
@@ -274,7 +290,7 @@ function openAddFacultyForm() {
     <div class="form-panel" style="border-left: 4px solid #5c0000;">
       <h3 style="color:#5c0000; margin-bottom:15px;">Add New Teacher</h3>
       <div class="form-grid">
-        <div class="field" style="grid-column: span 2;"><label>Full Name (e.g., T. John Doe)</label><input id="t_name" onkeyup="generateCredentials()"></div>
+        <div class="field" style="grid-column: span 2;"><label>Full Name (e.g., T. John Doe)</label><input id="t_name" onkeyup="generateFacultyCredentials()"></div>
         <div class="field"><label>System Generated Username</label><input id="t_user" readonly style="background:#e9ecef;"></div>
         <div class="field"><label>System Generated Password</label><input id="t_pass" readonly style="background:#e9ecef;"></div>
         <div class="field"><label>Department</label><input id="t_dept" placeholder="e.g., Math Dept"></div>
@@ -290,21 +306,19 @@ function openAddFacultyForm() {
     </div>`;
 }
 
-function generateCredentials() {
-  const name = $('t_name').value.trim();
+function generateFacultyCredentials() {
+  const name = $('t_name').value.trim().replace(/^T\.\s*/i, ''); // Remove T.
   if (!name) {
     $('t_user').value = '';
     $('t_pass').value = '';
     return;
   }
-  // Auto-generate: Palitan ang space ng walang space, gawing lowercase, dagdagan ng random number
-  const cleanName = name.replace(/[^a-zA-Z]/g, '').toLowerCase();
-  const randNum = Math.floor(10 + Math.random() * 90); // 2 digit number
-  const username = `${cleanName.substring(0, 8)}${randNum}`;
-  const password = `pass${randNum}${cleanName.substring(0, 3)}`;
+  const parts = name.split(' ');
+  const firstName = parts[0].toLowerCase();
+  const lastName = parts.length > 1 ? parts[parts.length - 1].toLowerCase() : '';
 
-  $('t_user').value = username;
-  $('t_pass').value = password;
+  $('t_user').value = `t.${firstName}${lastName}`;
+  $('t_pass').value = `${firstName}123`;
 }
 
 async function saveFaculty() {
@@ -403,7 +417,7 @@ async function updateFaculty(username) {
   alert('Teacher updated successfully!');
 }
 
-/* ---------- ADMIN: COURSES & SECTIONS (With Filter) ---------- */
+/* ---------- ADMIN: COURSES & SECTIONS ---------- */
 function renderCourses(c) {
   const grades = ['Grade 1', 'Grade 2', 'Grade 3', 'Grade 4', 'Grade 5', 'Grade 6', 'Grade 7', 'Grade 8', 'Grade 9', 'Grade 10', 'Grade 11', 'Grade 12'];
   
@@ -434,7 +448,6 @@ function renderCoursesTable() {
   const filter = $('courseFilter') ? $('courseFilter').value : 'All';
   const filtered = filter === 'All' ? db.courses : db.courses.filter(c => c.gradeLevel === filter);
 
-  // WALANG KINDER DITO
   $('courseTableContainer').innerHTML = simpleTable(['Code','Name','Grade Level','Section','Adviser','Subject Teacher','Status'],
     filtered.map(x => [esc(x.code), esc(x.name), esc(x.gradeLevel), esc(x.section), esc(x.adviser), esc(x.subjectTeacher), `<span class="badge ${x.status === 'Open' ? 'active' : 'inactive'}">${esc(x.status)}</span>`])
   );
@@ -518,7 +531,7 @@ async function saveNewSection() {
   alert(`Section ${newSec} created for ${grade}!`);
 }
 
-/* ---------- ADMIN: USERS & ACCESS (No Delete here too as requested) ---------- */
+/* ---------- ADMIN: USERS & ACCESS (All Users) ---------- */
 function renderUsers(c) {
   const rows = db.users.map(u => [
     esc(u.username), 
