@@ -352,7 +352,6 @@ function renderFacultyDirectory(c) {
   </div>`;
 }
 
-// UPDATED: Tinanggal ang Username at Password fields
 function openAddFacultyForm() {
   const grades = ['Grade 1', 'Grade 2', 'Grade 3', 'Grade 4', 'Grade 5', 'Grade 6', 'Grade 7', 'Grade 8', 'Grade 9', 'Grade 10', 'Grade 11 - STEM', 'Grade 11 - HUMSS', 'Grade 11 - ABM', 'Grade 12 - STEM', 'Grade 12 - HUMSS', 'Grade 12 - ABM'];
   const sections = ['1', '2'];
@@ -365,7 +364,7 @@ function openAddFacultyForm() {
       <div class="form-grid">
         <div class="field" style="grid-column: span 2;"><label>Full Name (e.g., T. John Doe)</label><input id="t_name" onkeyup="generateFacultyCredentials()"></div>
         
-        <div class="field" style="grid-column: span 2;"><label>Email Address (for credentials)</label><input id="t_email" type="email" placeholder="teacher@email.com"></div>
+        <div class="field" style="grid-column: span 2;"><label>Email Address (for credentials)</label><input id="t_email" type="email" placeholder="teacher@gmail.com"></div>
 
         <div class="field"><label>Department</label><input id="t_dept" placeholder="e.g., Math Dept"></div>
         <div class="field"><label>Advisory Class</label>
@@ -380,7 +379,6 @@ function openAddFacultyForm() {
     </div>`;
 }
 
-// Gumagana pa rin ito sa background para makabuo ng credentials
 function generateFacultyCredentials() {
   const name = $('t_name').value.trim().replace(/^T\.\s*/i, '');
   if (!name) return;
@@ -390,10 +388,15 @@ function generateFacultyCredentials() {
 
   window._generatedUser = `t.${firstName}${lastName}`;
   window._generatedPass = `${firstName}123`;
+  
+  // Auto-fill email kung gmail format
+  const emailInput = $('t_email');
+  if (emailInput && !emailInput.value) {
+      emailInput.value = `t${firstName}${lastName}@gmail.com`;
+  }
 }
 
 async function saveFaculty() {
-  // Kunin yung generated credentials na naka-save sa window
   const username = window._generatedUser || '';
   const password = window._generatedPass || '';
   
