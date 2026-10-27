@@ -4,320 +4,45 @@ const path = require('path');
 const cors = require('cors');
 
 const app = express();
-// IMPORTANT: Use Render's dynamic port, fallback to 3000 for local testing
-const port = process.env.PORT || 3000; 
+const port = process.env.PORT || 3000;
 
-// Middleware
 app.use(cors());
-app.use(express.json({ limit: '10mb' })); 
-app.use(express.static(__dirname)); 
+app.use(express.json({ limit: '10mb' }));
+app.use(express.static(__dirname));
 
 const dbPath = path.join(__dirname, 'database.db');
 const db = new sqlite3.Database(dbPath, (err) => {
-    if (err) {
-        console.error("Error opening database:", err.message);
+    if (err) console.error("DB error:", err.message);
+    else console.log("Connected to SQLite DB");
+});
+
+/* =========================================================
+   AUTO-SEED (runs only if tables are missing)
+   ========================================================= */
+db.get("SELECT name FROM sqlite_master WHERE type='table' AND name='users'", (err, row) => {
+    if (!row) {
+        console.log("⚠️ No tables found. Please run `node setup.js` first to initialize the database.");
     } else {
-        console.log("Connected to SQLite database at:", dbPath);
-        
-        // AUTO-SEED LOGIC
-        db.get("SELECT name FROM sqlite_master WHERE type='table' AND name='users'", (err, row) => {
-            if (!row) {
-                console.log("Database is empty. Starting auto-seed...");
-                
-                db.serialize(() => {
-                    // 1. Create Tables
-                    db.run(`CREATE TABLE IF NOT EXISTS users (username TEXT PRIMARY KEY, password TEXT, name TEXT, role TEXT, section TEXT)`);
-                    db.run(`CREATE TABLE IF NOT EXISTS students (id TEXT PRIMARY KEY, last TEXT, first TEXT, mi TEXT, address TEXT, course TEXT, yr TEXT, status TEXT, enrol TEXT, username TEXT, password TEXT, birthday TEXT)`);
-                    db.run(`CREATE TABLE IF NOT EXISTS courses (code TEXT PRIMARY KEY, name TEXT, gradeLevel TEXT, section TEXT, capacity INTEGER, adviser TEXT, status TEXT)`);
-                    db.run(`CREATE TABLE IF NOT EXISTS enrollments (id INTEGER PRIMARY KEY AUTOINCREMENT, studentId TEXT, courseCode TEXT, section TEXT, term TEXT)`);
-                    db.run(`CREATE TABLE IF NOT EXISTS grades (id INTEGER PRIMARY KEY AUTOINCREMENT, studentId TEXT, courseCode TEXT, courseName TEXT, units INTEGER, grade REAL, term TEXT)`);
-                    db.run(`CREATE TABLE IF NOT EXISTS billing (id INTEGER PRIMARY KEY AUTOINCREMENT, studentId TEXT, term TEXT, totalAmount REAL, dueDate TEXT, status TEXT DEFAULT 'Unpaid')`);
-                    db.run(`CREATE TABLE IF NOT EXISTS payments (id INTEGER PRIMARY KEY AUTOINCREMENT, studentId TEXT, billingId INTEGER, amount REAL, paymentMethod TEXT, referenceNo TEXT, receiptImage TEXT, status TEXT DEFAULT 'Pending', datePaid TEXT)`);
-
-                    // 2. Insert Users
-                    const insertUser = db.prepare(`INSERT INTO users (username, password, name, role, section) VALUES (?, ?, ?, ?, ?)`);
-                    const users = [
-                        ['admin', 'admin123', 'Admin User', 'Admin', ''],
-                        ['tmary', 'mary123', 'T. Mary C. Poppins', 'Faculty', 'Kinder'],
-                        ['tjohn', 'john123', 'T. John Emmanuel S.', 'Faculty', 'Grade 1'],
-                        ['tjane', 'jane123', 'T. Jane C. Villa', 'Faculty', 'Grade 7 & 11'],
-                        ['tsmith', 'smith123', 'T. Smith V. Cruz', 'Faculty', 'Grade 11'],
-                        ['talan', 'alan123', 'T. Alan Turing', 'Faculty', 'Math Dept'],
-                        ['temily', 'emily123', 'T. Emily Bronte', 'Faculty', 'English Dept'],
-                        ['tmarie', 'marie123', 'T. Marie Curie', 'Faculty', 'Science Dept'],
-                        ['twarren', 'warren123', 'T. Warren Buffet', 'Faculty', 'Business Dept'],
-                        ['taral', 'aral123', 'T. Andres Bonifacio', 'Faculty', 'Araling Panlipunan Dept'],
-                        ['tmapeh', 'mapeh123', 'T. Francisco Balagtas', 'Faculty', 'MAPEH Dept'],
-                        ['ttle', 'tle123', 'T. Gabriela Silang', 'Faculty', 'TLE Dept'],
-                        ['tfil1', 'fil123', 'T. Liza Soberano', 'Faculty', 'Filipino Dept'],
-                        ['tfil2', 'fil123', 'T. Enrique Gil', 'Faculty', 'Filipino Dept'],
-                        ['tfil3', 'fil123', 'T. Kathryn Bernardo', 'Faculty', 'Filipino Dept'],
-                        ['tfil4', 'fil123', 'T. Daniel Padilla', 'Faculty', 'Filipino Dept'],
-                        ['tfil5', 'fil123', 'T. Angel Locsin', 'Faculty', 'Filipino Dept'],
-                        ['tfil6', 'fil123', 'T. Coco Martin', 'Faculty', 'Filipino Dept'],
-                        ['juandc', 'juan123', 'Juan Dela Cruz', 'Student', 'Grade 4'],
-                        ['mariar', 'maria123', 'Maria Reyes', 'Student', 'Grade 11 - STEM - 1st Sem'],
-                        ['pedros', 'pedro123', 'Pedro Santos', 'Student', 'Kindergarten'],
-                        ['katiemaer', 'katie123', 'Katie Mae Reyes', 'Student', 'Grade 7'],
-                        ['alexandram', 'alexandra123', 'Alexandra Manuel', 'Student', 'Grade 12 - STEM - 1st Sem'],
-                        ['justinec', 'justine123', 'Justine Cruz', 'Student', 'Grade 2'],
-                        ['leahb', 'leah123', 'Leah Braine', 'Student', 'Grade 4'],
-                        ['chrisjohnm', 'chris123', 'Chris John Marquez', 'Student', 'Grade 12 - STEM - 1st Sem']
-                    ];
-                    users.forEach(u => insertUser.run(u));
-                    insertUser.finalize();
-
-                    // 3. Insert Students
-                    const insertStudent = db.prepare(`INSERT INTO students (id, last, first, mi, address, course, yr, status, enrol, username, password, birthday) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
-                    const students = [
-                        ['2023-0006', 'Dela Cruz', 'Juan', 'A', 'Mariveles, Bataan', 'Elem', 'Grade 4', 'Active', 'Enrolled', 'juandc', 'juan123', '2017-05-14'],
-                        ['2026-01523', 'Reyes', 'Maria', 'B', 'Limay, Bataan', 'SHS', 'Grade 11 - STEM - 1st Sem', 'Active', 'Enrolled', 'mariar', 'maria123', '2010-08-22'],
-                        ['2026-0163', 'Santos', 'Pedro', 'C', 'Mariveles, Bataan', 'Kinder', 'Kindergarten', 'Active', 'Enrolled', 'pedros', 'pedro123', '2021-02-10'],
-                        ['2026', 'Reyes', 'Katie Mae', '', 'Mariveles, Bataan', 'High School', 'Grade 7', 'Inactive', 'Enrolled', 'katiemaer', 'katie123', '2014-11-05'],
-                        ['2026-0011', 'Manuel', 'Alexandra', 'B.', 'Mariveles, Bataan', 'SHS', 'Grade 12 - STEM - 1st Sem', 'Active', 'Enrolled', 'alexandram', 'alexandra123', '2009-03-30'],
-                        ['2024-2235', 'Cruz', 'Justine', 'D.', 'Mariveles, Bataan', 'Elem', 'Grade 2', 'Active', 'Enrolled', 'justinec', 'justine123', '2019-07-12'],
-                        ['2023-0391', 'Braine', 'Leah', 'H.', 'Limay, Bataan', 'Elem', 'Grade 4', 'Active', 'Enrolled', 'leahb', 'leah123', '2017-09-21'],
-                        ['2022-0212', 'Marquez', 'Chris John', 'N.', 'Mariveles, Bataan', 'SHS', 'Grade 12 - STEM - 1st Sem', 'Archived', 'Enrolled', 'chrisjohnm', 'chris123', '2009-01-18']
-                    ];
-                    students.forEach(s => insertStudent.run(s));
-                    insertStudent.finalize();
-
-                    // 4. Insert Courses (WITH 3 SECTIONS FOR GRADES 1 TO 12)
-                    const insertCourse = db.prepare(`INSERT INTO courses (code, name, gradeLevel, section, capacity, adviser, status) VALUES (?, ?, ?, ?, ?, ?, ?)`);
-                    
-                    const courses = [
-                        // KINDERGARTEN (1 Section Only)
-                        ['KIN-VAL', 'Values Education', 'Kinder', '1', 20, 'T. Mary C. Poppins', 'Open'], ['KIN-PHY', 'Physical Health & Motor Dev', 'Kinder', '1', 20, 'T. Mary C. Poppins', 'Open'], ['KIN-SOC', 'Socio-Emotional Dev', 'Kinder', '1', 20, 'T. Mary C. Poppins', 'Open'], ['KIN-LAN', 'Language & Literacy', 'Kinder', '1', 20, 'T. Mary C. Poppins', 'Open'], ['KIN-MAT', 'Mathematics & Science', 'Kinder', '1', 20, 'T. Mary C. Poppins', 'Open'],
-
-                        // GRADE 1 (3 Sections)
-                        ['LANG1-1', 'Language', 'Grade 1', '1', 30, 'T. John Emmanuel S.', 'Open'], ['LANG1-2', 'Language', 'Grade 1', '2', 30, 'T. John Emmanuel S.', 'Open'], ['LANG1-3', 'Language', 'Grade 1', '3', 30, 'T. John Emmanuel S.', 'Open'],
-                        ['READ1-1', 'Reading & Literacy', 'Grade 1', '1', 30, 'T. Emily Bronte', 'Open'], ['READ1-2', 'Reading & Literacy', 'Grade 1', '2', 30, 'T. Emily Bronte', 'Open'], ['READ1-3', 'Reading & Literacy', 'Grade 1', '3', 30, 'T. Emily Bronte', 'Open'],
-                        ['MATH1-1', 'Mathematics', 'Grade 1', '1', 30, 'T. Alan Turing', 'Open'], ['MATH1-2', 'Mathematics', 'Grade 1', '2', 30, 'T. Alan Turing', 'Open'], ['MATH1-3', 'Mathematics', 'Grade 1', '3', 30, 'T. Alan Turing', 'Open'],
-                        ['GMRC1-1', 'Good Manners & Right Conduct', 'Grade 1', '1', 30, 'T. Liza Soberano', 'Open'], ['GMRC1-2', 'Good Manners & Right Conduct', 'Grade 1', '2', 30, 'T. Liza Soberano', 'Open'], ['GMRC1-3', 'Good Manners & Right Conduct', 'Grade 1', '3', 30, 'T. Liza Soberano', 'Open'],
-                        ['MAK1-1', 'Makabansa', 'Grade 1', '1', 30, 'T. Andres Bonifacio', 'Open'], ['MAK1-2', 'Makabansa', 'Grade 1', '2', 30, 'T. Andres Bonifacio', 'Open'], ['MAK1-3', 'Makabansa', 'Grade 1', '3', 30, 'T. Andres Bonifacio', 'Open'],
-
-                        // GRADE 2 (3 Sections)
-                        ['ENG2-1', 'English', 'Grade 2', '1', 30, 'T. Emily Bronte', 'Open'], ['ENG2-2', 'English', 'Grade 2', '2', 30, 'T. Emily Bronte', 'Open'], ['ENG2-3', 'English', 'Grade 2', '3', 30, 'T. Emily Bronte', 'Open'],
-                        ['FIL2-1', 'Filipino', 'Grade 2', '1', 30, 'T. Enrique Gil', 'Open'], ['FIL2-2', 'Filipino', 'Grade 2', '2', 30, 'T. Enrique Gil', 'Open'], ['FIL2-3', 'Filipino', 'Grade 2', '3', 30, 'T. Enrique Gil', 'Open'],
-                        ['MATH2-1', 'Mathematics', 'Grade 2', '1', 30, 'T. Alan Turing', 'Open'], ['MATH2-2', 'Mathematics', 'Grade 2', '2', 30, 'T. Alan Turing', 'Open'], ['MATH2-3', 'Mathematics', 'Grade 2', '3', 30, 'T. Alan Turing', 'Open'],
-                        ['GMRC2-1', 'Good Manners & Right Conduct', 'Grade 2', '1', 30, 'T. Liza Soberano', 'Open'], ['GMRC2-2', 'Good Manners & Right Conduct', 'Grade 2', '2', 30, 'T. Liza Soberano', 'Open'], ['GMRC2-3', 'Good Manners & Right Conduct', 'Grade 2', '3', 30, 'T. Liza Soberano', 'Open'],
-                        ['MAK2-1', 'Makabansa', 'Grade 2', '1', 30, 'T. Andres Bonifacio', 'Open'], ['MAK2-2', 'Makabansa', 'Grade 2', '2', 30, 'T. Andres Bonifacio', 'Open'], ['MAK2-3', 'Makabansa', 'Grade 2', '3', 30, 'T. Andres Bonifacio', 'Open'],
-
-                        // GRADE 3 (3 Sections)
-                        ['ENG3-1', 'English', 'Grade 3', '1', 30, 'T. Emily Bronte', 'Open'], ['ENG3-2', 'English', 'Grade 3', '2', 30, 'T. Emily Bronte', 'Open'], ['ENG3-3', 'English', 'Grade 3', '3', 30, 'T. Emily Bronte', 'Open'],
-                        ['FIL3-1', 'Filipino', 'Grade 3', '1', 30, 'T. Kathryn Bernardo', 'Open'], ['FIL3-2', 'Filipino', 'Grade 3', '2', 30, 'T. Kathryn Bernardo', 'Open'], ['FIL3-3', 'Filipino', 'Grade 3', '3', 30, 'T. Kathryn Bernardo', 'Open'],
-                        ['MATH3-1', 'Mathematics', 'Grade 3', '1', 30, 'T. Alan Turing', 'Open'], ['MATH3-2', 'Mathematics', 'Grade 3', '2', 30, 'T. Alan Turing', 'Open'], ['MATH3-3', 'Mathematics', 'Grade 3', '3', 30, 'T. Alan Turing', 'Open'],
-                        ['SCI3-1', 'Science', 'Grade 3', '1', 30, 'T. Marie Curie', 'Open'], ['SCI3-2', 'Science', 'Grade 3', '2', 30, 'T. Marie Curie', 'Open'], ['SCI3-3', 'Science', 'Grade 3', '3', 30, 'T. Marie Curie', 'Open'],
-                        ['GMRC3-1', 'Good Manners & Right Conduct', 'Grade 3', '1', 30, 'T. Liza Soberano', 'Open'], ['GMRC3-2', 'Good Manners & Right Conduct', 'Grade 3', '2', 30, 'T. Liza Soberano', 'Open'], ['GMRC3-3', 'Good Manners & Right Conduct', 'Grade 3', '3', 30, 'T. Liza Soberano', 'Open'],
-                        ['MAK3-1', 'Makabansa', 'Grade 3', '1', 30, 'T. Andres Bonifacio', 'Open'], ['MAK3-2', 'Makabansa', 'Grade 3', '2', 30, 'T. Andres Bonifacio', 'Open'], ['MAK3-3', 'Makabansa', 'Grade 3', '3', 30, 'T. Andres Bonifacio', 'Open'],
-
-                        // GRADE 4 (3 Sections)
-                        ['ENG4-1', 'English 4', 'Grade 4', '1', 30, 'T. Emily Bronte', 'Open'], ['ENG4-2', 'English 4', 'Grade 4', '2', 30, 'T. Emily Bronte', 'Open'], ['ENG4-3', 'English 4', 'Grade 4', '3', 30, 'T. Emily Bronte', 'Open'],
-                        ['FIL4-1', 'Filipino 4', 'Grade 4', '1', 30, 'T. Daniel Padilla', 'Open'], ['FIL4-2', 'Filipino 4', 'Grade 4', '2', 30, 'T. Daniel Padilla', 'Open'], ['FIL4-3', 'Filipino 4', 'Grade 4', '3', 30, 'T. Daniel Padilla', 'Open'],
-                        ['MATH4-1', 'Mathematics 4', 'Grade 4', '1', 30, 'T. Alan Turing', 'Open'], ['MATH4-2', 'Mathematics 4', 'Grade 4', '2', 30, 'T. Alan Turing', 'Open'], ['MATH4-3', 'Mathematics 4', 'Grade 4', '3', 30, 'T. Alan Turing', 'Open'],
-                        ['SCI4-1', 'Science 4', 'Grade 4', '1', 30, 'T. Marie Curie', 'Open'], ['SCI4-2', 'Science 4', 'Grade 4', '2', 30, 'T. Marie Curie', 'Open'], ['SCI4-3', 'Science 4', 'Grade 4', '3', 30, 'T. Marie Curie', 'Open'],
-                        ['AP4-1', 'Araling Panlipunan 4', 'Grade 4', '1', 30, 'T. Andres Bonifacio', 'Open'], ['AP4-2', 'Araling Panlipunan 4', 'Grade 4', '2', 30, 'T. Andres Bonifacio', 'Open'], ['AP4-3', 'Araling Panlipunan 4', 'Grade 4', '3', 30, 'T. Andres Bonifacio', 'Open'],
-                        ['ESP4-1', 'Values Education 4', 'Grade 4', '1', 30, 'T. Liza Soberano', 'Open'], ['ESP4-2', 'Values Education 4', 'Grade 4', '2', 30, 'T. Liza Soberano', 'Open'], ['ESP4-3', 'Values Education 4', 'Grade 4', '3', 30, 'T. Liza Soberano', 'Open'],
-                        ['MAPEH4-1', 'MAPEH 4', 'Grade 4', '1', 30, 'T. Francisco Balagtas', 'Open'], ['MAPEH4-2', 'MAPEH 4', 'Grade 4', '2', 30, 'T. Francisco Balagtas', 'Open'], ['MAPEH4-3', 'MAPEH 4', 'Grade 4', '3', 30, 'T. Francisco Balagtas', 'Open'],
-                        ['EPP4-1', 'EPP 4', 'Grade 4', '1', 30, 'T. Gabriela Silang', 'Open'], ['EPP4-2', 'EPP 4', 'Grade 4', '2', 30, 'T. Gabriela Silang', 'Open'], ['EPP4-3', 'EPP 4', 'Grade 4', '3', 30, 'T. Gabriela Silang', 'Open'],
-
-                        // GRADE 5 (3 Sections)
-                        ['ENG5-1', 'English 5', 'Grade 5', '1', 30, 'T. Emily Bronte', 'Open'], ['ENG5-2', 'English 5', 'Grade 5', '2', 30, 'T. Emily Bronte', 'Open'], ['ENG5-3', 'English 5', 'Grade 5', '3', 30, 'T. Emily Bronte', 'Open'],
-                        ['FIL5-1', 'Filipino 5', 'Grade 5', '1', 30, 'T. Angel Locsin', 'Open'], ['FIL5-2', 'Filipino 5', 'Grade 5', '2', 30, 'T. Angel Locsin', 'Open'], ['FIL5-3', 'Filipino 5', 'Grade 5', '3', 30, 'T. Angel Locsin', 'Open'],
-                        ['MATH5-1', 'Mathematics 5', 'Grade 5', '1', 30, 'T. Alan Turing', 'Open'], ['MATH5-2', 'Mathematics 5', 'Grade 5', '2', 30, 'T. Alan Turing', 'Open'], ['MATH5-3', 'Mathematics 5', 'Grade 5', '3', 30, 'T. Alan Turing', 'Open'],
-                        ['SCI5-1', 'Science 5', 'Grade 5', '1', 30, 'T. Marie Curie', 'Open'], ['SCI5-2', 'Science 5', 'Grade 5', '2', 30, 'T. Marie Curie', 'Open'], ['SCI5-3', 'Science 5', 'Grade 5', '3', 30, 'T. Marie Curie', 'Open'],
-                        ['AP5-1', 'Araling Panlipunan 5', 'Grade 5', '1', 30, 'T. Andres Bonifacio', 'Open'], ['AP5-2', 'Araling Panlipunan 5', 'Grade 5', '2', 30, 'T. Andres Bonifacio', 'Open'], ['AP5-3', 'Araling Panlipunan 5', 'Grade 5', '3', 30, 'T. Andres Bonifacio', 'Open'],
-                        ['ESP5-1', 'Values Education 5', 'Grade 5', '1', 30, 'T. Liza Soberano', 'Open'], ['ESP5-2', 'Values Education 5', 'Grade 5', '2', 30, 'T. Liza Soberano', 'Open'], ['ESP5-3', 'Values Education 5', 'Grade 5', '3', 30, 'T. Liza Soberano', 'Open'],
-                        ['MAPEH5-1', 'MAPEH 5', 'Grade 5', '1', 30, 'T. Francisco Balagtas', 'Open'], ['MAPEH5-2', 'MAPEH 5', 'Grade 5', '2', 30, 'T. Francisco Balagtas', 'Open'], ['MAPEH5-3', 'MAPEH 5', 'Grade 5', '3', 30, 'T. Francisco Balagtas', 'Open'],
-                        ['EPP5-1', 'EPP 5', 'Grade 5', '1', 30, 'T. Gabriela Silang', 'Open'], ['EPP5-2', 'EPP 5', 'Grade 5', '2', 30, 'T. Gabriela Silang', 'Open'], ['EPP5-3', 'EPP 5', 'Grade 5', '3', 30, 'T. Gabriela Silang', 'Open'],
-
-                        // GRADE 6 (3 Sections)
-                        ['ENG6-1', 'English 6', 'Grade 6', '1', 30, 'T. Emily Bronte', 'Open'], ['ENG6-2', 'English 6', 'Grade 6', '2', 30, 'T. Emily Bronte', 'Open'], ['ENG6-3', 'English 6', 'Grade 6', '3', 30, 'T. Emily Bronte', 'Open'],
-                        ['FIL6-1', 'Filipino 6', 'Grade 6', '1', 30, 'T. Coco Martin', 'Open'], ['FIL6-2', 'Filipino 6', 'Grade 6', '2', 30, 'T. Coco Martin', 'Open'], ['FIL6-3', 'Filipino 6', 'Grade 6', '3', 30, 'T. Coco Martin', 'Open'],
-                        ['MATH6-1', 'Mathematics 6', 'Grade 6', '1', 30, 'T. Alan Turing', 'Open'], ['MATH6-2', 'Mathematics 6', 'Grade 6', '2', 30, 'T. Alan Turing', 'Open'], ['MATH6-3', 'Mathematics 6', 'Grade 6', '3', 30, 'T. Alan Turing', 'Open'],
-                        ['SCI6-1', 'Science 6', 'Grade 6', '1', 30, 'T. Marie Curie', 'Open'], ['SCI6-2', 'Science 6', 'Grade 6', '2', 30, 'T. Marie Curie', 'Open'], ['SCI6-3', 'Science 6', 'Grade 6', '3', 30, 'T. Marie Curie', 'Open'],
-                        ['AP6-1', 'Araling Panlipunan 6', 'Grade 6', '1', 30, 'T. Andres Bonifacio', 'Open'], ['AP6-2', 'Araling Panlipunan 6', 'Grade 6', '2', 30, 'T. Andres Bonifacio', 'Open'], ['AP6-3', 'Araling Panlipunan 6', 'Grade 6', '3', 30, 'T. Andres Bonifacio', 'Open'],
-                        ['ESP6-1', 'Values Education 6', 'Grade 6', '1', 30, 'T. Liza Soberano', 'Open'], ['ESP6-2', 'Values Education 6', 'Grade 6', '2', 30, 'T. Liza Soberano', 'Open'], ['ESP6-3', 'Values Education 6', 'Grade 6', '3', 30, 'T. Liza Soberano', 'Open'],
-                        ['MAPEH6-1', 'MAPEH 6', 'Grade 6', '1', 30, 'T. Francisco Balagtas', 'Open'], ['MAPEH6-2', 'MAPEH 6', 'Grade 6', '2', 30, 'T. Francisco Balagtas', 'Open'], ['MAPEH6-3', 'MAPEH 6', 'Grade 6', '3', 30, 'T. Francisco Balagtas', 'Open'],
-                        ['TLE6-1', 'TLE 6', 'Grade 6', '1', 30, 'T. Gabriela Silang', 'Open'], ['TLE6-2', 'TLE 6', 'Grade 6', '2', 30, 'T. Gabriela Silang', 'Open'], ['TLE6-3', 'TLE 6', 'Grade 6', '3', 30, 'T. Gabriela Silang', 'Open'],
-
-                        // GRADE 7 (3 Sections)
-                        ['ENG7-1', 'English 7', 'Grade 7', '1', 35, 'T. Emily Bronte', 'Open'], ['ENG7-2', 'English 7', 'Grade 7', '2', 35, 'T. Emily Bronte', 'Open'], ['ENG7-3', 'English 7', 'Grade 7', '3', 35, 'T. Emily Bronte', 'Open'],
-                        ['FIL7-1', 'Filipino 7', 'Grade 7', '1', 35, 'T. Enrique Gil', 'Open'], ['FIL7-2', 'Filipino 7', 'Grade 7', '2', 35, 'T. Enrique Gil', 'Open'], ['FIL7-3', 'Filipino 7', 'Grade 7', '3', 35, 'T. Enrique Gil', 'Open'],
-                        ['MATH7-1', 'Mathematics 7', 'Grade 7', '1', 35, 'T. Jane C. Villa', 'Open'], ['MATH7-2', 'Mathematics 7', 'Grade 7', '2', 35, 'T. Jane C. Villa', 'Open'], ['MATH7-3', 'Mathematics 7', 'Grade 7', '3', 35, 'T. Jane C. Villa', 'Open'],
-                        ['SCI7-1', 'Science 7', 'Grade 7', '1', 35, 'T. Marie Curie', 'Open'], ['SCI7-2', 'Science 7', 'Grade 7', '2', 35, 'T. Marie Curie', 'Open'], ['SCI7-3', 'Science 7', 'Grade 7', '3', 35, 'T. Marie Curie', 'Open'],
-                        ['AP7-1', 'Araling Panlipunan 7', 'Grade 7', '1', 35, 'T. Andres Bonifacio', 'Open'], ['AP7-2', 'Araling Panlipunan 7', 'Grade 7', '2', 35, 'T. Andres Bonifacio', 'Open'], ['AP7-3', 'Araling Panlipunan 7', 'Grade 7', '3', 35, 'T. Andres Bonifacio', 'Open'],
-                        ['ESP7-1', 'Values Education 7', 'Grade 7', '1', 35, 'T. Liza Soberano', 'Open'], ['ESP7-2', 'Values Education 7', 'Grade 7', '2', 35, 'T. Liza Soberano', 'Open'], ['ESP7-3', 'Values Education 7', 'Grade 7', '3', 35, 'T. Liza Soberano', 'Open'],
-                        ['MAPEH7-1', 'MAPEH 7', 'Grade 7', '1', 35, 'T. Francisco Balagtas', 'Open'], ['MAPEH7-2', 'MAPEH 7', 'Grade 7', '2', 35, 'T. Francisco Balagtas', 'Open'], ['MAPEH7-3', 'MAPEH 7', 'Grade 7', '3', 35, 'T. Francisco Balagtas', 'Open'],
-                        ['TLE7-1', 'TLE 7', 'Grade 7', '1', 35, 'T. Gabriela Silang', 'Open'], ['TLE7-2', 'TLE 7', 'Grade 7', '2', 35, 'T. Gabriela Silang', 'Open'], ['TLE7-3', 'TLE 7', 'Grade 7', '3', 35, 'T. Gabriela Silang', 'Open'],
-
-                        // GRADE 8 (3 Sections)
-                        ['ENG8-1', 'English 8', 'Grade 8', '1', 35, 'T. Emily Bronte', 'Open'], ['ENG8-2', 'English 8', 'Grade 8', '2', 35, 'T. Emily Bronte', 'Open'], ['ENG8-3', 'English 8', 'Grade 8', '3', 35, 'T. Emily Bronte', 'Open'],
-                        ['FIL8-1', 'Filipino 8', 'Grade 8', '1', 35, 'T. Kathryn Bernardo', 'Open'], ['FIL8-2', 'Filipino 8', 'Grade 8', '2', 35, 'T. Kathryn Bernardo', 'Open'], ['FIL8-3', 'Filipino 8', 'Grade 8', '3', 35, 'T. Kathryn Bernardo', 'Open'],
-                        ['MATH8-1', 'Mathematics 8', 'Grade 8', '1', 35, 'T. Alan Turing', 'Open'], ['MATH8-2', 'Mathematics 8', 'Grade 8', '2', 35, 'T. Alan Turing', 'Open'], ['MATH8-3', 'Mathematics 8', 'Grade 8', '3', 35, 'T. Alan Turing', 'Open'],
-                        ['SCI8-1', 'Science 8', 'Grade 8', '1', 35, 'T. Marie Curie', 'Open'], ['SCI8-2', 'Science 8', 'Grade 8', '2', 35, 'T. Marie Curie', 'Open'], ['SCI8-3', 'Science 8', 'Grade 8', '3', 35, 'T. Marie Curie', 'Open'],
-                        ['AP8-1', 'Araling Panlipunan 8', 'Grade 8', '1', 35, 'T. Andres Bonifacio', 'Open'], ['AP8-2', 'Araling Panlipunan 8', 'Grade 8', '2', 35, 'T. Andres Bonifacio', 'Open'], ['AP8-3', 'Araling Panlipunan 8', 'Grade 8', '3', 35, 'T. Andres Bonifacio', 'Open'],
-                        ['ESP8-1', 'Values Education 8', 'Grade 8', '1', 35, 'T. Liza Soberano', 'Open'], ['ESP8-2', 'Values Education 8', 'Grade 8', '2', 35, 'T. Liza Soberano', 'Open'], ['ESP8-3', 'Values Education 8', 'Grade 8', '3', 35, 'T. Liza Soberano', 'Open'],
-                        ['MAPEH8-1', 'MAPEH 8', 'Grade 8', '1', 35, 'T. Francisco Balagtas', 'Open'], ['MAPEH8-2', 'MAPEH 8', 'Grade 8', '2', 35, 'T. Francisco Balagtas', 'Open'], ['MAPEH8-3', 'MAPEH 8', 'Grade 8', '3', 35, 'T. Francisco Balagtas', 'Open'],
-                        ['TLE8-1', 'TLE 8', 'Grade 8', '1', 35, 'T. Gabriela Silang', 'Open'], ['TLE8-2', 'TLE 8', 'Grade 8', '2', 35, 'T. Gabriela Silang', 'Open'], ['TLE8-3', 'TLE 8', 'Grade 8', '3', 35, 'T. Gabriela Silang', 'Open'],
-
-                        // GRADE 9 (3 Sections)
-                        ['ENG9-1', 'English 9', 'Grade 9', '1', 35, 'T. Emily Bronte', 'Open'], ['ENG9-2', 'English 9', 'Grade 9', '2', 35, 'T. Emily Bronte', 'Open'], ['ENG9-3', 'English 9', 'Grade 9', '3', 35, 'T. Emily Bronte', 'Open'],
-                        ['FIL9-1', 'Filipino 9', 'Grade 9', '1', 35, 'T. Daniel Padilla', 'Open'], ['FIL9-2', 'Filipino 9', 'Grade 9', '2', 35, 'T. Daniel Padilla', 'Open'], ['FIL9-3', 'Filipino 9', 'Grade 9', '3', 35, 'T. Daniel Padilla', 'Open'],
-                        ['MATH9-1', 'Mathematics 9', 'Grade 9', '1', 35, 'T. Alan Turing', 'Open'], ['MATH9-2', 'Mathematics 9', 'Grade 9', '2', 35, 'T. Alan Turing', 'Open'], ['MATH9-3', 'Mathematics 9', 'Grade 9', '3', 35, 'T. Alan Turing', 'Open'],
-                        ['SCI9-1', 'Science 9', 'Grade 9', '1', 35, 'T. Marie Curie', 'Open'], ['SCI9-2', 'Science 9', 'Grade 9', '2', 35, 'T. Marie Curie', 'Open'], ['SCI9-3', 'Science 9', 'Grade 9', '3', 35, 'T. Marie Curie', 'Open'],
-                        ['AP9-1', 'Araling Panlipunan 9', 'Grade 9', '1', 35, 'T. Andres Bonifacio', 'Open'], ['AP9-2', 'Araling Panlipunan 9', 'Grade 9', '2', 35, 'T. Andres Bonifacio', 'Open'], ['AP9-3', 'Araling Panlipunan 9', 'Grade 9', '3', 35, 'T. Andres Bonifacio', 'Open'],
-                        ['ESP9-1', 'Values Education 9', 'Grade 9', '1', 35, 'T. Liza Soberano', 'Open'], ['ESP9-2', 'Values Education 9', 'Grade 9', '2', 35, 'T. Liza Soberano', 'Open'], ['ESP9-3', 'Values Education 9', 'Grade 9', '3', 35, 'T. Liza Soberano', 'Open'],
-                        ['MAPEH9-1', 'MAPEH 9', 'Grade 9', '1', 35, 'T. Francisco Balagtas', 'Open'], ['MAPEH9-2', 'MAPEH 9', 'Grade 9', '2', 35, 'T. Francisco Balagtas', 'Open'], ['MAPEH9-3', 'MAPEH 9', 'Grade 9', '3', 35, 'T. Francisco Balagtas', 'Open'],
-                        ['TLE9-1', 'TLE 9', 'Grade 9', '1', 35, 'T. Gabriela Silang', 'Open'], ['TLE9-2', 'TLE 9', 'Grade 9', '2', 35, 'T. Gabriela Silang', 'Open'], ['TLE9-3', 'TLE 9', 'Grade 9', '3', 35, 'T. Gabriela Silang', 'Open'],
-
-                        // GRADE 10 (3 Sections)
-                        ['ENG10-1', 'English 10', 'Grade 10', '1', 35, 'T. Emily Bronte', 'Open'], ['ENG10-2', 'English 10', 'Grade 10', '2', 35, 'T. Emily Bronte', 'Open'], ['ENG10-3', 'English 10', 'Grade 10', '3', 35, 'T. Emily Bronte', 'Open'],
-                        ['FIL10-1', 'Filipino 10', 'Grade 10', '1', 35, 'T. Angel Locsin', 'Open'], ['FIL10-2', 'Filipino 10', 'Grade 10', '2', 35, 'T. Angel Locsin', 'Open'], ['FIL10-3', 'Filipino 10', 'Grade 10', '3', 35, 'T. Angel Locsin', 'Open'],
-                        ['MATH10-1', 'Mathematics 10', 'Grade 10', '1', 35, 'T. Alan Turing', 'Open'], ['MATH10-2', 'Mathematics 10', 'Grade 10', '2', 35, 'T. Alan Turing', 'Open'], ['MATH10-3', 'Mathematics 10', 'Grade 10', '3', 35, 'T. Alan Turing', 'Open'],
-                        ['SCI10-1', 'Science 10', 'Grade 10', '1', 35, 'T. Marie Curie', 'Open'], ['SCI10-2', 'Science 10', 'Grade 10', '2', 35, 'T. Marie Curie', 'Open'], ['SCI10-3', 'Science 10', 'Grade 10', '3', 35, 'T. Marie Curie', 'Open'],
-                        ['AP10-1', 'Araling Panlipunan 10', 'Grade 10', '1', 35, 'T. Andres Bonifacio', 'Open'], ['AP10-2', 'Araling Panlipunan 10', 'Grade 10', '2', 35, 'T. Andres Bonifacio', 'Open'], ['AP10-3', 'Araling Panlipunan 10', 'Grade 10', '3', 35, 'T. Andres Bonifacio', 'Open'],
-                        ['ESP10-1', 'Values Education 10', 'Grade 10', '1', 35, 'T. Liza Soberano', 'Open'], ['ESP10-2', 'Values Education 10', 'Grade 10', '2', 35, 'T. Liza Soberano', 'Open'], ['ESP10-3', 'Values Education 10', 'Grade 10', '3', 35, 'T. Liza Soberano', 'Open'],
-                        ['MAPEH10-1', 'MAPEH 10', 'Grade 10', '1', 35, 'T. Francisco Balagtas', 'Open'], ['MAPEH10-2', 'MAPEH 10', 'Grade 10', '2', 35, 'T. Francisco Balagtas', 'Open'], ['MAPEH10-3', 'MAPEH 10', 'Grade 10', '3', 35, 'T. Francisco Balagtas', 'Open'],
-                        ['TLE10-1', 'TLE 10', 'Grade 10', '1', 35, 'T. Gabriela Silang', 'Open'], ['TLE10-2', 'TLE 10', 'Grade 10', '2', 35, 'T. Gabriela Silang', 'Open'], ['TLE10-3', 'TLE 10', 'Grade 10', '3', 35, 'T. Gabriela Silang', 'Open'],
-
-                        // GRADE 11 (3 Sections)
-                        ['ORAL11-1', 'Oral Communication', 'Grade 11 - STEM - 1st Sem', '1', 40, 'T. Emily Bronte', 'Open'], ['ORAL11-2', 'Oral Communication', 'Grade 11 - STEM - 1st Sem', '2', 40, 'T. Emily Bronte', 'Open'], ['ORAL11-3', 'Oral Communication', 'Grade 11 - STEM - 1st Sem', '3', 40, 'T. Emily Bronte', 'Open'],
-                        ['KOMU11-1', 'Komunikasyon at Pananaliksik', 'Grade 11 - STEM - 1st Sem', '1', 40, 'T. Coco Martin', 'Open'], ['KOMU11-2', 'Komunikasyon at Pananaliksik', 'Grade 11 - STEM - 1st Sem', '2', 40, 'T. Coco Martin', 'Open'], ['KOMU11-3', 'Komunikasyon at Pananaliksik', 'Grade 11 - STEM - 1st Sem', '3', 40, 'T. Coco Martin', 'Open'],
-                        ['GENM11-1', 'General Mathematics', 'Grade 11 - STEM - 1st Sem', '1', 40, 'T. Smith V. Cruz', 'Open'], ['GENM11-2', 'General Mathematics', 'Grade 11 - STEM - 1st Sem', '2', 40, 'T. Smith V. Cruz', 'Open'], ['GENM11-3', 'General Mathematics', 'Grade 11 - STEM - 1st Sem', '3', 40, 'T. Smith V. Cruz', 'Open'],
-                        ['EALS11-1', 'Earth and Life Science', 'Grade 11 - STEM - 1st Sem', '1', 40, 'T. Marie Curie', 'Open'], ['EALS11-2', 'Earth and Life Science', 'Grade 11 - STEM - 1st Sem', '2', 40, 'T. Marie Curie', 'Open'], ['EALS11-3', 'Earth and Life Science', 'Grade 11 - STEM - 1st Sem', '3', 40, 'T. Marie Curie', 'Open'],
-                        ['PERD11-1', 'Personal Development', 'Grade 11 - STEM - 1st Sem', '1', 40, 'T. Liza Soberano', 'Open'], ['PERD11-2', 'Personal Development', 'Grade 11 - STEM - 1st Sem', '2', 40, 'T. Liza Soberano', 'Open'], ['PERD11-3', 'Personal Development', 'Grade 11 - STEM - 1st Sem', '3', 40, 'T. Liza Soberano', 'Open'],
-                        ['EMPW11-1', 'Empowerment Technologies', 'Grade 11 - STEM - 1st Sem', '1', 40, 'T. Alan Turing', 'Open'], ['EMPW11-2', 'Empowerment Technologies', 'Grade 11 - STEM - 1st Sem', '2', 40, 'T. Alan Turing', 'Open'], ['EMPW11-3', 'Empowerment Technologies', 'Grade 11 - STEM - 1st Sem', '3', 40, 'T. Alan Turing', 'Open'],
-                        ['PE111-1', 'PE and Health 1', 'Grade 11 - STEM - 1st Sem', '1', 40, 'T. Francisco Balagtas', 'Open'], ['PE111-2', 'PE and Health 1', 'Grade 11 - STEM - 1st Sem', '2', 40, 'T. Francisco Balagtas', 'Open'], ['PE111-3', 'PE and Health 1', 'Grade 11 - STEM - 1st Sem', '3', 40, 'T. Francisco Balagtas', 'Open'],
-                        ['PREC11-1', 'Pre-Calculus (STEM)', 'Grade 11 - STEM - 1st Sem', '1', 40, 'T. Alan Turing', 'Open'], ['PREC11-2', 'Pre-Calculus (STEM)', 'Grade 11 - STEM - 1st Sem', '2', 40, 'T. Alan Turing', 'Open'], ['PREC11-3', 'Pre-Calculus (STEM)', 'Grade 11 - STEM - 1st Sem', '3', 40, 'T. Alan Turing', 'Open'],
-                        ['CHEM111-1', 'General Chemistry 1 (STEM)', 'Grade 11 - STEM - 1st Sem', '1', 40, 'T. Marie Curie', 'Open'], ['CHEM111-2', 'General Chemistry 1 (STEM)', 'Grade 11 - STEM - 1st Sem', '2', 40, 'T. Marie Curie', 'Open'], ['CHEM111-3', 'General Chemistry 1 (STEM)', 'Grade 11 - STEM - 1st Sem', '3', 40, 'T. Marie Curie', 'Open'],
-
-                        // GRADE 12 (3 Sections)
-                        ['21ST12-1', '21st Century Literature', 'Grade 12 - STEM - 1st Sem', '1', 40, 'T. Emily Bronte', 'Open'], ['21ST12-2', '21st Century Literature', 'Grade 12 - STEM - 1st Sem', '2', 40, 'T. Emily Bronte', 'Open'], ['21ST12-3', '21st Century Literature', 'Grade 12 - STEM - 1st Sem', '3', 40, 'T. Emily Bronte', 'Open'],
-                        ['UCSP12-1', 'Understanding Culture & Politics', 'Grade 12 - STEM - 1st Sem', '1', 40, 'T. Andres Bonifacio', 'Open'], ['UCSP12-2', 'Understanding Culture & Politics', 'Grade 12 - STEM - 1st Sem', '2', 40, 'T. Andres Bonifacio', 'Open'], ['UCSP12-3', 'Understanding Culture & Politics', 'Grade 12 - STEM - 1st Sem', '3', 40, 'T. Andres Bonifacio', 'Open'],
-                        ['PHIL12-1', 'Philosophy of the Human Person', 'Grade 12 - STEM - 1st Sem', '1', 40, 'T. Liza Soberano', 'Open'], ['PHIL12-2', 'Philosophy of the Human Person', 'Grade 12 - STEM - 1st Sem', '2', 40, 'T. Liza Soberano', 'Open'], ['PHIL12-3', 'Philosophy of the Human Person', 'Grade 12 - STEM - 1st Sem', '3', 40, 'T. Liza Soberano', 'Open'],
-                        ['PE312-1', 'PE and Health 3', 'Grade 12 - STEM - 1st Sem', '1', 40, 'T. Francisco Balagtas', 'Open'], ['PE312-2', 'PE and Health 3', 'Grade 12 - STEM - 1st Sem', '2', 40, 'T. Francisco Balagtas', 'Open'], ['PE312-3', 'PE and Health 3', 'Grade 12 - STEM - 1st Sem', '3', 40, 'T. Francisco Balagtas', 'Open'],
-                        ['EAPP12-1', 'English for Academic Purposes', 'Grade 12 - STEM - 1st Sem', '1', 40, 'T. Emily Bronte', 'Open'], ['EAPP12-2', 'English for Academic Purposes', 'Grade 12 - STEM - 1st Sem', '2', 40, 'T. Emily Bronte', 'Open'], ['EAPP12-3', 'English for Academic Purposes', 'Grade 12 - STEM - 1st Sem', '3', 40, 'T. Emily Bronte', 'Open'],
-                        ['PR212-1', 'Practical Research 2', 'Grade 12 - STEM - 1st Sem', '1', 40, 'T. Jane C. Villa', 'Open'], ['PR212-2', 'Practical Research 2', 'Grade 12 - STEM - 1st Sem', '2', 40, 'T. Jane C. Villa', 'Open'], ['PR212-3', 'Practical Research 2', 'Grade 12 - STEM - 1st Sem', '3', 40, 'T. Jane C. Villa', 'Open'],
-                        ['CPAR12-1', 'Contemporary Arts', 'Grade 12 - STEM - 1st Sem', '1', 40, 'T. Francisco Balagtas', 'Open'], ['CPAR12-2', 'Contemporary Arts', 'Grade 12 - STEM - 1st Sem', '2', 40, 'T. Francisco Balagtas', 'Open'], ['CPAR12-3', 'Contemporary Arts', 'Grade 12 - STEM - 1st Sem', '3', 40, 'T. Francisco Balagtas', 'Open'],
-                        ['MIL12-1', 'Media and Information Literacy', 'Grade 12 - STEM - 1st Sem', '1', 40, 'T. Alan Turing', 'Open'], ['MIL12-2', 'Media and Information Literacy', 'Grade 12 - STEM - 1st Sem', '2', 40, 'T. Alan Turing', 'Open'], ['MIL12-3', 'Media and Information Literacy', 'Grade 12 - STEM - 1st Sem', '3', 40, 'T. Alan Turing', 'Open'],
-                        ['PHY112-1', 'General Physics 1 (STEM)', 'Grade 12 - STEM - 1st Sem', '1', 40, 'T. Marie Curie', 'Open'], ['PHY112-2', 'General Physics 1 (STEM)', 'Grade 12 - STEM - 1st Sem', '2', 40, 'T. Marie Curie', 'Open'], ['PHY112-3', 'General Physics 1 (STEM)', 'Grade 12 - STEM - 1st Sem', '3', 40, 'T. Marie Curie', 'Open'],
-                        ['BIO112-1', 'General Biology 1 (STEM)', 'Grade 12 - STEM - 1st Sem', '1', 40, 'T. Marie Curie', 'Open'], ['BIO112-2', 'General Biology 1 (STEM)', 'Grade 12 - STEM - 1st Sem', '2', 40, 'T. Marie Curie', 'Open'], ['BIO112-3', 'General Biology 1 (STEM)', 'Grade 12 - STEM - 1st Sem', '3', 40, 'T. Marie Curie', 'Open']
-                    ];
-                    
-                    courses.forEach(c => insertCourse.run(c));
-                    insertCourse.finalize();
-
-                    // 5. Insert Billing
-                    const insertBilling = db.prepare(`INSERT INTO billing (studentId, term, totalAmount, dueDate) VALUES (?, ?, ?, ?)`);
-                    insertBilling.run('2023-0006', '1st Sem 2026-2027', 9500.00, '2026-11-15');
-                    insertBilling.run('2026-01523', '1st Sem 2026-2027', 14500.00, '2026-11-15');
-                    insertBilling.run('2026-0011', '1st Sem 2026-2027', 14500.00, '2026-11-15');
-                    insertBilling.run('2026-0163', '1st Sem 2026-2027', 6500.00, '2026-11-15');
-                    insertBilling.run('2024-2235', '1st Sem 2026-2027', 9500.00, '2026-11-15');
-                    insertBilling.finalize();
-
-                    console.log("Auto-seed complete! Database is ready.");
-                });
-            }
-        });
+        console.log("✅ Tables present. Server ready.");
     }
 });
 
-// ==========================================
-// API ROUTES
-// ==========================================
+/* =========================================================
+   AUTH
+   ========================================================= */
 app.post('/api/login', (req, res) => {
-    const { username, password, roleAttempt } = req.body;
+    const { username, password } = req.body;
+    if (!username || !password) return res.status(400).json({ error: "Username and password required" });
     db.get("SELECT * FROM users WHERE username = ? AND password = ?", [username, password], (err, user) => {
         if (err) return res.status(500).json({ error: err.message });
         if (!user) return res.status(401).json({ error: "Invalid username or password" });
-        if (user.role !== 'Admin' && user.role !== roleAttempt) {
-            return res.status(403).json({ error: `This account is for ${user.role}s only.` });
-        }
-        res.json(user);
+        res.json(user); // returns { username, name, role, section }
     });
 });
 
-app.get('/api/students', (req, res) => {
-    db.all("SELECT * FROM students", [], (err, rows) => {
-        if (err) return res.status(500).json({ error: err.message });
-        res.json(rows);
-    });
-});
-
-app.post('/api/students', (req, res) => {
-    const { id, last, first, mi, address, course, yr, status, enrol, birthday } = req.body;
-    const username = id; 
-    const password = "password123";
-    const fullName = `${first} ${last}`;
-
-    db.get("SELECT id FROM students WHERE id = ?", [id], (err, row) => {
-        if (err) return res.status(500).json({ error: err.message });
-        
-        if (row) {
-            const sql = `UPDATE students SET last=?, first=?, mi=?, address=?, course=?, yr=?, status=?, enrol=?, birthday=? WHERE id=?`;
-            db.run(sql, [last, first, mi, address, course, yr, status, enrol, birthday, id], function(err) {
-                if (err) return res.status(400).json({ error: err.message });
-                res.json({ message: "Student updated successfully" });
-            });
-        } else {
-            const insertStudentSql = `INSERT INTO students (id, last, first, mi, address, course, yr, status, enrol, username, password, birthday) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
-            db.run(insertStudentSql, [id, last, first, mi, address, course, yr, status, enrol, username, password, birthday], function(err) {
-                if (err) return res.status(400).json({ error: err.message });
-                
-                const insertUserSql = `INSERT INTO users (username, password, name, role, section) VALUES (?, ?, ?, 'Student', ?)`;
-                db.run(insertUserSql, [username, password, fullName, yr], function(err) {
-                    if (err) console.error("Failed to create user account:", err.message);
-                    res.json({ message: "Student and Login Account created successfully!" });
-                });
-            });
-        }
-    });
-});
-
-app.get('/api/courses', (req, res) => {
-    db.all("SELECT * FROM courses", [], (err, rows) => {
-        if (err) return res.status(500).json({ error: err.message });
-        res.json(rows);
-    });
-});
-
-app.get('/api/enrollments/:studentId', (req, res) => {
-    db.all("SELECT * FROM enrollments WHERE studentId = ?", [req.params.studentId], (err, rows) => {
-        if (err) return res.status(500).json({ error: err.message });
-        res.json(rows);
-    });
-});
-
-app.post('/api/enroll', (req, res) => {
-    const { studentId, courseCode, section, term } = req.body;
-
-    db.get("SELECT name, capacity FROM courses WHERE code = ?", [courseCode], (err, course) => {
-        if (err || !course) return res.status(404).json({ error: "Course not found" });
-
-        const checkSql = `SELECT e.id FROM enrollments e JOIN courses c ON e.courseCode = c.code WHERE e.studentId = ? AND c.name = ?`;
-        
-        db.get(checkSql, [studentId, course.name], (err, existing) => {
-            if (err) return res.status(500).json({ error: err.message });
-            if (existing) return res.status(400).json({ error: "You are already enrolled in this subject." });
-
-            const sql = `INSERT INTO enrollments (studentId, courseCode, section, term) VALUES (?, ?, ?, ?)`;
-            db.run(sql, [studentId, courseCode, section, term], function(err) {
-                if (err) return res.status(400).json({ error: err.message });
-
-                db.get("SELECT COUNT(*) as count FROM enrollments WHERE courseCode = ? AND section = ?", [courseCode, section], (err, result) => {
-                    if (err) return res.json({ message: "Enrolled successfully" });
-                    if (result.count >= course.capacity) {
-                        db.run("UPDATE courses SET status = 'Closed' WHERE code = ?", [courseCode]);
-                    }
-                    res.json({ message: "Enrolled successfully" });
-                });
-            });
-        });
-    });
-});
-
+/* =========================================================
+   USERS
+   ========================================================= */
 app.get('/api/users', (req, res) => {
     db.all("SELECT username, name, role, section FROM users", [], (err, rows) => {
         if (err) return res.status(500).json({ error: err.message });
@@ -327,42 +52,322 @@ app.get('/api/users', (req, res) => {
 
 app.post('/api/users/update', (req, res) => {
     const { username, password, name, role, section } = req.body;
-    if (!password) {
-        db.run(`UPDATE users SET name=?, role=?, section=? WHERE username=?`, [name, role, section, username], function(err) {
-            if (err) return res.status(400).json({ error: err.message });
-            res.json({ message: "User details updated successfully" });
-        });
+    if (!username) return res.status(400).json({ error: "Username required" });
+
+    if (password && password.trim() !== '') {
+        db.run(`UPDATE users SET password=?, name=?, role=?, section=? WHERE username=?`,
+            [password, name, role, section, username],
+            function (e) {
+                if (e) return res.status(400).json({ error: e.message });
+                if (this.changes === 0) return res.status(404).json({ error: "User not found" });
+                res.json({ message: "User updated successfully" });
+            });
     } else {
-        db.run(`UPDATE users SET password=?, name=?, role=?, section=? WHERE username=?`, [password, name, role, section, username], function(err) {
-            if (err) return res.status(400).json({ error: err.message });
-            res.json({ message: "User details and password updated successfully" });
-        });
+        db.run(`UPDATE users SET name=?, role=?, section=? WHERE username=?`,
+            [name, role, section, username],
+            function (e) {
+                if (e) return res.status(400).json({ error: e.message });
+                if (this.changes === 0) return res.status(404).json({ error: "User not found" });
+                res.json({ message: "User updated successfully" });
+            });
     }
 });
 
-app.get('/api/students/teacher/:teacherName', (req, res) => {
-    const teacherName = req.params.teacherName;
-    const sql = `SELECT DISTINCT s.*, c.name as courseName, c.code as courseCode FROM students s JOIN enrollments e ON s.id = e.studentId JOIN courses c ON e.courseCode = c.code WHERE c.adviser = ?`;
-    db.all(sql, [teacherName], (err, rows) => {
+/* =========================================================
+   STUDENTS
+   ========================================================= */
+app.get('/api/students', (req, res) => {
+    db.all("SELECT * FROM students", [], (err, rows) => {
         if (err) return res.status(500).json({ error: err.message });
         res.json(rows);
     });
 });
 
-app.get('/api/grades/check/:studentId/:courseName', (req, res) => {
-    db.get("SELECT * FROM grades WHERE studentId = ? AND courseName = ?", [req.params.studentId, req.params.courseName], (err, row) => {
+app.get('/api/students/:id', (req, res) => {
+    db.get("SELECT * FROM students WHERE id = ?", [req.params.id], (err, row) => {
         if (err) return res.status(500).json({ error: err.message });
-        res.json(row || null);
+        if (!row) return res.status(404).json({ error: "Student not found" });
+        res.json(row);
     });
 });
 
-app.post('/api/grades', (req, res) => {
-    const { studentId, courseCode, courseName, units, grade, term } = req.body;
-    const sql = `INSERT INTO grades (studentId, courseCode, courseName, units, grade, term) VALUES (?, ?, ?, ?, ?, ?)`;
-    db.run(sql, [studentId, courseCode, courseName, units, grade, term], function(err) {
-        if (err) return res.status(400).json({ error: err.message });
-        res.json({ message: "Grade submitted successfully" });
+app.post('/api/students', (req, res) => {
+    const { id, last, first, mi, address, course, yr, status, enrol, birthday } = req.body;
+    if (!id) return res.status(400).json({ error: "Student ID required" });
+
+    const username = id;
+    const password = "password123";
+    const fullName = `${first} ${last}`;
+
+    db.get("SELECT id FROM students WHERE id = ?", [id], (err, row) => {
+        if (err) return res.status(500).json({ error: err.message });
+
+        if (row) {
+            // UPDATE existing
+            db.run(`UPDATE students SET last=?, first=?, mi=?, address=?, course=?, yr=?, status=?, enrol=?, birthday=? WHERE id=?`,
+                [last, first, mi, address, course, yr, status, enrol, birthday, id],
+                function (e) {
+                    if (e) return res.status(400).json({ error: e.message });
+                    res.json({ message: "Student updated" });
+                });
+        } else {
+            // INSERT new + auto-create user account
+            db.run(`INSERT INTO students (id, last, first, mi, address, course, yr, status, enrol, username, password, birthday)
+                    VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
+                [id, last, first, mi, address, course, yr, status, enrol, username, password, birthday],
+                function (e) {
+                    if (e) return res.status(400).json({ error: e.message });
+
+                    db.get("SELECT username FROM users WHERE username = ?", [username], (e2, exists) => {
+                        if (exists) {
+                            return res.json({ message: "Student created (user already exists)" });
+                        }
+                        db.run(`INSERT INTO users (username, password, name, role, section) VALUES (?,?,?,'Student',?)`,
+                            [username, password, fullName, yr],
+                            (e3) => {
+                                if (e3) return res.status(400).json({ error: e3.message });
+                                res.json({ message: "Student + login account created" });
+                            });
+                    });
+                });
+        }
     });
+});
+
+app.delete('/api/students/:id', (req, res) => {
+    db.run("DELETE FROM students WHERE id = ?", [req.params.id], function (e) {
+        if (e) return res.status(400).json({ error: e.message });
+        db.run("DELETE FROM users WHERE username = ?", [req.params.id]);
+        res.json({ message: "Student deleted" });
+    });
+});
+
+/* =========================================================
+   COURSES
+   ========================================================= */
+app.get('/api/courses', (req, res) => {
+    db.all("SELECT * FROM courses", [], (err, rows) => {
+        if (err) return res.status(500).json({ error: err.message });
+        res.json(rows);
+    });
+});
+
+app.get('/api/courses/:code', (req, res) => {
+    db.get("SELECT * FROM courses WHERE code = ?", [req.params.code], (err, row) => {
+        if (err) return res.status(500).json({ error: err.message });
+        if (!row) return res.status(404).json({ error: "Course not found" });
+        res.json(row);
+    });
+});
+
+app.post('/api/courses', (req, res) => {
+    const { code, name, gradeLevel, section, capacity, adviser, status } = req.body;
+    if (!code || !name || !gradeLevel || !section) {
+        return res.status(400).json({ error: "Code, name, gradeLevel, and section required" });
+    }
+    db.get("SELECT code FROM courses WHERE code = ?", [code], (err, row) => {
+        if (err) return res.status(500).json({ error: err.message });
+        if (row) return res.status(400).json({ error: "Course code already exists" });
+
+        db.run(`INSERT INTO courses (code, name, gradeLevel, section, capacity, adviser, status)
+                VALUES (?,?,?,?,?,?,?)`,
+            [code, name, gradeLevel, section, capacity || 30, adviser || '', status || 'Open'],
+            function (e) {
+                if (e) return res.status(400).json({ error: e.message });
+                res.json({ message: "Course created" });
+            });
+    });
+});
+
+app.delete('/api/courses/:code', (req, res) => {
+    db.run("DELETE FROM courses WHERE code = ?", [req.params.code], function (e) {
+        if (e) return res.status(400).json({ error: e.message });
+        res.json({ message: "Course deleted" });
+    });
+});
+
+/* =========================================================
+   SCHEDULES
+   ========================================================= */
+app.get('/api/schedules', (req, res) => {
+    db.all("SELECT * FROM schedules", [], (err, rows) => {
+        if (err) return res.status(500).json({ error: err.message });
+        res.json(rows);
+    });
+});
+
+app.get('/api/schedules/:gradeLevel/:section', (req, res) => {
+    db.all(`SELECT s.*, c.name AS courseName, c.adviser
+            FROM schedules s
+            JOIN courses c ON s.courseCode = c.code
+            WHERE c.gradeLevel = ? AND s.section = ?
+            ORDER BY
+                CASE s.day
+                    WHEN 'Monday' THEN 1
+                    WHEN 'Tuesday' THEN 2
+                    WHEN 'Wednesday' THEN 3
+                    WHEN 'Thursday' THEN 4
+                    WHEN 'Friday' THEN 5
+                    WHEN 'Saturday' THEN 6
+                    ELSE 7
+                END,
+                s.startTime`,
+        [req.params.gradeLevel, req.params.section],
+        (err, rows) => {
+            if (err) return res.status(500).json({ error: err.message });
+            res.json(rows);
+        });
+});
+
+app.post('/api/schedules', (req, res) => {
+    const { courseCode, section, day, startTime, endTime } = req.body;
+    if (!courseCode || !section || !day || !startTime || !endTime) {
+        return res.status(400).json({ error: "All schedule fields are required" });
+    }
+
+    // Conflict check: same section, same day, overlapping time
+    db.all(`SELECT * FROM schedules WHERE section = ? AND day = ?`,
+        [section, day],
+        (err, existing) => {
+            if (err) return res.status(500).json({ error: err.message });
+
+            const toMin = t => { const [h,m] = t.split(':').map(Number); return h*60+m; };
+            const newStart = toMin(startTime);
+            const newEnd = toMin(endTime);
+
+            const conflict = existing.find(s => {
+                const sStart = toMin(s.startTime);
+                const sEnd = toMin(s.endTime);
+                return (newStart < sEnd) && (newEnd > sStart);
+            });
+
+            if (conflict) {
+                return res.status(400).json({
+                    error: `Time conflict with ${conflict.courseCode} (${conflict.startTime}-${conflict.endTime}) on ${day} in section ${section}`
+                });
+            }
+
+            db.run(`INSERT INTO schedules (courseCode, section, day, startTime, endTime) VALUES (?,?,?,?,?)`,
+                [courseCode, section, day, startTime, endTime],
+                function (e) {
+                    if (e) return res.status(400).json({ error: e.message });
+                    res.json({ message: "Schedule added" });
+                });
+        });
+});
+
+app.delete('/api/schedules/:id', (req, res) => {
+    db.run("DELETE FROM schedules WHERE id = ?", [req.params.id], function (e) {
+        if (e) return res.status(400).json({ error: e.message });
+        res.json({ message: "Schedule deleted" });
+    });
+});
+
+/* =========================================================
+   ENROLLMENTS
+   ========================================================= */
+app.get('/api/enrollments/:studentId', (req, res) => {
+    db.all("SELECT * FROM enrollments WHERE studentId = ?", [req.params.studentId], (err, rows) => {
+        if (err) return res.status(500).json({ error: err.message });
+        res.json(rows);
+    });
+});
+
+app.post('/api/enroll', (req, res) => {
+    const { studentId, courseCode, section, term } = req.body;
+    if (!studentId || !courseCode) {
+        return res.status(400).json({ error: "studentId and courseCode required" });
+    }
+
+    db.get("SELECT name, capacity, status FROM courses WHERE code = ?", [courseCode], (err, course) => {
+        if (err) return res.status(500).json({ error: err.message });
+        if (!course) return res.status(404).json({ error: "Course not found" });
+        if (course.status === 'Closed') return res.status(400).json({ error: "Course is closed" });
+
+        // Check duplicate subject enrollment (same course name)
+        db.get(`SELECT e.id FROM enrollments e
+                JOIN courses c ON e.courseCode = c.code
+                WHERE e.studentId = ? AND c.name = ?`,
+            [studentId, course.name], (err2, existing) => {
+                if (err2) return res.status(500).json({ error: err2.message });
+                if (existing) return res.status(400).json({ error: "Already enrolled in this subject" });
+
+                // Check capacity
+                db.get(`SELECT COUNT(*) as count FROM enrollments WHERE courseCode = ? AND section = ?`,
+                    [courseCode, section], (err3, result) => {
+                        if (err3) return res.status(500).json({ error: err3.message });
+                        if (result.count >= course.capacity) {
+                            return res.status(400).json({ error: "Course is full" });
+                        }
+
+                        db.run(`INSERT INTO enrollments (studentId, courseCode, section, term) VALUES (?,?,?,?)`,
+                            [studentId, courseCode, section, term || '1st Sem'],
+                            function (e) {
+                                if (e) return res.status(400).json({ error: e.message });
+
+                                // Auto-close if full
+                                db.get(`SELECT COUNT(*) as count FROM enrollments WHERE courseCode = ? AND section = ?`,
+                                    [courseCode, section], (err4, finalCount) => {
+                                        if (finalCount.count >= course.capacity) {
+                                            db.run("UPDATE courses SET status = 'Closed' WHERE code = ?", [courseCode]);
+                                        }
+                                        res.json({ message: "Enrolled successfully" });
+                                    });
+                            });
+                    });
+            });
+    });
+});
+
+app.delete('/api/enroll/:studentId/:courseCode', (req, res) => {
+    db.run(`DELETE FROM enrollments WHERE studentId = ? AND courseCode = ?`,
+        [req.params.studentId, req.params.courseCode],
+        function (e) {
+            if (e) return res.status(400).json({ error: e.message });
+            res.json({ message: "Enrollment removed" });
+        });
+});
+
+/* =========================================================
+   GRADES
+   ========================================================= */
+app.get('/api/grades/check/:studentId/:courseName', (req, res) => {
+    db.get("SELECT * FROM grades WHERE studentId = ? AND courseName = ?",
+        [req.params.studentId, req.params.courseName],
+        (err, row) => {
+            if (err) return res.status(500).json({ error: err.message });
+            res.json(row || null);
+        });
+});
+
+app.post('/api/grades', (req, res) => {
+    const { studentId, courseCode, courseName, grade, term } = req.body;
+    if (!studentId || !courseName || grade === undefined || grade === null) {
+        return res.status(400).json({ error: "studentId, courseName, and grade required" });
+    }
+
+    // UPSERT — update existing or insert new
+    db.get("SELECT id FROM grades WHERE studentId = ? AND courseName = ?",
+        [studentId, courseName],
+        (err, existing) => {
+            if (err) return res.status(500).json({ error: err.message });
+
+            if (existing) {
+                db.run(`UPDATE grades SET grade=?, term=? WHERE id=?`,
+                    [grade, term, existing.id],
+                    function (e) {
+                        if (e) return res.status(400).json({ error: e.message });
+                        res.json({ message: "Grade updated" });
+                    });
+            } else {
+                db.run(`INSERT INTO grades (studentId, courseCode, courseName, grade, term) VALUES (?,?,?,?,?)`,
+                    [studentId, courseCode || 'N/A', courseName, grade, term || '1st Sem 2026-2027'],
+                    function (e) {
+                        if (e) return res.status(400).json({ error: e.message });
+                        res.json({ message: "Grade submitted" });
+                    });
+            }
+        });
 });
 
 app.get('/api/student/grades/:studentId', (req, res) => {
@@ -372,85 +377,72 @@ app.get('/api/student/grades/:studentId', (req, res) => {
     });
 });
 
-app.get('/api/billing/:studentId', (req, res) => {
-    const studentId = req.params.studentId;
-    db.all("SELECT * FROM billing WHERE studentId = ?", [studentId], (err, rows) => {
-        if (err) return res.status(500).json({ error: err.message });
-        if (rows.length > 0) return res.json(rows);
-
-        db.get("SELECT yr FROM students WHERE id = ?", [studentId], (err, student) => {
-            if (err || !student) return res.json([]); 
-            const yearStr = (student.yr || '').toLowerCase();
-            let tuitionFee = 8000; 
-            if (yearStr.includes('kinder')) tuitionFee = 5000;
-            else if (yearStr.includes('grade 1') || yearStr.includes('grade 2') || yearStr.includes('grade 3') || yearStr.includes('grade 4') || yearStr.includes('grade 5') || yearStr.includes('grade 6')) tuitionFee = 8000;
-            else if (yearStr.includes('grade 7') || yearStr.includes('grade 8') || yearStr.includes('grade 9') || yearStr.includes('grade 10')) tuitionFee = 10000;
-            else if (yearStr.includes('grade 11') || yearStr.includes('grade 12')) tuitionFee = 13000;
-
-            const totalAmount = tuitionFee + 1500; 
-            const term = '1st Sem 2026-2027';
-            const dueDate = '2026-11-15';
-
-            db.run(`INSERT INTO billing (studentId, term, totalAmount, dueDate) VALUES (?, ?, ?, ?)`, [studentId, term, totalAmount, dueDate], function(err) {
-                if (err) return res.status(500).json({ error: err.message });
-                db.all("SELECT * FROM billing WHERE studentId = ?", [studentId], (err, newRows) => {
-                    if (err) return res.status(500).json({ error: err.message });
-                    res.json(newRows);
-                });
-            });
+/* =========================================================
+   STUDENT RECORDS (Historical)
+   ========================================================= */
+app.get('/api/student/records/:studentId', (req, res) => {
+    db.all("SELECT * FROM student_records WHERE studentId = ? ORDER BY gradeLevel, schoolYear",
+        [req.params.studentId],
+        (err, rows) => {
+            if (err) return res.status(500).json({ error: err.message });
+            res.json(rows);
         });
-    });
 });
 
-app.get('/api/payments/:studentId', (req, res) => {
-    db.all("SELECT * FROM payments WHERE studentId = ? ORDER BY id DESC", [req.params.studentId], (err, rows) => {
-        if (err) return res.status(500).json({ error: err.message });
-        res.json(rows);
-    });
+app.post('/api/student/records', (req, res) => {
+    const { studentId, gradeLevel, schoolYear, subject, grade, status, remarks } = req.body;
+    if (!studentId || !gradeLevel || !subject) {
+        return res.status(400).json({ error: "studentId, gradeLevel, and subject required" });
+    }
+    db.run(`INSERT INTO student_records (studentId, gradeLevel, schoolYear, subject, grade, status, remarks)
+            VALUES (?,?,?,?,?,?,?)`,
+        [studentId, gradeLevel, schoolYear, subject, grade, status || 'Passed', remarks || ''],
+        function (e) {
+            if (e) return res.status(400).json({ error: e.message });
+            res.json({ message: "Record added" });
+        });
 });
 
-app.post('/api/payments', (req, res) => {
-    const { studentId, billingId, amount, paymentMethod, referenceNo, receiptImage, datePaid } = req.body;
-    const finalBillingId = billingId === 'new' ? 0 : billingId;
-    const sql = `INSERT INTO payments (studentId, billingId, amount, paymentMethod, referenceNo, receiptImage, datePaid) VALUES (?, ?, ?, ?, ?, ?, ?)`;
-    db.run(sql, [studentId, finalBillingId, amount, paymentMethod, referenceNo, receiptImage, datePaid], function(err) {
-        if (err) return res.status(400).json({ error: err.message });
-        res.json({ message: "Payment submitted successfully! Waiting for admin approval." });
-    });
+/* =========================================================
+   ATTENDANCE
+   ========================================================= */
+app.get('/api/attendance/:courseCode/:section/:date', (req, res) => {
+    db.all(`SELECT * FROM attendance WHERE courseCode = ? AND section = ? AND date = ?`,
+        [req.params.courseCode, req.params.section, req.params.date],
+        (err, rows) => {
+            if (err) return res.status(500).json({ error: err.message });
+            res.json(rows);
+        });
 });
 
-app.get('/api/admin/all-billing', (req, res) => {
-    const sql = `
-        SELECT s.id as studentId, s.first, s.last, s.yr, b.id as billingId, b.totalAmount, b.dueDate, b.status as billStatus,
-            p.id as paymentId, p.amount as paidAmount, p.referenceNo, p.receiptImage, p.datePaid, p.status as paymentStatus
-        FROM students s
-        LEFT JOIN billing b ON s.id = b.studentId AND b.status = 'Unpaid'
-        LEFT JOIN payments p ON s.id = p.studentId AND p.status IN ('Pending', 'Approved')
-        ORDER BY s.last ASC
-    `;
-    db.all(sql, [], (err, rows) => {
-        if (err) return res.status(500).json({ error: err.message });
-        let processed = []; let seen = new Set();
-        rows.forEach(row => { if (!seen.has(row.studentId)) { processed.push(row); seen.add(row.studentId); } });
-        res.json(processed);
-    });
+app.post('/api/attendance', (req, res) => {
+    const { courseCode, section, studentId, date, status } = req.body;
+    if (!courseCode || !section || !studentId || !date || !status) {
+        return res.status(400).json({ error: "All attendance fields required" });
+    }
+
+    // UPSERT — one record per student/course/date
+    db.run(`INSERT INTO attendance (courseCode, section, studentId, date, status)
+            VALUES (?,?,?,?,?)
+            ON CONFLICT(courseCode, section, studentId, date)
+            DO UPDATE SET status=excluded.status`,
+        [courseCode, section, studentId, date, status],
+        function (e) {
+            if (e) return res.status(400).json({ error: e.message });
+            res.json({ message: "Attendance recorded" });
+        });
 });
 
-app.post('/api/admin/payments/approve', (req, res) => {
-    const { paymentId, billingId } = req.body;
-    db.run(`UPDATE payments SET status = 'Approved' WHERE id = ?`, [paymentId], function(err) {
-        if (err) return res.status(400).json({ error: err.message });
-        if (billingId && billingId !== 0) {
-            db.run(`UPDATE billing SET status = 'Paid' WHERE id = ?`, [billingId], function(err) {
-                if (err) return res.status(400).json({ error: err.message });
-                res.json({ message: "Payment approved and bill marked as Paid." });
-            });
-        } else {
-            res.json({ message: "Payment approved." });
-        }
-    });
+app.get('/api/attendance/student/:studentId', (req, res) => {
+    db.all(`SELECT * FROM attendance WHERE studentId = ? ORDER BY date DESC`,
+        [req.params.studentId],
+        (err, rows) => {
+            if (err) return res.status(500).json({ error: err.message });
+            res.json(rows);
+        });
 });
 
-app.listen(port, () => {
-    console.log(`Server running at http://localhost:${port}`);
-});
+/* =========================================================
+   START
+   ========================================================= */
+app.listen(port, () => console.log(`✅ Server running at http://localhost:${port}`));
