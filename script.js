@@ -835,7 +835,8 @@ async function submitBulkGrades() {
 // --- UPDATED ATTENDANCE SECTION WITH LOGS ---
 function renderAttendance(c) {
   const myCourses = db.courses.filter(x => x.adviser === session.name || x.subjectTeacher === session.name);
-  const sections = [...new Set(myCourses.map(x => x.section))]; // Kunin lahat ng sections na hawak
+  // Gumawa ng unique list ng "GradeLevel|Section"
+  const uniqueSections = [...new Set(myCourses.map(x => `${x.gradeLevel}|${x.section}`))];
 
   let html = `<div class="panel"><h2>Attendance</h2>
     <div class="form-panel" style="display:flex; gap:20px; align-items:flex-end; margin-bottom:20px;">
@@ -850,18 +851,21 @@ function renderAttendance(c) {
     <p style="color:#666; margin-bottom:15px; font-size:14px;">Click a folder below to view all submitted attendance records for a specific section.</p>
     <div style="display:grid; gap:10px;">`;
 
-  if(sections.length === 0) {
+  if(uniqueSections.length === 0) {
       html += `<p style="color:#999;">No classes assigned to you.</p>`;
   } else {
-      sections.forEach(sec => {
-          html += `<div class="folder" onclick="showAttendanceHistory('${esc(sec)}')"><span>📁 Section ${esc(sec)}</span> <span>&rarr;</span></div>`;
+      uniqueSections.forEach(secString => {
+          const [gradeLevel, section] = secString.split('|');
+          html += `<div class="folder" onclick="showAttendanceHistory('${esc(gradeLevel)}', '${esc(section)}')">
+            <span>📁 ${esc(gradeLevel)} | Section ${esc(section)}</span> 
+            <span>&rarr;</span>
+          </div>`;
       });
   }
   html += `</div><div id="attendance_history_view" style="margin-top:20px;"></div></div>`;
   c.innerHTML = html;
 }
 
-// Function para i-load ang students sa form
 async function loadAttendance() {
   const code = $('att_course').value;
   const date = $('att_date').value;
@@ -885,18 +889,21 @@ async function markAttendance(courseCode, section, studentId, date, status) {
   await fetch('/api/attendance', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ courseCode, section, studentId, date, status }) });
 }
 
-// Function para i-view ang Attendance History per section
-async function showAttendanceHistory(section) {
+async function showAttendanceHistory(gradeLevel, section) {
+  // Kunin ang history gamit ang section filter
   const history = await (await fetch(`/api/attendance/history/${encodeURIComponent(section)}`)).json();
   
-  if(history.length === 0) {
-      $('attendance_history_view').innerHTML = `<div class="panel" style="background:#f9f9f9; border-left:4px solid #ccc;"><p style="color:#666;">No attendance records found for Section ${esc(section)} yet.</p></div>`;
+  // I-filter lang yung para sa specific Grade Level na ito
+  const filteredHistory = history.filter(h => h.gradeLevel === gradeLevel);
+
+  if(filteredHistory.length === 0) {
+      $('attendance_history_view').innerHTML = `<div class="panel" style="background:#f9f9f9; border-left:4px solid #ccc;"><p style="color:#666;">No attendance records found for ${esc(gradeLevel)} | Section ${esc(section)} yet.</p></div>`;
       return;
   }
 
-  // I-group by Date at Subject
+  // I-group by Date at Course Name (Subject)
   const grouped = {};
-  history.forEach(h => {
+  filteredHistory.forEach(h => {
       const key = `${h.date} | ${h.courseName}`;
       if(!grouped[key]) grouped[key] = [];
       grouped[key].push(h);
@@ -904,7 +911,7 @@ async function showAttendanceHistory(section) {
 
   let html = `<div class="panel" style="border:2px solid #5c0000;">
       <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
-        <h3 style="color:#5c0000; margin:0;">History: Section ${esc(section)}</h3>
+        <h3 style="color:#5c0000; margin:0;">History: ${esc(gradeLevel)} | Section ${esc(section)}</h3>
         <button class="btn secondary" onclick="$('attendance_history_view').innerHTML=''">Close</button>
       </div>
       <div style="display:grid; gap:15px;">`;
