@@ -244,7 +244,7 @@ function renderStudentDashboard(c) {
   setInterval(() => { if($('dash-clock')) $('dash-clock').textContent = new Date().toLocaleTimeString(); }, 1000);
 }
 
-// --- INI-AYOS NA STUDENT DIRECTORY (May Edit Button at Total Count) ---
+// --- INI-AYOS NA STUDENT DIRECTORY (May Top Edit Button) ---
 function renderActiveDirectory(c) {
   const uniqueGrades = [...new Set(db.students.map(s => s.yr.split(' - ')[0]))].filter(Boolean).sort();
   const currentGradeFilter = $('directoryGradeFilter') ? $('directoryGradeFilter').value : 'All';
@@ -258,13 +258,16 @@ function renderActiveDirectory(c) {
   let rows = active.map(s => [
       esc(s.id), esc(s.last), esc(s.first), esc(s.yr), 
       `<span class="badge ${s.status === 'Active' ? 'active' : 'inactive'}">${esc(s.status)}</span>`,
-      `<button type="button" class="btn secondary" data-id="${esc(s.id)}" onclick="window.editStudentBtn(this)">Edit</button>`
+      `—`
   ]);
 
   c.innerHTML = `<div class="panel">
     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
       <h2 style="margin:0;">Student Directory</h2>
-      <button type="button" class="btn" onclick="openStudentForm()">+ Add New Student</button>
+      <div style="display:flex; gap:10px;">
+        <button type="button" class="btn" onclick="openTopEditStudentForm()">✏️ Edit Student</button>
+        <button type="button" class="btn" onclick="openStudentForm()">+ Add New Student</button>
+      </div>
     </div>
     
     <div class="form-panel" style="margin-bottom: 20px; background: #f9eaea; border-left: 4px solid #5c0000; display:flex; align-items:center; gap:20px; flex-wrap:wrap;">
@@ -294,11 +297,188 @@ function renderActiveDirectory(c) {
   </div>`;
 }
 
-window.editStudentBtn = function(btn) {
-  const id = btn.getAttribute('data-id');
-  if(id) openStudentForm(id);
-  else alert('Error: Student ID not found.');
-};
+// --- BAGONG TOP EDIT FORM PARA SA STUDENT ---
+function openTopEditStudentForm() {
+    $('enrollFormArea').innerHTML = `
+        <div class="form-panel" style="border-left: 4px solid #5c0000; background: #fffdfd;">
+            <h3 style="color:#5c0000; margin-bottom:15px;">Edit Student via Student No.</h3>
+            <div style="display:flex; gap:10px; align-items:flex-end; margin-bottom:15px;">
+                <div class="field" style="flex:1;">
+                    <label>Enter Student No. (e.g., 2026-0101)</label>
+                    <input id="top_edit_student_id" placeholder="Type Student ID here...">
+                </div>
+                <button type="button" class="btn" onclick="loadStudentForTopEdit()">Load Student</button>
+                <button type="button" class="btn secondary" onclick="$('enrollFormArea').innerHTML=''">Cancel</button>
+            </div>
+            <div id="top_edit_student_fields"></div>
+        </div>
+    `;
+}
+
+function loadStudentForTopEdit() {
+    const id = $('top_edit_student_id').value.trim();
+    const s = db.students.find(x => x.id === id);
+    
+    if (!s) return alert('Student ID not found.');
+
+    $('top_edit_student_fields').innerHTML = `
+        <div class="form-grid" style="margin-top:20px; border-top:1px dashed #ccc; padding-top:20px;">
+            <div class="field"><label>Student No.</label><input value="${esc(s.id)}" readonly style="background:#e9ecef;"></div>
+            <div class="field"><label>Status</label>
+                <select id="te_status">
+                    <option value="Active" ${s.status === 'Active' ? 'selected' : ''}>Active</option>
+                    <option value="Inactive" ${s.status === 'Inactive' ? 'selected' : ''}>Inactive</option>
+                    <option value="Archived" ${s.status === 'Archived' ? 'selected' : ''}>Archived</option>
+                    <option value="Graduated" ${s.status === 'Graduated' ? 'selected' : ''}>Graduated</option>
+                </select>
+            </div>
+            <div class="field"><label>Last Name</label><input id="te_last" value="${esc(s.last)}"></div>
+            <div class="field"><label>First Name</label><input id="te_first" value="${esc(s.first)}"></div>
+        </div>
+        <button type="button" class="btn" style="margin-top:15px;" onclick="saveTopEditStudent('${esc(s.id)}')">Save Changes</button>
+    `;
+}
+
+async function saveTopEditStudent(id) {
+    const status = $('te_status').value;
+    const last = $('te_last').value;
+    const first = $('te_first').value;
+    
+    const s = db.students.find(x => x.id === id);
+    if(!s) return;
+
+    const rec = { 
+        ...s, 
+        status: status,
+        last: last,
+        first: first
+    };
+
+    const res = await fetch('/api/students', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(rec) });
+    if(res.ok) {
+        alert('Student updated successfully!');
+        db.students = await (await fetch('/api/students')).json();
+        db.users = await (await fetch('/api/users')).json();
+        $('enrollFormArea').innerHTML = '';
+        renderActiveDirectory($('content'));
+    } else {
+        alert('Failed to update student.');
+    }
+}
+
+// --- INI-AYOS NA USERS & ACCESS (May Top Edit Button at Dropdown) ---
+function renderUsers(c) {
+  let filterVal = 'All';
+  if($('userFilter')) filterVal = $('userFilter').value;
+  let filteredUsers = db.users;
+  if(filterVal !== 'All') {
+      filteredUsers = db.users.filter(u => {
+          if(filterVal === 'Students') return u.role === 'Student';
+          return u.role === filterVal;
+      });
+  }
+
+  const rows = filteredUsers.map(u => [
+    esc(u.username), esc(u.name), esc(u.role), esc(u.section||'—'),
+    `<div style="display:flex; gap:5px;">
+        ${u.role !== 'Admin' ? `<button type="button" class="btn" style="background:#a00;" onclick="deleteUser('${esc(u.username)}')">Delete</button>` : ''}
+     </div>`
+  ]);
+
+  c.innerHTML = `<div class="panel">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+        <h2 style="margin:0;">Users & Access</h2>
+        <button type="button" class="btn" onclick="openTopEditUserForm()">✏️ Edit User Account</button>
+    </div>
+    
+    <div class="form-panel" style="margin-bottom: 20px; background: #f9eaea; border-left: 4px solid #5c0000; display:flex; align-items:center; gap:20px;">
+      <label style="font-weight:bold; color:#5c0000;">Filter by Role:</label>
+      <select id="userFilter" onchange="renderUsers($('content'))" style="padding: 10px; border-radius: 6px; border: 1px solid #ccc; width: 100%; max-width: 300px; font-size:14px;">
+        <option value="All" ${filterVal === 'All' ? 'selected' : ''}>All Users</option>
+        <option value="Admin" ${filterVal === 'Admin' ? 'selected' : ''}>Admin</option>
+        <option value="Faculty" ${filterVal === 'Faculty' ? 'selected' : ''}>Faculty</option>
+        <option value="Students" ${filterVal === 'Students' ? 'selected' : ''}>Students</option>
+      </select>
+    </div>
+    
+    <div id="userFormArea"></div>
+    <div id="userTableContainer">${simpleTable(['Username','Name','Role','Section','Action'], rows)}</div>
+  </div>`;
+}
+
+function openTopEditUserForm() {
+    $('userFormArea').innerHTML = `
+        <div class="form-panel" style="border-left: 4px solid #5c0000; background: #fffdfd;">
+            <h3 style="color:#5c0000; margin-bottom:15px;">Edit User Account via Username</h3>
+            <div style="display:flex; gap:10px; align-items:flex-end; margin-bottom:15px;">
+                <div class="field" style="flex:1;">
+                    <label>Enter Username</label>
+                    <input id="top_edit_username" placeholder="Type username here...">
+                </div>
+                <button type="button" class="btn" onclick="loadUserForTopEdit()">Load User</button>
+                <button type="button" class="btn secondary" onclick="$('userFormArea').innerHTML=''">Cancel</button>
+            </div>
+            <div id="top_edit_user_fields"></div>
+        </div>
+    `;
+}
+
+function loadUserForTopEdit() {
+    const uname = $('top_edit_username').value.trim();
+    const u = db.users.find(x => x.username === uname);
+    
+    if (!u) return alert('Username not found.');
+
+    $('top_edit_user_fields').innerHTML = `
+        <div class="form-grid" style="margin-top:20px; border-top:1px dashed #ccc; padding-top:20px;">
+            <div class="field"><label>Username</label><input value="${esc(u.username)}" readonly style="background:#e9ecef;"></div>
+            <div class="field"><label>Full Name</label><input id="te_user_name" value="${esc(u.name)}"></div>
+            <div class="field"><label>Role</label>
+                <select id="te_user_role" onchange="toggleSectionInput()">
+                    <option value="Student" ${u.role === 'Student' ? 'selected' : ''}>Student</option>
+                    <option value="Faculty" ${u.role === 'Faculty' ? 'selected' : ''}>Faculty</option>
+                    <option value="Admin" ${u.role === 'Admin' ? 'selected' : ''}>Admin</option>
+                    <option value="Registrar" ${u.role === 'Registrar' ? 'selected' : ''}>Registrar</option>
+                </select>
+            </div>
+            <div class="field"><label>New Password (Leave blank to keep)</label><input id="te_user_pass" type="password"></div>
+            <div class="field" id="te_sec_group" style="display:${u.role === 'Faculty' || u.role === 'Admin' || u.role === 'Registrar' ? 'block' : 'none'};">
+                <label>Department / Section</label><input id="te_user_dept" value="${esc(u.section||'')}">
+            </div>
+        </div>
+        <button type="button" class="btn" style="margin-top:15px;" onclick="saveTopEditUser('${esc(u.username)}')">Save Changes</button>
+    `;
+}
+
+function toggleSectionInput() {
+    const role = $('te_user_role').value;
+    $('te_sec_group').style.display = (role === 'Faculty' || role === 'Admin' || role === 'Registrar') ? 'block' : 'none';
+}
+
+async function saveTopEditUser(username) {
+    const name = $('te_user_name').value;
+    const role = $('te_user_role').value;
+    const pass = $('te_user_pass').value;
+    const dept = $('te_user_dept') ? $('te_user_dept').value : '';
+
+    const rec = { 
+        username: username, 
+        password: pass, 
+        name: name, 
+        role: role, 
+        section: dept
+    };
+
+    const res = await fetch('/api/users/update', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(rec) });
+    if(res.ok) {
+        alert('User updated successfully!');
+        db.users = await (await fetch('/api/users')).json();
+        $('userFormArea').innerHTML = '';
+        renderUsers($('content'));
+    } else {
+        alert('Failed to update user.');
+    }
+}
 
 function computeAge() {
   const bday = document.getElementById('f_birthday').value;
@@ -311,7 +491,7 @@ function computeAge() {
   document.getElementById('f_age').value = age;
 }
 
-// --- INI-AYOS NA EDIT STUDENT (Form Panel, hindi Prompt) ---
+// --- ADD STUDENT FORM (Form Panel) ---
 function openStudentForm(id) {
   const s = id ? db.students.find(x => x.id === id) : null;
   const nextId = s ? s.id : '2026-' + Math.floor(1000 + Math.random() * 9000);
@@ -436,19 +616,13 @@ async function saveStudent(existingId) {
   $('enrollFormArea').innerHTML = ''; renderActiveDirectory($('content')); 
 }
 
+// --- IBA PANG FUNCTIONS (Walang binago) ---
 function renderFacultyDirectory(c) {
   const facultyList = db.users.filter(u => u.role === 'Faculty');
-  
   const rows = facultyList.map(f => {
     const advised = db.courses.filter(crs => crs.adviser === f.name).map(crs => `${crs.gradeLevel} (Sec ${crs.section})`);
     const advisoryDisplay = advised.length > 0 ? advised[0] : '<span style="color:#999;">None</span>';
-    return [
-        `<b>${esc(f.username)}</b>`, 
-        esc(f.name), 
-        esc(f.email || 'N/A'), 
-        advisoryDisplay, 
-        `<button type="button" class="btn secondary" onclick="window.openEditFacultyForm('${esc(f.username)}')">Edit</button>`
-    ];
+    return [`<b>${esc(f.username)}</b>`, esc(f.name), esc(f.email || 'N/A'), advisoryDisplay, `—`];
   });
 
   c.innerHTML = `<div class="panel">
@@ -527,7 +701,6 @@ async function saveFaculty() {
   else alert('Teacher created!');
 }
 
-// --- INI-AYOS NA EDIT FACULTY (Form Panel, hindi Prompt) ---
 window.openEditFacultyForm = function(username) {
   const user = db.users.find(u => u.username === username);
   if(!user) return alert('User not found');
@@ -687,51 +860,6 @@ async function saveNewSection() {
   $('courseFormArea').innerHTML = '';
   renderCourses($('content'));
   alert(`Section ${newSec} created for ${grade}!`);
-}
-
-function renderUsers(c) {
-  let filterVal = 'All';
-  if($('userFilter')) filterVal = $('userFilter').value;
-  let filteredUsers = db.users;
-  if(filterVal !== 'All') {
-      filteredUsers = db.users.filter(u => {
-          if(filterVal === 'Students') return u.role === 'Student';
-          return u.role === filterVal;
-      });
-  }
-
-  const rows = filteredUsers.map(u => [
-    esc(u.username), esc(u.name), esc(u.role), esc(u.section||'—'),
-    `<div style="display:flex; gap:5px;">
-        ${u.role === 'Student' ? `<button type="button" class="btn secondary" onclick="window.editStudentFromUsers('${esc(u.username)}')">Edit</button>` : (u.role === 'Faculty' ? `<button type="button" class="btn secondary" onclick="window.openEditFacultyForm('${esc(u.username)}')">Edit</button>` : '')}
-        ${u.role !== 'Admin' ? `<button type="button" class="btn" style="background:#a00;" onclick="deleteUser('${esc(u.username)}')">Delete</button>` : ''}
-     </div>`
-  ]);
-
-  c.innerHTML = `<div class="panel">
-    <h2>Users & Access</h2>
-    <p style="margin-bottom:15px; color:#666;">Manage system accounts.</p>
-    <div class="form-panel" style="margin-bottom: 20px; background: #f9eaea; border-left: 4px solid #5c0000; display:flex; align-items:center; gap:20px;">
-      <label style="font-weight:bold; color:#5c0000;">Filter by Role:</label>
-      <select id="userFilter" onchange="renderUsers($('content'))" style="padding: 10px; border-radius: 6px; border: 1px solid #ccc; width: 100%; max-width: 300px; font-size:14px;">
-        <option value="All" ${filterVal === 'All' ? 'selected' : ''}>All Users</option>
-        <option value="Admin" ${filterVal === 'Admin' ? 'selected' : ''}>Admin</option>
-        <option value="Faculty" ${filterVal === 'Faculty' ? 'selected' : ''}>Faculty</option>
-        <option value="Students" ${filterVal === 'Students' ? 'selected' : ''}>Students</option>
-      </select>
-    </div>
-    <div id="userTableContainer">${simpleTable(['Username','Name','Role','Section','Action'], rows)}</div>
-  </div>`;
-}
-
-window.editStudentFromUsers = function(username) {
-    const student = db.students.find(s => s.id === username || s.username === username);
-    if (!student) return alert('Student record not found in directory.');
-    
-    navigate('activeDirectory');
-    setTimeout(() => {
-        openStudentForm(student.id);
-    }, 300);
 }
 
 async function deleteUser(username) {
