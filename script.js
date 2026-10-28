@@ -204,9 +204,20 @@ function renderStudentDashboard(c) {
   setInterval(() => { if($('dash-clock')) $('dash-clock').textContent = new Date().toLocaleTimeString(); }, 1000);
 }
 
-// --- STUDENT DIRECTORY (May Edit Button) ---
+// --- STUDENT DIRECTORY (May Edit Button at Filter) ---
 function renderActiveDirectory(c) {
-  const active = db.students.filter(s => s.status !== 'Archived' && s.status !== 'Graduated');
+  // Kunin ang unique na listahan ng Grade Level para sa dropdown
+  const uniqueGrades = [...new Set(db.students.map(s => s.yr.split(' - ')[0]))].filter(Boolean).sort();
+  
+  // Kunin ang kasalukuyang napiling filter
+  const currentFilter = $('directoryFilter') ? $('directoryFilter').value : 'All';
+
+  let active = db.students.filter(s => s.status !== 'Archived' && s.status !== 'Graduated');
+  
+  // I-apply ang filter
+  if (currentFilter !== 'All') {
+      active = active.filter(s => s.yr.includes(currentFilter));
+  }
   
   let rows = active.map(s => [
       esc(s.id), 
@@ -222,6 +233,15 @@ function renderActiveDirectory(c) {
       <h2 style="margin:0;">Student Directory</h2>
       <button class="btn" onclick="openStudentForm()">+ Add New Student</button>
     </div>
+    
+    <div class="form-panel" style="margin-bottom: 20px; background: #f9eaea; border-left: 4px solid #5c0000; display:flex; align-items:center; gap:20px;">
+      <label style="font-weight:bold; color:#5c0000;">Filter by Grade Level:</label>
+      <select id="directoryFilter" onchange="renderActiveDirectory($('content'))" style="padding: 10px; border-radius: 6px; border: 1px solid #ccc; width: 100%; max-width: 300px; font-size:14px;">
+        <option value="All" ${currentFilter === 'All' ? 'selected' : ''}>All Grade Levels</option>
+        ${uniqueGrades.map(g => `<option value="${g}" ${currentFilter === g ? 'selected' : ''}>${g}</option>`).join('')}
+      </select>
+    </div>
+
     <div id="enrollFormArea"></div>
     ${simpleTable(['Student ID','Last Name','First Name','Year Level','Status','Action'], rows)}
   </div>`;
@@ -262,7 +282,7 @@ function openStudentForm(id) {
   }
 
   const yearLevels = ['Grade 1', 'Grade 2', 'Grade 3', 'Grade 4', 'Grade 5', 'Grade 6', 'Grade 7', 'Grade 8', 'Grade 9', 'Grade 10', 'Grade 11', 'Grade 12'];
-  const statuses = ['Active', 'Archived', 'Graduated', 'Inactive']; // Idinagdag ang Inactive
+  const statuses = ['Active', 'Archived', 'Graduated', 'Inactive']; 
   const sections = ['1', '2'];
 
   $('enrollFormArea').innerHTML = `
@@ -710,7 +730,6 @@ async function deleteUser(username) {
   }
 }
 
-// --- UPDATED: CLASS RECORDS WITH NEW CARD DESIGN AND STATUS EDIT ---
 async function renderClassRecords(c) {
   const myCourses = db.courses.filter(x => {
     const isTeacher = x.adviser === session.name || x.subjectTeacher === session.name;
@@ -749,7 +768,6 @@ async function showClassFolder(gradeLevel, secName) {
   
   let students = db.students.filter(s => s.yr.includes(gradeLevel) && s.yr.includes('Sec ' + section));
   
-  // Kunin ang absences ng bawat student para sa display
   const attendanceHistory = await (await fetch(`/api/attendance/history/${encodeURIComponent(section)}`)).json();
 
   let rows = students.map(s => {
@@ -787,7 +805,6 @@ async function openEditStatusModal(studentId, currentStatus) {
     if(res.ok) {
         alert('Status updated successfully!');
         db.students = await (await fetch('/api/students')).json();
-        // I-refresh ang view
         const [gradeLevel, secName] = document.querySelector('#classFolderView h3').innerText.split(' — ')[0].split(' | ');
         showClassFolder(gradeLevel, secName);
     } else {
@@ -795,7 +812,6 @@ async function openEditStatusModal(studentId, currentStatus) {
     }
 }
 
-// --- UPDATED: GRADE ENTRY WITH NEW CARD DESIGN ---
 function renderGradeEntry(c) {
   const myCourses = db.courses.filter(x => {
     const isTeacher = x.adviser === session.name || x.subjectTeacher === session.name;
@@ -905,7 +921,6 @@ async function submitBulkGrades() {
   }
 }
 
-// --- UPDATED: ATTENDANCE WITH NEW CARD DESIGN ---
 function renderAttendance(c) {
   const myCourses = db.courses.filter(x => {
     const isTeacher = x.adviser === session.name || x.subjectTeacher === session.name;
@@ -977,7 +992,6 @@ async function showAttendanceHistory(gradeLevel, section) {
       return;
   }
 
-  // I-group by DATE
   const groupedByDate = {};
   filteredHistory.forEach(h => {
       if (!groupedByDate[h.date]) groupedByDate[h.date] = [];
@@ -996,7 +1010,6 @@ async function showAttendanceHistory(gradeLevel, section) {
   sortedDates.forEach(date => {
       const dailyRecords = groupedByDate[date];
 
-      // I-group ulit by SUBJECT (courseName)
       const groupedBySubject = {};
       dailyRecords.forEach(r => {
           if (!groupedBySubject[r.courseName]) groupedBySubject[r.courseName] = [];

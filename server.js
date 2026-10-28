@@ -82,30 +82,35 @@ function buildDatabase() {
         });
         insertUser.finalize();
 
-        // --- STUDENT GENERATION LOGIC (30 per year level, 27 for SHS) ---
+        // --- STUDENT GENERATION LOGIC (Unique Names, 27 per section) ---
         const insertStudent = db.prepare(`INSERT INTO students (id, last, first, mi, address, course, yr, status, enrol, username, password, birthday, email, age, gender, guardianName, guardianContact) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
         
-        const firstNames = ['Juan', 'Maria', 'Jose', 'Ana', 'Pedro', 'Rosa', 'Mark', 'Katie', 'Alexandra', 'Paul', 'Liza', 'Carlo', 'Mia', 'Leo', 'Ella', 'Ben', 'Sarah', 'David', 'Mary', 'James'];
-        const lastNames = ['Dela Cruz', 'Reyes', 'Santos', 'Manuel', 'Garcia', 'Mendoza', 'Torres', 'Flores', 'Ramos', 'Rivera', 'Cruz', 'Bautista', 'Ocampo', 'Aquino', 'Navarro', 'Villanueva', 'Gonzales', 'Perez', 'Castillo', 'Soriano'];
+        // Malaking listahan ng names para hindi masyadong magkakapareho
+        const firstNamesList = ['Juan', 'Maria', 'Jose', 'Ana', 'Pedro', 'Rosa', 'Mark', 'Katie', 'Alexandra', 'Paul', 'Liza', 'Carlo', 'Mia', 'Leo', 'Ella', 'Ben', 'Sarah', 'David', 'Mary', 'James', 'John', 'Emily', 'Alan', 'Jane', 'Michael', 'Sarah', 'David', 'Jessica', 'Daniel', 'Ashley', 'Matthew', 'Amanda', 'Christopher', 'Melissa', 'Andrew', 'Stephanie', 'Joshua', 'Nicole', 'Ryan', 'Angela', 'Nicholas', 'Heather', 'Tyler', 'Amber', 'Brandon', 'Michelle', 'Zachary', 'Tiffany', 'Jacob', 'Christina'];
+        
+        const lastNamesList = ['Dela Cruz', 'Reyes', 'Santos', 'Manuel', 'Garcia', 'Mendoza', 'Torres', 'Flores', 'Ramos', 'Rivera', 'Cruz', 'Bautista', 'Ocampo', 'Aquino', 'Navarro', 'Villanueva', 'Gonzales', 'Perez', 'Castillo', 'Soriano', 'Smith', 'Johnson', 'Williams', 'Brown', 'Jones', 'Garcia', 'Miller', 'Davis', 'Rodriguez', 'Martinez', 'Hernandez', 'Lopez', 'Gonzalez', 'Wilson', 'Anderson', 'Thomas', 'Taylor', 'Moore', 'Jackson', 'Martin', 'Lee', 'Perez', 'Thompson', 'White', 'Harris', 'Sanchez', 'Clark', 'Ramirez', 'Lewis', 'Robinson'];
+
+        // Shuffle arrays para random ang combination
+        firstNamesList.sort(() => Math.random() - 0.5);
+        lastNamesList.sort(() => Math.random() - 0.5);
 
         let globalStudentCount = 0;
 
         for (let grade = 1; grade <= 12; grade++) {
-            let targetCount = 30; // Default 30 students
+            // Logic: 30 students per year level (27 sa Sec 1, 3 sa Sec 2).
+            // Sa SHS (Grade 11 & 12), 27 lang total (27 sa Sec 1, 0 sa Sec 2).
+            let totalStudentsTarget = (grade >= 11) ? 27 : 30; 
             
-            // Kapag SHS (Grade 11 at 12), gawing 27 students
-            if (grade === 11 || grade === 12) {
-                targetCount = 27;
-            }
-
-            for (let i = 0; i < targetCount; i++) {
-                const first = firstNames[globalStudentCount % firstNames.length];
-                const last = lastNames[Math.floor(globalStudentCount / firstNames.length) % lastNames.length];
-                const sec = (i % 2 === 0) ? '1' : '2'; // Alternate sections 1 and 2
+            for (let i = 0; i < totalStudentsTarget; i++) {
+                // Kunin ang susunod na name sa shuffled list
+                const first = firstNamesList[globalStudentCount % firstNamesList.length];
+                const last = lastNamesList[globalStudentCount % lastNamesList.length];
                 
-                // Gumawa ng unique ID
+                // Distribution: Kung i < 27, Sec 1. Kung i >= 27, Sec 2.
+                const sec = (i < 27) ? '1' : '2'; 
+                
                 let studentId = `2026-${String(grade).padStart(2, '0')}${String(i + 1).padStart(2, '0')}`;
-                let birthday = `200${10 - grade}-05-14`; 
+                let birthday = `200${10 - grade}-05-14`;
                 let email = `${first.toLowerCase()}.${last.toLowerCase()}${globalStudentCount}@example.com`;
                 let age = (12 - grade) + 6;
                 if(age < 5) age = 5;
