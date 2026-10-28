@@ -140,7 +140,7 @@ function simpleTable(headers, rows) {
 }
 
 function currentStudent() {
-  return db.students.find(s => s.username === session.username) || null;
+  return db.students.find(s => s.username === session.username || s.id === session.username) || null;
 }
 
 function renderAdminDashboard(c) {

@@ -188,14 +188,32 @@ function generateSchedules() {
     });
 }
 
-// API ROUTES
+// --- INI-AYOS NA LOGIN ROUTE ---
 app.post('/api/login', (req, res) => {
     const { username, password } = req.body;
     if (!username || !password) return res.status(400).json({ error: "Username and password required" });
+    
     db.get("SELECT * FROM users WHERE username = ? AND password = ?", [username, password], (err, user) => {
         if (err) return res.status(500).json({ error: err.message });
-        if (!user) return res.status(401).json({ error: "Invalid credentials" });
-        res.json(user);
+        
+        if (user) {
+            return res.json(user);
+        } else {
+            // Kung wala sa users table, hanapin sa students table (para sa mga lumang seed students)
+            db.get("SELECT * FROM students WHERE (username = ? OR id = ?) AND password = ?", [username, username, password], (err, student) => {
+                if (err) return res.status(500).json({ error: err.message });
+                if (!student) return res.status(401).json({ error: "Invalid credentials" });
+                
+                // Awtomatikong i-save sa users table para sa susunod na login
+                const fullName = `${student.first} ${student.last}`;
+                db.run(`INSERT INTO users (username, password, name, role, section, email) VALUES (?,?,?,'Student',?,?)`, 
+                [student.id, student.password, fullName, student.yr, student.email], (e) => {
+                    if (e) console.error("Auto-sync error:", e);
+                    // Ibalik ang user object
+                    res.json({ username: student.id, name: fullName, role: 'Student', section: student.yr });
+                });
+            });
+        }
     });
 });
 
@@ -213,7 +231,6 @@ app.post('/api/settings/term', (req, res) => {
     });
 });
 
-// INI-AYOS NA USERS ROUTE (May Auto-Sync para sa Students)
 app.get('/api/users', (req, res) => {
     db.all("SELECT * FROM students", [], (err, students) => {
         if (err || !students) return res.status(500).json({ error: "DB Error" });
@@ -221,7 +238,6 @@ app.get('/api/users', (req, res) => {
         db.all("SELECT username FROM users WHERE role = 'Student'", [], (err, existingUsers) => {
             const existingUsernames = existingUsers.map(u => u.username);
             
-            // I-save ang mga students sa users table kung wala pa
             students.forEach(s => {
                 if (!existingUsernames.includes(s.id)) {
                     db.run(`INSERT INTO users (username, password, name, role, section, email) VALUES (?,?,?,'Student',?,?)`, 
@@ -229,7 +245,6 @@ app.get('/api/users', (req, res) => {
                 }
             });
 
-            // Kunin ang listahan
             db.all("SELECT username, name, role, section, email FROM users", [], (err, rows) => res.json(err ? [] : rows));
         });
     });
