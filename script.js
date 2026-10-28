@@ -520,67 +520,38 @@ async function saveFaculty() {
   else alert('Teacher created!');
 }
 
+// --- BAGONG FIX PARA SA EDIT FACULTY (Gumagana kahit saan) ---
 function openEditFacultyForm(username) {
   const user = db.users.find(u => u.username === username);
   if(!user) return alert('User not found');
-  const currentAdvisory = db.courses.filter(crs => crs.adviser === user.name).map(crs => `${crs.gradeLevel} - Section ${crs.section}`);
-  const currentAdvisoryStr = currentAdvisory.length > 0 ? currentAdvisory[0] : "";
-  const grades = ['Grade 1', 'Grade 2', 'Grade 3', 'Grade 4', 'Grade 5', 'Grade 6', 'Grade 7', 'Grade 8', 'Grade 9', 'Grade 10', 'Grade 11 - STEM', 'Grade 11 - HUMSS', 'Grade 11 - ABM', 'Grade 12 - STEM', 'Grade 12 - HUMSS', 'Grade 12 - ABM'];
-  const sections = ['1', '2'];
-  let uniqueSections = [];
-  grades.forEach(g => sections.forEach(s => uniqueSections.push(`${g} - Section ${s}`)));
+  
+  // Gumamit tayo ng Prompt para siguradong lalabas kahit saang page
+  const newName = prompt("Edit Full Name:", user.name);
+  if (newName === null || newName.trim() === "") return; // Kinancel
 
-  const formArea = $('facultyFormArea');
-  if (!formArea) return alert('Form area not found. Please refresh the page.');
+  const newDept = prompt("Edit Department:", user.section || "");
+  if (newDept === null) return;
 
-  formArea.innerHTML = `
-    <div class="form-panel" style="border-left: 4px solid #5c0000;">
-      <h3 style="color:#5c0000; margin-bottom:15px;">Edit Teacher: ${esc(user.name)}</h3>
-      <div class="form-grid">
-        <div class="field"><label>Username (Read-only)</label><input value="${esc(user.username)}" readonly style="background:#e9ecef;"></div>
-        <div class="field"><label>New Password (Leave blank to keep)</label><input id="et_pass" type="password"></div>
-        <div class="field"><label>Full Name</label><input id="et_name" value="${esc(user.name)}"></div>
-        <div class="field"><label>Department</label><input id="et_dept" value="${esc(user.section||'')}"></div>
-        <div class="field" style="grid-column: span 2;"><label>Advisory Class</label>
-          <select id="et_advisory">
-            <option value="">-- No Advisory Class --</option>
-            ${uniqueSections.map(s => `<option value="${esc(s)}" ${currentAdvisoryStr === s ? 'selected' : ''}>${esc(s)}</option>`).join('')}
-          </select>
-        </div>
-      </div>
-      <button type="button" class="btn" onclick="updateFaculty('${esc(user.username)}')">Save Changes</button>
-      <button type="button" class="btn secondary" onclick="$('facultyFormArea').innerHTML=''">Cancel</button>
-    </div>`;
-}
+  const newPass = prompt("Enter new password (leave blank to keep current):", "");
+  if (newPass === null) return;
 
-async function updateFaculty(username) {
-  const newName = $('et_name').value.trim();
-  const newPass = $('et_pass').value.trim();
-  const newDept = $('et_dept').value.trim();
-  const newAdvisory = $('et_advisory').value;
-  const oldUser = db.users.find(u => u.username === username);
-
-  const rec = { username, password: newPass, name: newName, role: 'Faculty', section: newDept };
-  await fetch('/api/users/update', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(rec) });
-
-  const oldCourses = db.courses.filter(c => c.adviser === oldUser.name);
-  for(const c of oldCourses) {
-      await fetch('/api/courses', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...c, adviser: '' }) });
-  }
-
-  if (newAdvisory) {
-    const [gradePart, sectionPart] = newAdvisory.split(' - Section ');
-    const newCourses = db.courses.filter(c => c.gradeLevel === gradePart.trim() && c.section === sectionPart.trim());
-    for(const c of newCourses) {
-        await fetch('/api/courses', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...c, adviser: newName }) });
-    }
-  }
-
-  db.users = await (await fetch('/api/users')).json();
-  db.courses = await (await fetch('/api/courses')).json();
-  $('facultyFormArea').innerHTML = '';
-  renderFacultyDirectory($('content'));
-  alert('Teacher updated successfully!');
+  // I-update agad via API
+  const rec = { username: user.username, password: newPass, name: newName.trim(), role: 'Faculty', section: newDept.trim() };
+  
+  fetch('/api/users/update', { 
+      method: 'POST', 
+      headers: {'Content-Type': 'application/json'}, 
+      body: JSON.stringify(rec) 
+  }).then(async res => {
+      if(res.ok) {
+          alert('Teacher updated successfully!');
+          db.users = await (await fetch('/api/users')).json();
+          // I-refresh ang kasalukuyang page
+          renderFacultyDirectory($('content')); 
+      } else {
+          alert('Failed to update teacher.');
+      }
+  });
 }
 
 function renderCourses(c) {
@@ -696,7 +667,7 @@ function renderUsers(c) {
   const rows = filteredUsers.map(u => [
     esc(u.username), esc(u.name), esc(u.role), esc(u.section||'—'),
     `<div style="display:flex; gap:5px;">
-        ${u.role === 'Student' ? `<button type="button" class="btn secondary" onclick="alert('Please edit student details in Student Directory')">Edit</button>` : (u.role === 'Faculty' ? `<button type="button" class="btn secondary" onclick="openEditFacultyForm('${esc(u.username)}')">Edit</button>` : '')}
+        ${u.role === 'Student' ? `<button type="button" class="btn secondary" onclick="openEditStudentFromUsers('${esc(u.username)}')">Edit</button>` : (u.role === 'Faculty' ? `<button type="button" class="btn secondary" onclick="openEditFacultyForm('${esc(u.username)}')">Edit</button>` : '')}
         ${u.role !== 'Admin' ? `<button type="button" class="btn" style="background:#a00;" onclick="deleteUser('${esc(u.username)}')">Delete</button>` : ''}
      </div>`
   ]);
@@ -715,6 +686,21 @@ function renderUsers(c) {
     </div>
     <div id="userTableContainer">${simpleTable(['Username','Name','Role','Section','Action'], rows)}</div>
   </div>`;
+}
+
+// --- BAGONG FIX PARA SA STUDENT EDIT MULA SA USERS PAGE ---
+function openEditStudentFromUsers(username) {
+    // Ire-redirect sa Student Directory at bubuksan ang form
+    const student = db.students.find(s => s.id === username || s.username === username);
+    if (!student) return alert('Student record not found in directory.');
+    
+    // Pumunta sa Student Directory page
+    navigate('activeDirectory');
+    
+    // Mag-antay ng konti tapos buksan ang form
+    setTimeout(() => {
+        openStudentForm(student.id);
+    }, 300);
 }
 
 async function deleteUser(username) {
