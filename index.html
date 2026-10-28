@@ -23,24 +23,23 @@
   
   .login-box { background: white; padding: 45px; border-radius: 16px; width: 100%; max-width: 420px; box-shadow: 0 10px 30px rgba(0,0,0,0.08); border: 1px solid #eaeaea; }
   .login-box label { font-size: 13px; color: #444; font-weight: 600; display: block; margin-bottom: 8px; }
-  
   .input-group { position: relative; margin-bottom: 20px; }
   .login-box input { width: 100%; padding: 14px 45px 14px 14px; border: 1px solid #ccc; border-radius: 8px; font-size: 14px; outline: none; transition: 0.2s; }
   .login-box input:focus { border-color: #5c0000; box-shadow: 0 0 0 3px rgba(92,0,0,0.1); }
   
-  /* Inayos ang eye icon para maging maroon at maayos ang click area */
+  /* ANG EYE ICON DESIGN */
   .eye-icon { 
     position: absolute; 
-    right: 14px; 
+    right: 15px; 
     top: 50%; 
     transform: translateY(-50%); 
     cursor: pointer; 
     width: 20px; 
     height: 20px;
-    opacity: 0.6;
+    stroke: #5c0000; /* Maroon color */
     transition: 0.2s;
   }
-  .eye-icon:hover { opacity: 1; }
+  .eye-icon:hover { opacity: 0.7; }
 
   .login-box button.login-btn { width: 100%; padding: 15px; background: #5c0000; color: white; border: none; border-radius: 8px; font-weight: 700; font-size: 15px; cursor: pointer; display: flex; justify-content: center; align-items: center; gap: 8px; transition: 0.2s; }
   .login-box button.login-btn:hover { background: #450000; }
@@ -121,8 +120,13 @@
       <label>Password</label>
       <div class="input-group">
         <input id="loginPass" type="password" placeholder="Enter password">
-        <!-- Pinalitan ang emoji ng img tag para sa SVG icon -->
-        <img src="eye-slash.svg" id="toggleIcon" class="eye-icon" onclick="togglePassword()" alt="Show/Hide Password">
+        
+        <!-- INLINE SVG ICON PARA SA MATA -->
+        <svg id="toggleIcon" class="eye-icon" onclick="togglePassword()" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <!-- Default: Naka-slash (Nakatago) -->
+          <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path>
+          <line x1="1" y1="1" x2="23" y2="23"></line>
+        </svg>
       </div>
 
       <button class="login-btn" onclick="doLogin()">Log In &rarr;</button>
