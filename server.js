@@ -65,20 +65,14 @@ function buildDatabase() {
         db.run(`INSERT INTO users (username, password, name, role, section, email) VALUES ('admin', 'admin123', 'Admin User', 'Admin', '', 'admin@edutrack.com')`);
         db.run(`INSERT INTO users (username, password, name, role, section, email) VALUES ('registrar', 'reg123', 'Registrar Staff', 'Registrar', '', 'registrar@edutrack.com')`);
 
-        // DINAGDAGAN NATIN ANG TEACHERS PARA HINDI KULANGIN
+        // IBINALIK SA ORIHINAL NA 30 TEACHERS
         const teachers = [
             'T. John Emmanuel S.', 'T. Emily Bronte', 'T. Alan Turing', 'T. Liza Soberano', 'T. Andres Bonifacio',
             'T. Enrique Gil', 'T. Kathryn Bernardo', 'T. Marie Curie', 'T. Daniel Padilla', 'T. Angel Locsin',
             'T. Coco Martin', 'T. Francisco Balagtas', 'T. Gabriela Silang', 'T. Jane C. Villa', 'T. Warren Buffet',
             'T. Michael Smith', 'T. Sarah Johnson', 'T. David Williams', 'T. Mary Brown', 'T. James Davis',
             'T. Smith V. Cruz', 'T. Albert Einstein', 'T. Isaac Newton', 'T. Charles Darwin', 'T. Nikola Tesla',
-            'T. Rosalind Franklin', 'T. Stephen Hawking', 'T. Ada Lovelace', 'T. Galileo Galilei', 'T. Aristotle',
-            'T. Plato', 'T. Socrates', 'T. Sigmund Freud', 'T. Carl Jung', 'T. Ivan Pavlov',
-            'T. B.F. Skinner', 'T. Abraham Maslow', 'T. Carl Rogers', 'T. Erik Erikson', 'T. Jean Piaget',
-            'T. Lev Vygotsky', 'T. John Dewey', 'T. Maria Montessori', 'T. Howard Gardner', 'T. Noam Chomsky',
-            'T. Stephen Krashen', 'T. B.F. Skinner', 'T. John Watson', 'T. William James', 'T. Wilhelm Wundt',
-            'T. Renee Descartes', 'T. Immanuel Kant', 'T. John Locke', 'T. David Hume', 'T. George Berkeley',
-            'T. Baruch Spinoza', 'T. Gottfried Leibniz', 'T. Arthur Schopenhauer', 'T. Friedrich Nietzsche', 'T. Karl Marx'
+            'T. Rosalind Franklin', 'T. Stephen Hawking', 'T. Ada Lovelace', 'T. Galileo Galilei', 'T. Aristotle'
         ];
         
         const insertUser = db.prepare(`INSERT INTO users (username, password, name, role, section, email) VALUES (?, ?, ?, ?, ?, ?)`);
@@ -113,28 +107,32 @@ function buildDatabase() {
             { level: 'Grade 12 - STEM - 2nd Semester', subjects: [['PAGS', 'Pagsulat'], ['PE12B', 'PE & Health 4'], ['ENTR', 'Entrepreneurship'], ['INQ', 'Inquiries'], ['PHY2', 'Gen Physics 2'], ['BIO2', 'Gen Biology 2'], ['STEMW', 'Work Immersion']], capacity: 40 }
         ];
 
-        let currentTeacherIndex = 0;
+        // LOGIC PARA SA 2-3 SUBJECTS PER TEACHER AT ALTERNATION
+        let globalSubCount = 0;
 
         gradeConfigs.forEach(config => {
             for (let sec = 1; sec <= 2; sec++) {
                 const sectionStr = sec.toString();
                 const gradePrefix = config.level.replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
                 
-                // 1 Advisory Teacher per section
-                const advisoryTeacher = teachers[currentTeacherIndex % teachers.length];
-                currentTeacherIndex++;
+                // Advisory teacher (Iba-iba per section)
+                const advisoryTeacher = teachers[(globalSubCount + sec) % teachers.length];
 
-                config.subjects.forEach((sub) => {
+                config.subjects.forEach((sub, idx) => {
                     const subCode = sub[0];
                     const subName = sub[1];
                     const courseCode = `${subCode}-${gradePrefix}-${sec}`;
                     
-                    // Kunin ang susunod na teacher para sa subject na ito
-                    const subjectTeacher = teachers[currentTeacherIndex % teachers.length];
-                    currentTeacherIndex++; // I-advance para iba naman sa susunod na subject
-
+                    // Formula para ma-distribute ang teachers (2-3 subjects each) at walang magkapareho sa loob ng isang section
+                    // Nag-add tayo ng multiplier para maiba ang teacher per subject at per section
+                    const teacherIdx = (globalSubCount + idx + (sec * 2)) % teachers.length;
+                    const subjectTeacher = teachers[teacherIdx];
+                    
                     insertCourse.run(courseCode, `${subName} (${config.level})`, config.level, sectionStr, config.capacity, advisoryTeacher, subjectTeacher, 'Open');
                 });
+                
+                // I-update ang counter base sa dami ng subjects sa section na ito
+                globalSubCount += config.subjects.length;
             }
         });
         
