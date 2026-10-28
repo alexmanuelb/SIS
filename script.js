@@ -885,14 +885,13 @@ function renderAttendance(c) {
   c.innerHTML = html;
 }
 
-// --- INI-AYOS NA LOADATTENDANCE ---
+// --- INI-AYOS NA LOADATTENDANCE (May Save Button) ---
 async function loadAttendance() {
   const code = $('att_course').value;
   const date = $('att_date').value;
   const crs = db.courses.find(x => x.code === code);
   if (!crs) return;
 
-  // Direktang hanapin sa db.students base sa gradeLevel at section
   let list = db.students.filter(s => isStudentInSection(s.yr, crs.gradeLevel, crs.section));
 
   if (list.length === 0) {
@@ -906,13 +905,42 @@ async function loadAttendance() {
   $('att_list').innerHTML = `<div class="panel" style="background:#f9f9f9; border:1px solid #ddd; padding:20px;">
   <h4 style="margin-bottom:15px; color:#5c0000;">Taking Attendance: ${esc(crs.name)} (${esc(date)})</h4>
   <table style="width:100%;"><thead><tr><th>Student Name</th><th>Status</th></tr></thead><tbody>
-    ${list.map(s => `<tr><td style="padding:10px; border-bottom:1px solid #eee;">${esc(s.last+', '+s.first)}</td><td style="padding:10px; border-bottom:1px solid #eee;"><select onchange="markAttendance('${code}','${esc(crs.section)}','${esc(s.id)}','${date}', this.value)" style="padding:8px; border-radius:4px; border:1px solid #ccc;">
-      <option value="Present" ${map[s.id]==='Present'?'selected':''}>Present</option><option value="Absent" ${map[s.id]==='Absent'?'selected':''}>Absent</option><option value="Late" ${map[s.id]==='Late'?'selected':''}>Late</option>
-    </select></td></tr>`).join('')}</tbody></table></div>`;
+    ${list.map(s => `<tr><td style="padding:10px; border-bottom:1px solid #eee;">${esc(s.last+', '+s.first)}</td><td style="padding:10px; border-bottom:1px solid #eee;">
+      <select id="att_status_${s.id}" style="padding:8px; border-radius:4px; border:1px solid #ccc;">
+        <option value="Present" ${map[s.id]==='Present' || !map[s.id] ? 'selected' : ''}>Present</option>
+        <option value="Absent" ${map[s.id]==='Absent'?'selected':''}>Absent</option>
+        <option value="Late" ${map[s.id]==='Late'?'selected':''}>Late</option>
+      </select>
+    </td></tr>`).join('')}</tbody></table>
+    <div style="margin-top:20px; text-align:right;">
+        <button class="btn" onclick="saveBulkAttendance('${code}', '${crs.section}', '${date}', '${crs.gradeLevel}')">Save Attendance</button>
+    </div>
+  </div>`;
 }
 
-async function markAttendance(courseCode, section, studentId, date, status) {
-  await fetch('/api/attendance', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ courseCode, section, studentId, date, status }) });
+// --- BAGONG FUNCTION PARA SA SAVE BUTTON ---
+async function saveBulkAttendance(courseCode, section, date, gradeLevel) {
+  const crs = db.courses.find(x => x.code === courseCode);
+  let list = db.students.filter(s => isStudentInSection(s.yr, crs.gradeLevel, crs.section));
+  let successCount = 0;
+
+  for (const s of list) {
+    const statusSelect = $(`att_status_${s.id}`);
+    if (statusSelect) {
+      const status = statusSelect.value;
+      await fetch('/api/attendance', { 
+        method: 'POST', 
+        headers: {'Content-Type':'application/json'}, 
+        body: JSON.stringify({ courseCode, section, studentId: s.id, date, status }) 
+      });
+      successCount++;
+    }
+  }
+
+  alert(`Successfully saved attendance for ${successCount} students!`);
+  
+  // I-refresh ang history para lumabas agad ang bagong record
+  showAttendanceHistory(gradeLevel, section);
 }
 
 async function showAttendanceHistory(gradeLevel, section) {
