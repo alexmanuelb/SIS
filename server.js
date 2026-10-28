@@ -42,6 +42,9 @@ db.serialize(() => {
                     db.get("SELECT COUNT(*) as count FROM schedules", (e, r) => {
                         if(r && r.count === 0) generateSchedules();
                     });
+                    db.get("SELECT COUNT(*) as count FROM enrollments", (e, r) => {
+                        if(r && r.count === 0) autoEnrollAllStudents();
+                    });
                 }
             });
         }
@@ -82,6 +85,7 @@ function buildDatabase() {
         });
         insertUser.finalize();
 
+        // --- STUDENT GENERATION LOGIC (Sections 1 to 3) ---
         const insertStudent = db.prepare(`INSERT INTO students (id, last, first, mi, address, course, yr, status, enrol, username, password, birthday, email, age, gender, guardianName, guardianContact) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
         
         const firstNamesList = ['Juan', 'Maria', 'Jose', 'Ana', 'Pedro', 'Rosa', 'Mark', 'Katie', 'Alexandra', 'Paul', 'Liza', 'Carlo', 'Mia', 'Leo', 'Ella', 'Ben', 'Sarah', 'David', 'Mary', 'James', 'John', 'Emily', 'Alan', 'Jane', 'Michael', 'Sarah', 'David', 'Jessica', 'Daniel', 'Ashley', 'Matthew', 'Amanda', 'Christopher', 'Melissa', 'Andrew', 'Stephanie', 'Joshua', 'Nicole', 'Ryan', 'Angela', 'Nicholas', 'Heather', 'Tyler', 'Amber', 'Brandon', 'Michelle', 'Zachary', 'Tiffany', 'Jacob', 'Christina'];
@@ -95,7 +99,7 @@ function buildDatabase() {
         for (let grade = 1; grade <= 12; grade++) {
             const yearPrefix = 2027 - grade;
             
-            for (let sec = 1; sec <= 2; sec++) {
+            for (let sec = 1; sec <= 3; sec++) { // Sections 1, 2, 3
                 let targetCount = 30; 
 
                 for (let i = 0; i < targetCount; i++) {
@@ -156,7 +160,7 @@ function buildDatabase() {
         let globalSubCount = 0;
 
         gradeConfigs.forEach(config => {
-            for (let sec = 1; sec <= 2; sec++) {
+            for (let sec = 1; sec <= 3; sec++) {
                 const sectionStr = sec.toString();
                 const gradePrefix = config.level.replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
                 
@@ -179,12 +183,55 @@ function buildDatabase() {
         
         insertCourse.finalize(() => {
             generateSchedules();
+            autoEnrollAllStudents();
         });
     });
 }
 
 // ==========================================
-// ✅ NEW SCHEDULE GENERATOR (FIXED)
+// AUTO ENROLL: Ine-enroll lahat ng students sa subjects nila
+// ==========================================
+function autoEnrollAllStudents() {
+    db.all("SELECT * FROM students", [], (err, students) => {
+        if (err || !students) return;
+        db.all("SELECT * FROM courses", [], (err, courses) => {
+            if (err || !courses) return;
+            
+            const insertEnroll = db.prepare(`INSERT INTO enrollments (studentId, courseCode, section, term) VALUES (?, ?, ?, ?)`);
+            
+            students.forEach(s => {
+                const parts = s.yr.split(' - ');
+                const gradeLevel = parts[0].trim();
+                const secMatch = s.yr.match(/Sec(?:tion)?\s*(\d+)/i);
+                const section = secMatch ? secMatch[1] : '1';
+                
+                let track = '';
+                let semester = '';
+                if (s.course === 'SHS') {
+                    track = s.yr.includes('STEM') ? 'STEM' : s.yr.includes('HUMSS') ? 'HUMSS' : s.yr.includes('ABM') ? 'ABM' : '';
+                    semester = s.yr.includes('2nd Semester') ? '2nd Semester' : '1st Semester';
+                }
+
+                const mySubjects = courses.filter(c => {
+                    if (s.course === 'SHS') {
+                        return c.gradeLevel.includes(gradeLevel) && c.gradeLevel.includes(track) && c.gradeLevel.includes(semester) && c.section === section;
+                    } else {
+                        return c.gradeLevel.startsWith(gradeLevel) && c.section === section;
+                    }
+                });
+
+                mySubjects.forEach(sub => {
+                    insertEnroll.run(s.id, sub.code, section, s.course === 'SHS' ? semester : '1st Semester');
+                });
+            });
+            
+            insertEnroll.finalize(() => console.log("✅ Auto-enrolled all students."));
+        });
+    });
+}
+
+// ==========================================
+// ✅ SCHEDULE GENERATOR (FIXED)
 // ==========================================
 function generateSchedules() {
     db.all("SELECT * FROM courses", [], (err, courses) => {
@@ -192,12 +239,10 @@ function generateSchedules() {
         db.run("DELETE FROM schedules", () => {
             const insertSchedule = db.prepare(`INSERT INTO schedules (courseCode, section, day, startTime, endTime) VALUES (?, ?, ?, ?, ?)`);
             
-            // Time helpers
             const toMin = t => { const [h,m] = t.split(':').map(Number); return h*60+m; };
             const toTime = m => `${String(Math.floor(m/60)).padStart(2,'0')}:${String(m%60).padStart(2,'0')}`;
             const overlaps = (a1,a2,b1,b2) => a1 < b2 && b1 < a2;
 
-            // Teacher schedule tracker
             const teacherBusy = {};
 
             const isTeacherFree = (teacher, day, start, end) => {
@@ -215,11 +260,9 @@ function generateSchedules() {
                 teacherBusy[`${teacher}|${day}|${start}-${end}`] = true;
             };
 
-            // BREAKS (ALL departments)
             const SNACK = { start: '09:30', end: '10:00' };
             const LUNCH = { start: '12:00', end: '13:00' };
 
-            // Build time slots for a day, skipping breaks
             const buildDaySlots = (startTime, endTime, duration) => {
                 const slots = [];
                 let cur = toMin(startTime);
@@ -237,7 +280,6 @@ function generateSchedules() {
                 return slots;
             };
 
-            // Group courses by grade+section
             const grouped = {};
             courses.forEach(c => {
                 const key = `${c.gradeLevel}|${c.section}`;
@@ -251,8 +293,6 @@ function generateSchedules() {
                 const [gradeLevel, section] = key.split('|');
                 const isSHS = gradeLevel.includes('Grade 11') || gradeLevel.includes('Grade 12');
 
-                // Elem/JHS: 1 hr/subject, 1 meeting/day
-                // SHS: 1.5 hrs/subject, 3-4 subjects/day, 2 meetings/week
                 const duration = isSHS ? 90 : 60;
                 const maxPerDay = isSHS ? 4 : 6;
                 const meetingsPerWeek = isSHS ? 2 : 1;
@@ -290,22 +330,87 @@ function generateSchedules() {
                         countToday++;
                     }
                 });
-
-                const leftover = subjects.filter(s => s.meetingsLeft > 0);
-                if (leftover.length > 0) {
-                    console.warn(`⚠️ ${gradeLevel} Sec ${section}: ${leftover.length} subject meetings couldn't fit (teacher conflicts).`);
-                }
             });
 
             insertSchedule.finalize(() => {
-                db.all("SELECT COUNT(*) as c FROM schedules", [], (e, r) => {
-                    console.log(`✅ Schedules generated: ${r ? r[0].c : 0} total entries.`);
-                });
+                console.log(`✅ Schedules generated successfully.`);
             });
         });
     });
 }
 
+// ==========================================
+// ✅ NEW ENDPOINT: Add Section (Auto-copy courses, auto-enroll, auto-schedule)
+// ==========================================
+app.post('/api/sections/add', (req, res) => {
+    const { gradeLevel, newSection, adviser } = req.body;
+    if (!gradeLevel || !newSection) return res.status(400).json({ error: "Missing fields" });
+
+    // Hanapin ang template courses (galing sa Section 1)
+    db.all("SELECT * FROM courses WHERE gradeLevel = ? AND section = '1'", [gradeLevel], (err, templates) => {
+        if (err || !templates || templates.length === 0) {
+            return res.status(400).json({ error: "No template courses found in Section 1 for this grade level." });
+        }
+
+        let insertCount = 0;
+        const insertCourse = db.prepare(`INSERT INTO courses (code, name, gradeLevel, section, capacity, adviser, subjectTeacher, status) VALUES (?,?,?,?,?,?,?,?)`);
+
+        templates.forEach(t => {
+            const newCode = t.code.replace(/-1$/, `-${newSection}`);
+            insertCourse.run(newCode, t.name, t.gradeLevel, newSection, t.capacity, adviser || t.adviser, t.subjectTeacher, 'Open', (e) => {
+                if (e) console.error("Error inserting course:", e.message);
+                insertCount++;
+                if (insertCount === templates.length) {
+                    insertCourse.finalize(() => {
+                        // Auto-enroll existing students na nasa bagong section
+                        db.all("SELECT * FROM students", [], (errS, students) => {
+                            if (errS || !students) {
+                                generateSchedules();
+                                return res.json({ message: `Section ${newSection} created (courses copied).` });
+                            }
+                            
+                            const insertEnroll = db.prepare(`INSERT INTO enrollments (studentId, courseCode, section, term) VALUES (?, ?, ?, ?)`);
+                            let enrolledCount = 0;
+
+                            students.forEach(s => {
+                                const secMatch = s.yr.match(/Sec(?:tion)?\s*(\d+)/i);
+                                const studentSec = secMatch ? secMatch[1] : '';
+                                if (studentSec !== newSection.toString()) return;
+
+                                const parts = s.yr.split(' - ');
+                                const studentGrade = parts[0].trim();
+                                if (studentGrade !== gradeLevel.split(' - ')[0].trim()) return;
+
+                                // Hanapin ang newly created courses for this student
+                                db.all("SELECT * FROM courses WHERE gradeLevel = ? AND section = ?", [gradeLevel, newSection], (errC, newCourses) => {
+                                    if (errC || !newCourses) return;
+                                    newCourses.forEach(nc => {
+                                        insertEnroll.run(s.id, nc.code, newSection, '1st Semester');
+                                    });
+                                });
+                            });
+
+                            insertEnroll.finalize(() => {
+                                generateSchedules();
+                                res.json({ message: `Section ${newSection} created. Courses copied, schedules generated.` });
+                            });
+                        });
+                    });
+                }
+            });
+        });
+    });
+});
+
+// ==========================================
+// ✅ NEW ENDPOINT: Generate Schedules Manually
+// ==========================================
+app.post('/api/schedules/generate', (req, res) => {
+    generateSchedules();
+    res.json({ message: "Schedules generated successfully!" });
+});
+
+// REST OF THE API ROUTES
 app.post('/api/login', (req, res) => {
     const { username, password } = req.body;
     if (!username || !password) return res.status(400).json({ error: "Username and password required" });
@@ -434,7 +539,23 @@ app.post('/api/students', (req, res) => {
             [last, first, mi, address, course, yr, status, enrol, birthday, email, age, gender, guardianName, guardianContact, id], (e) => {
                 if (e) return res.status(400).json({ error: e.message });
                 db.run(`UPDATE users SET name=?, section=? WHERE username=?`, [fullName, yr, id]);
-                res.json({ message: "Updated" });
+                
+                // AUTO ENROLL: Check kung may bagong section na dapat i-enroll
+                db.all("SELECT * FROM courses WHERE section = ?", [section], (errC, coursesInSec) => {
+                    if (errC || !coursesInSec) return res.json({ message: "Updated" });
+                    
+                    db.all("SELECT * FROM enrollments WHERE studentId = ?", [id], (errE, existing) => {
+                        const existingCodes = (existing || []).map(e => e.courseCode);
+                        const insertEnroll = db.prepare(`INSERT INTO enrollments (studentId, courseCode, section, term) VALUES (?, ?, ?, ?)`);
+                        
+                        coursesInSec.forEach(c => {
+                            if (!existingCodes.includes(c.code)) {
+                                insertEnroll.run(id, c.code, section, '1st Semester');
+                            }
+                        });
+                        insertEnroll.finalize(() => res.json({ message: "Updated & auto-enrolled" }));
+                    });
+                });
             });
         } else {
             db.get(`SELECT COUNT(*) as count FROM students WHERE yr LIKE ? AND yr LIKE ?`, [`${gradeLevel}%`, `%Sec ${section}%`], (errCount, countRes) => {
@@ -451,6 +572,15 @@ app.post('/api/students', (req, res) => {
                     if (e) return res.status(400).json({ error: e.message });
                     
                     db.run(`INSERT INTO users (username, password, name, role, section, email) VALUES (?,?,?,'Student',?,?)`, [id, generatedPass, fullName, yr, email], async () => {
+                        // AUTO ENROLL NEW STUDENT
+                        db.all("SELECT * FROM courses WHERE section = ?", [section], (errC, coursesInSec) => {
+                            if (!errC && coursesInSec) {
+                                const insertEnroll = db.prepare(`INSERT INTO enrollments (studentId, courseCode, section, term) VALUES (?, ?, ?, ?)`);
+                                coursesInSec.forEach(c => insertEnroll.run(id, c.code, section, '1st Semester'));
+                                insertEnroll.finalize();
+                            }
+                        });
+
                         if (email && email.trim() !== "") {
                             try {
                                 if(process.env.RESEND_API_KEY) {

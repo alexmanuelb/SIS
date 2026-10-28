@@ -306,7 +306,6 @@ function renderActiveDirectory(c) {
   </div>`;
 }
 
-// --- TOP EDIT FORM PARA SA STUDENT ---
 function openTopEditStudentForm() {
     $('enrollFormArea').innerHTML = `
         <div class="form-panel" style="border-left: 4px solid #5c0000; background: #fffdfd;">
@@ -808,6 +807,7 @@ function renderCourses(c) {
     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
       <h2 style="margin:0;">Course & Section Management</h2>
       <div style="display:flex; gap:10px;">
+        <button type="button" class="btn" onclick="generateSchedulesManual()">⚡ Generate Schedules</button>
         <button type="button" class="btn" onclick="openAddCourseForm()">+ Add New Course</button>
         <button type="button" class="btn secondary" onclick="openAddSectionForm()">+ Add New Section</button>
       </div>
@@ -831,6 +831,13 @@ function renderCoursesTable() {
   $('courseTableContainer').innerHTML = simpleTable(['Code','Name','Grade Level','Section','Adviser','Subject Teacher'],
     filtered.map(x => [esc(x.code), esc(x.name), esc(x.gradeLevel), esc(x.section), esc(x.adviser), esc(x.subjectTeacher)])
   );
+}
+
+async function generateSchedulesManual() {
+    if (!confirm('I-regenerate ang LAHAT ng schedules? Mapapatungan ang existing.')) return;
+    await fetch('/api/schedules/generate', { method: 'POST' });
+    alert('Schedules regenerated successfully!');
+    db.schedules = await (await fetch('/api/schedules')).json();
 }
 
 function openAddCourseForm() {
@@ -871,10 +878,10 @@ function openAddSectionForm() {
 
   formArea.innerHTML = `
     <div class="form-panel" style="border-left: 4px solid #5c0000;">
-      <h3 style="color:#5c0000; margin-bottom:15px;">Add New Section</h3>
+      <h3 style="color:#5c0000; margin-bottom:15px;">Add New Section (Auto-generates subjects, enrolls students, schedules)</h3>
       <div class="form-grid">
         <div class="field"><label>Grade Level / Track</label><select id="s_grade">${grades.map(g => `<option value="${g}">${g}</option>`).join('')}</select></div>
-        <div class="field"><label>New Section Name</label><input id="s_section" placeholder="e.g., 3"></div>
+        <div class="field"><label>New Section Name</label><input id="s_section" placeholder="e.g., 4"></div>
         <div class="field" style="grid-column: span 2;"><label>Advisory Teacher</label><input id="s_adviser" placeholder="e.g., T. Maria Clara"></div>
       </div>
       <button type="button" class="btn" onclick="saveNewSection()">Create Section</button>
@@ -887,17 +894,23 @@ async function saveNewSection() {
   const newSec = $('s_section').value.trim();
   const newAdviser = $('s_adviser').value.trim();
   if(!grade || !newSec || !newAdviser) return alert('Fill in all fields');
-  const templates = db.courses.filter(c => c.gradeLevel === grade && c.section === '1');
-  if(templates.length === 0) return alert('No courses found for Section 1 to copy.');
+  
+  const res = await fetch('/api/sections/add', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ gradeLevel: grade, newSection: newSec, adviser: newAdviser })
+  });
 
-  for(const t of templates) {
-    const newCode = t.code.replace(/-1$/, '-' + newSec);
-    await fetch('/api/courses', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ code: newCode, name: t.name, gradeLevel: t.gradeLevel, section: newSec, capacity: t.capacity, adviser: newAdviser, subjectTeacher: t.subjectTeacher, status: 'Open' }) });
+  if (!res.ok) {
+      const err = await res.json();
+      return alert(err.error || 'Failed to add section.');
   }
+
   db.courses = await (await fetch('/api/courses')).json();
+  db.schedules = await (await fetch('/api/schedules')).json();
   $('courseFormArea').innerHTML = '';
   renderCourses($('content'));
-  alert(`Section ${newSec} created for ${grade}!`);
+  alert(`Section ${newSec} created! Kasama na ang subjects, students auto-enrolled, at schedules.`);
 }
 
 async function deleteUser(username) {
@@ -1183,9 +1196,6 @@ function renderRegistration(c) {
   </div>`;
 }
 
-// ==========================================
-// ✅ FIXED renderSchedule — multiple fallbacks + rules display
-// ==========================================
 async function renderSchedule(c) {
   const s = currentStudent();
   if (!s) {
@@ -1199,7 +1209,6 @@ async function renderSchedule(c) {
   const secMatch = s.yr.match(/Sec(?:tion)?\s*(\d+)/i);
   if (secMatch) studentSec = secMatch[1];
 
-  // Build query candidates
   const candidates = [];
   if (s.course === 'SHS' && studentTrack) {
     candidates.push(`${studentYear} - ${studentTrack} - ${db.activeTerm}`);
@@ -1217,7 +1226,6 @@ async function renderSchedule(c) {
     } catch (e) { /* ignore */ }
   }
 
-  // Fallback: pull from local db.schedules
   if (sched.length === 0 && db.schedules && db.schedules.length > 0) {
     sched = db.schedules.filter(x => {
       const gradeMatch = x.gradeLevel && x.gradeLevel.includes(studentYear);
