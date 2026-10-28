@@ -10,14 +10,12 @@ function togglePassword() {
   
   if (passInput.type === 'password') {
     passInput.type = 'text';
-    // Papalitan ang shape ng SVG (Open Eye)
     icon.innerHTML = `
       <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
       <circle cx="12" cy="12" r="3"></circle>
     `;
   } else {
     passInput.type = 'password';
-    // Papalitan ang shape ng SVG (Eye with Slash)
     icon.innerHTML = `
       <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path>
       <line x1="1" y1="1" x2="23" y2="23"></line>
@@ -458,9 +456,10 @@ async function saveFaculty() {
   }
 }
 
+// --- INI-AYOS NA EDIT FACULTY FUNCTION ---
 function openEditFacultyForm(username) {
   const user = db.users.find(u => u.username === username);
-  if(!user) return;
+  if(!user) return alert('User not found');
   
   const currentAdvisory = db.courses.filter(crs => crs.adviser === user.name).map(crs => `${crs.gradeLevel} - Section ${crs.section}`);
   const currentAdvisoryStr = currentAdvisory.length > 0 ? currentAdvisory[0] : "";
@@ -635,31 +634,59 @@ async function saveNewSection() {
   alert(`Section ${newSec} created for ${grade}!`);
 }
 
+// --- UPDATED USERS & ACCESS WITH FILTER AND STUDENTS ---
 function renderUsers(c) {
-  const rows = db.users.map(u => [
+  let filterVal = 'All';
+  if($('userFilter')) filterVal = $('userFilter').value;
+
+  let filteredUsers = db.users;
+  if(filterVal !== 'All') {
+      filteredUsers = db.users.filter(u => u.role === filterVal);
+  }
+
+  const rows = filteredUsers.map(u => [
     esc(u.username), 
     esc(u.name), 
     esc(u.role), 
     esc(u.section||'—'),
     `<div style="display:flex; gap:5px;">
         ${u.role === 'Student' ? `<button class="btn secondary" onclick="alert('Please edit student details in Student Directory')">Edit</button>` : (u.role === 'Faculty' ? `<button class="btn secondary" onclick="openEditFacultyForm('${esc(u.username)}')">Edit</button>` : '')}
-        ${u.role !== 'Admin' ? `<button class="btn" style="background:#a00;" onclick="deleteUser('${esc(u.username)}')">Delete</button>` : ''}
+        ${u.role !== 'Admin' ? `<button type="button" class="btn" style="background:#a00;" onclick="deleteUser('${esc(u.username)}')">Delete</button>` : ''}
      </div>`
   ]);
-  c.innerHTML = `<div class="panel"><h2>Users & Access</h2>
+
+  c.innerHTML = `<div class="panel">
+    <h2>Users & Access</h2>
     <p style="margin-bottom:15px; color:#666;">Manage system accounts.</p>
+    
+    <div class="form-panel" style="margin-bottom: 20px; background: #f9eaea; border-left: 4px solid #5c0000; display:flex; align-items:center; gap:20px;">
+      <label style="font-weight:bold; color:#5c0000;">Filter by Role:</label>
+      <select id="userFilter" onchange="renderUsers($('content'))" style="padding: 10px; border-radius: 6px; border: 1px solid #ccc; width: 100%; max-width: 300px; font-size:14px;">
+        <option value="All" ${filterVal === 'All' ? 'selected' : ''}>All Users</option>
+        <option value="Admin" ${filterVal === 'Admin' ? 'selected' : ''}>Admin</option>
+        <option value="Faculty" ${filterVal === 'Faculty' ? 'selected' : ''}>Faculty</option>
+        <option value="Student" ${filterVal === 'Student' ? 'selected' : ''}>Students</option>
+      </select>
+    </div>
+
     ${simpleTable(['Username','Name','Role','Section','Action'], rows)}
   </div>`;
 }
 
 async function deleteUser(username) {
   if(!confirm(`Are you sure you want to delete user ${username}? This will also remove their student record if applicable.`)) return;
-  const res = await fetch('/api/users/' + username, { method: 'DELETE' });
-  if(!res.ok) return alert('Error deleting user');
-  alert('User deleted!');
-  db.users = await (await fetch('/api/users')).json();
-  db.students = await (await fetch('/api/students')).json();
-  renderUsers($('content'));
+  
+  try {
+      const res = await fetch('/api/users/' + username, { method: 'DELETE' });
+      if(!res.ok) throw new Error('Failed to delete');
+      
+      alert('User deleted!');
+      db.users = await (await fetch('/api/users')).json();
+      db.students = await (await fetch('/api/students')).json();
+      renderUsers($('content'));
+  } catch (error) {
+      alert('Error deleting user.');
+  }
 }
 
 async function renderClassRecords(c) {
