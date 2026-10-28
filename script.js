@@ -21,6 +21,12 @@ function isStudentInSection(studentYr, courseGradeLevel, courseSection) {
     return studentGrade === courseBaseGrade && studentSec === courseSection.toString().trim();
 }
 
+// --- HELPER PARA MAKUHA ANG SECTION MULA SA YR STRING ---
+function getSectionFromYr(yrString) {
+    const secMatch = yrString.match(/Sec(?:tion)?\s*(\d+)/i);
+    return secMatch ? secMatch[1] : '';
+}
+
 // --- EYE ICON TOGGLE LOGIC ---
 function togglePassword() {
   const passInput = $('loginPass');
@@ -207,7 +213,6 @@ function renderFacultyDashboard(c) {
   const uniqueStudents = new Set();
   
   myCourses.forEach(crs => {
-      // Gamitin ang helper function para sa exact match
       const enrolled = db.students.filter(s => isStudentInSection(s.yr, crs.gradeLevel, crs.section));
       enrolled.forEach(s => uniqueStudents.add(s.id));
   });
@@ -237,15 +242,28 @@ function renderStudentDashboard(c) {
   setInterval(() => { if($('dash-clock')) $('dash-clock').textContent = new Date().toLocaleTimeString(); }, 1000);
 }
 
-// --- STUDENT DIRECTORY (May Filter at Edit) ---
+// --- INI-AYOS NA STUDENT DIRECTORY (May Grade Level at Section Filter) ---
 function renderActiveDirectory(c) {
+  // Kunin ang unique na Grade Levels
   const uniqueGrades = [...new Set(db.students.map(s => s.yr.split(' - ')[0]))].filter(Boolean).sort();
-  const currentFilter = $('directoryFilter') ? $('directoryFilter').value : 'All';
+  
+  // Kunin ang unique na Sections
+  const uniqueSections = [...new Set(db.students.map(s => getSectionFromYr(s.yr)))].filter(Boolean).sort();
+
+  // Kunin ang kasalukuyang napiling filters
+  const currentGradeFilter = $('directoryGradeFilter') ? $('directoryGradeFilter').value : 'All';
+  const currentSectionFilter = $('directorySectionFilter') ? $('directorySectionFilter').value : 'All';
 
   let active = db.students.filter(s => s.status !== 'Archived' && s.status !== 'Graduated');
   
-  if (currentFilter !== 'All') {
-      active = active.filter(s => s.yr.split(' - ')[0].trim() === currentFilter);
+  // I-apply ang Grade Level Filter
+  if (currentGradeFilter !== 'All') {
+      active = active.filter(s => s.yr.split(' - ')[0].trim() === currentGradeFilter);
+  }
+  
+  // I-apply ang Section Filter
+  if (currentSectionFilter !== 'All') {
+      active = active.filter(s => getSectionFromYr(s.yr) === currentSectionFilter);
   }
   
   let rows = active.map(s => [
@@ -263,12 +281,22 @@ function renderActiveDirectory(c) {
       <button class="btn" onclick="openStudentForm()">+ Add New Student</button>
     </div>
     
-    <div class="form-panel" style="margin-bottom: 20px; background: #f9eaea; border-left: 4px solid #5c0000; display:flex; align-items:center; gap:20px;">
-      <label style="font-weight:bold; color:#5c0000;">Filter by Grade Level:</label>
-      <select id="directoryFilter" onchange="renderActiveDirectory($('content'))" style="padding: 10px; border-radius: 6px; border: 1px solid #ccc; width: 100%; max-width: 300px; font-size:14px;">
-        <option value="All" ${currentFilter === 'All' ? 'selected' : ''}>All Grade Levels</option>
-        ${uniqueGrades.map(g => `<option value="${g}" ${currentFilter === g ? 'selected' : ''}>${g}</option>`).join('')}
-      </select>
+    <div class="form-panel" style="margin-bottom: 20px; background: #f9eaea; border-left: 4px solid #5c0000; display:flex; align-items:center; gap:20px; flex-wrap:wrap;">
+      <div style="display:flex; align-items:center; gap:10px;">
+          <label style="font-weight:bold; color:#5c0000;">Filter by Grade Level:</label>
+          <select id="directoryGradeFilter" onchange="renderActiveDirectory($('content'))" style="padding: 10px; border-radius: 6px; border: 1px solid #ccc; width: 200px; font-size:14px;">
+            <option value="All" ${currentGradeFilter === 'All' ? 'selected' : ''}>All Grade Levels</option>
+            ${uniqueGrades.map(g => `<option value="${g}" ${currentGradeFilter === g ? 'selected' : ''}>${g}</option>`).join('')}
+          </select>
+      </div>
+
+      <div style="display:flex; align-items:center; gap:10px;">
+          <label style="font-weight:bold; color:#5c0000;">Filter by Section:</label>
+          <select id="directorySectionFilter" onchange="renderActiveDirectory($('content'))" style="padding: 10px; border-radius: 6px; border: 1px solid #ccc; width: 150px; font-size:14px;">
+            <option value="All" ${currentSectionFilter === 'All' ? 'selected' : ''}>All Sections</option>
+            ${uniqueSections.map(s => `<option value="${s}" ${currentSectionFilter === s ? 'selected' : ''}>Section ${s}</option>`).join('')}
+          </select>
+      </div>
     </div>
 
     <div id="enrollFormArea"></div>
