@@ -244,7 +244,7 @@ function renderStudentDashboard(c) {
   setInterval(() => { if($('dash-clock')) $('dash-clock').textContent = new Date().toLocaleTimeString(); }, 1000);
 }
 
-// --- INI-AYOS NA STUDENT DIRECTORY (May Top Edit Button) ---
+// --- STUDENT DIRECTORY (May Top Edit Button) ---
 function renderActiveDirectory(c) {
   const uniqueGrades = [...new Set(db.students.map(s => s.yr.split(' - ')[0]))].filter(Boolean).sort();
   const currentGradeFilter = $('directoryGradeFilter') ? $('directoryGradeFilter').value : 'All';
@@ -297,7 +297,7 @@ function renderActiveDirectory(c) {
   </div>`;
 }
 
-// --- BAGONG TOP EDIT FORM PARA SA STUDENT ---
+// --- TOP EDIT FORM PARA SA STUDENT ---
 function openTopEditStudentForm() {
     $('enrollFormArea').innerHTML = `
         <div class="form-panel" style="border-left: 4px solid #5c0000; background: #fffdfd;">
@@ -366,7 +366,7 @@ async function saveTopEditStudent(id) {
     }
 }
 
-// --- INI-AYOS NA USERS & ACCESS (May Top Edit Button at Dropdown) ---
+// --- USERS & ACCESS (May Top Edit Button) ---
 function renderUsers(c) {
   let filterVal = 'All';
   if($('userFilter')) filterVal = $('userFilter').value;
@@ -491,7 +491,7 @@ function computeAge() {
   document.getElementById('f_age').value = age;
 }
 
-// --- ADD STUDENT FORM (Form Panel) ---
+// --- ADD STUDENT FORM ---
 function openStudentForm(id) {
   const s = id ? db.students.find(x => x.id === id) : null;
   const nextId = s ? s.id : '2026-' + Math.floor(1000 + Math.random() * 9000);
@@ -616,25 +616,110 @@ async function saveStudent(existingId) {
   $('enrollFormArea').innerHTML = ''; renderActiveDirectory($('content')); 
 }
 
-// --- IBA PANG FUNCTIONS (Walang binago) ---
+// --- FACULTY DIRECTORY (Inayos: Walang Action Column, May Top Edit Button) ---
 function renderFacultyDirectory(c) {
   const facultyList = db.users.filter(u => u.role === 'Faculty');
   const rows = facultyList.map(f => {
     const advised = db.courses.filter(crs => crs.adviser === f.name).map(crs => `${crs.gradeLevel} (Sec ${crs.section})`);
     const advisoryDisplay = advised.length > 0 ? advised[0] : '<span style="color:#999;">None</span>';
-    return [`<b>${esc(f.username)}</b>`, esc(f.name), esc(f.email || 'N/A'), advisoryDisplay, `—`];
+    return [`<b>${esc(f.username)}</b>`, esc(f.name), esc(f.email || 'N/A'), advisoryDisplay];
   });
 
   c.innerHTML = `<div class="panel">
     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
       <h2 style="margin:0;">Faculty Directory</h2>
-      <button type="button" class="btn" onclick="openAddFacultyForm()">+ Add New Teacher</button>
+      <div style="display:flex; gap:10px;">
+        <button type="button" class="btn" onclick="openTopEditFacultyForm()">✏️ Edit Teacher</button>
+        <button type="button" class="btn" onclick="openAddFacultyForm()">+ Add New Teacher</button>
+      </div>
     </div>
     <div id="facultyFormArea"></div>
-    ${simpleTable(['Username', 'Full Name', 'Email', 'Advisory Class', 'Action'], rows)}
+    ${simpleTable(['Username', 'Full Name', 'Email', 'Advisory Class'], rows)}
   </div>`;
 }
 
+// --- TOP EDIT FORM PARA SA FACULTY ---
+function openTopEditFacultyForm() {
+    $('facultyFormArea').innerHTML = `
+        <div class="form-panel" style="border-left: 4px solid #5c0000; background: #fffdfd;">
+            <h3 style="color:#5c0000; margin-bottom:15px;">Edit Teacher via Username</h3>
+            <div style="display:flex; gap:10px; align-items:flex-end; margin-bottom:15px;">
+                <div class="field" style="flex:1;">
+                    <label>Enter Username</label>
+                    <input id="top_edit_faculty_uname" placeholder="Type username here...">
+                </div>
+                <button type="button" class="btn" onclick="loadFacultyForTopEdit()">Load Teacher</button>
+                <button type="button" class="btn secondary" onclick="$('facultyFormArea').innerHTML=''">Cancel</button>
+            </div>
+            <div id="top_edit_faculty_fields"></div>
+        </div>
+    `;
+}
+
+function loadFacultyForTopEdit() {
+    const uname = $('top_edit_faculty_uname').value.trim();
+    const u = db.users.find(x => x.username === uname && x.role === 'Faculty');
+    
+    if (!u) return alert('Faculty username not found.');
+
+    const currentAdvisory = db.courses.filter(crs => crs.adviser === u.name).map(crs => `${crs.gradeLevel} - Section ${crs.section}`);
+    const currentAdvisoryStr = currentAdvisory.length > 0 ? currentAdvisory[0] : "";
+    
+    const grades = ['Grade 1', 'Grade 2', 'Grade 3', 'Grade 4', 'Grade 5', 'Grade 6', 'Grade 7', 'Grade 8', 'Grade 9', 'Grade 10', 'Grade 11 - STEM', 'Grade 11 - HUMSS', 'Grade 11 - ABM', 'Grade 12 - STEM', 'Grade 12 - HUMSS', 'Grade 12 - ABM'];
+    const sections = ['1', '2'];
+    let uniqueSections = [];
+    grades.forEach(g => sections.forEach(s => uniqueSections.push(`${g} - Section ${s}`)));
+
+    $('top_edit_faculty_fields').innerHTML = `
+        <div class="form-grid" style="margin-top:20px; border-top:1px dashed #ccc; padding-top:20px;">
+            <div class="field"><label>Username</label><input value="${esc(u.username)}" readonly style="background:#e9ecef;"></div>
+            <div class="field"><label>New Password (Leave blank to keep)</label><input id="te_fac_pass" type="password"></div>
+            <div class="field"><label>Full Name</label><input id="te_fac_name" value="${esc(u.name)}"></div>
+            <div class="field"><label>Department</label><input id="te_fac_dept" value="${esc(u.section||'')}"></div>
+            <div class="field" style="grid-column: span 2;"><label>Advisory Class</label>
+                <select id="te_fac_advisory">
+                    <option value="">-- No Advisory Class --</option>
+                    ${uniqueSections.map(s => `<option value="${esc(s)}" ${currentAdvisoryStr === s ? 'selected' : ''}>${esc(s)}</option>`).join('')}
+                </select>
+            </div>
+        </div>
+        <button type="button" class="btn" style="margin-top:15px;" onclick="saveTopEditFaculty('${esc(u.username)}')">Save Changes</button>
+    `;
+}
+
+async function saveTopEditFaculty(username) {
+    const newName = $('te_fac_name').value.trim();
+    const newPass = $('te_fac_pass').value.trim();
+    const newDept = $('te_fac_dept').value.trim();
+    const newAdvisory = $('te_fac_advisory').value;
+    const oldUser = db.users.find(u => u.username === username);
+
+    if(!newName) return alert('Full Name cannot be empty.');
+
+    const rec = { username, password: newPass, name: newName, role: 'Faculty', section: newDept };
+    await fetch('/api/users/update', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(rec) });
+
+    const oldCourses = db.courses.filter(c => c.adviser === oldUser.name);
+    for(const c of oldCourses) {
+        await fetch('/api/courses', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...c, adviser: '' }) });
+    }
+
+    if (newAdvisory) {
+        const [gradePart, sectionPart] = newAdvisory.split(' - Section ');
+        const newCourses = db.courses.filter(c => c.gradeLevel === gradePart.trim() && c.section === sectionPart.trim());
+        for(const c of newCourses) {
+            await fetch('/api/courses', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...c, adviser: newName }) });
+        }
+    }
+
+    db.users = await (await fetch('/api/users')).json();
+    db.courses = await (await fetch('/api/courses')).json();
+    $('facultyFormArea').innerHTML = '';
+    renderFacultyDirectory($('content'));
+    alert('Teacher updated successfully!');
+}
+
+// --- ADD FACULTY FORM ---
 function openAddFacultyForm() {
   const grades = ['Grade 1', 'Grade 2', 'Grade 3', 'Grade 4', 'Grade 5', 'Grade 6', 'Grade 7', 'Grade 8', 'Grade 9', 'Grade 10', 'Grade 11 - STEM', 'Grade 11 - HUMSS', 'Grade 11 - ABM', 'Grade 12 - STEM', 'Grade 12 - HUMSS', 'Grade 12 - ABM'];
   const sections = ['1', '2'];
@@ -701,68 +786,7 @@ async function saveFaculty() {
   else alert('Teacher created!');
 }
 
-window.openEditFacultyForm = function(username) {
-  const user = db.users.find(u => u.username === username);
-  if(!user) return alert('User not found');
-  
-  const currentAdvisory = db.courses.filter(crs => crs.adviser === user.name).map(crs => `${crs.gradeLevel} - Section ${crs.section}`);
-  const currentAdvisoryStr = currentAdvisory.length > 0 ? currentAdvisory[0] : "";
-  
-  const grades = ['Grade 1', 'Grade 2', 'Grade 3', 'Grade 4', 'Grade 5', 'Grade 6', 'Grade 7', 'Grade 8', 'Grade 9', 'Grade 10', 'Grade 11 - STEM', 'Grade 11 - HUMSS', 'Grade 11 - ABM', 'Grade 12 - STEM', 'Grade 12 - HUMSS', 'Grade 12 - ABM'];
-  const sections = ['1', '2'];
-  let uniqueSections = [];
-  grades.forEach(g => sections.forEach(s => uniqueSections.push(`${g} - Section ${s}`)));
-
-  $('facultyFormArea').innerHTML = `
-    <div class="form-panel" style="border-left: 4px solid #5c0000;">
-      <h3 style="color:#5c0000; margin-bottom:15px;">Edit Teacher: ${esc(user.name)}</h3>
-      <div class="form-grid">
-        <div class="field"><label>Username (Read-only)</label><input value="${esc(user.username)}" readonly style="background:#e9ecef;"></div>
-        <div class="field"><label>New Password (Leave blank to keep)</label><input id="et_pass" type="password"></div>
-        <div class="field"><label>Full Name</label><input id="et_name" value="${esc(user.name)}"></div>
-        <div class="field"><label>Department</label><input id="et_dept" value="${esc(user.section||'')}"></div>
-        <div class="field" style="grid-column: span 2;"><label>Advisory Class</label>
-          <select id="et_advisory">
-            <option value="">-- No Advisory Class --</option>
-            ${uniqueSections.map(s => `<option value="${esc(s)}" ${currentAdvisoryStr === s ? 'selected' : ''}>${esc(s)}</option>`).join('')}
-          </select>
-        </div>
-      </div>
-      <button type="button" class="btn" onclick="updateFaculty('${esc(user.username)}')">Save Changes</button>
-      <button type="button" class="btn secondary" onclick="$('facultyFormArea').innerHTML=''">Cancel</button>
-    </div>`;
-}
-
-async function updateFaculty(username) {
-  const newName = $('et_name').value.trim();
-  const newPass = $('et_pass').value.trim();
-  const newDept = $('et_dept').value.trim();
-  const newAdvisory = $('et_advisory').value;
-  const oldUser = db.users.find(u => u.username === username);
-
-  const rec = { username, password: newPass, name: newName, role: 'Faculty', section: newDept };
-  await fetch('/api/users/update', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(rec) });
-
-  const oldCourses = db.courses.filter(c => c.adviser === oldUser.name);
-  for(const c of oldCourses) {
-      await fetch('/api/courses', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...c, adviser: '' }) });
-  }
-
-  if (newAdvisory) {
-    const [gradePart, sectionPart] = newAdvisory.split(' - Section ');
-    const newCourses = db.courses.filter(c => c.gradeLevel === gradePart.trim() && c.section === sectionPart.trim());
-    for(const c of newCourses) {
-        await fetch('/api/courses', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...c, adviser: newName }) });
-    }
-  }
-
-  db.users = await (await fetch('/api/users')).json();
-  db.courses = await (await fetch('/api/courses')).json();
-  $('facultyFormArea').innerHTML = '';
-  renderFacultyDirectory($('content'));
-  alert('Teacher updated successfully!');
-}
-
+// --- IBA PANG FUNCTIONS (Walang binago) ---
 function renderCourses(c) {
   const grades = ['Grade 1', 'Grade 2', 'Grade 3', 'Grade 4', 'Grade 5', 'Grade 6', 'Grade 7', 'Grade 8', 'Grade 9', 'Grade 10', 'Grade 11 - STEM - 1st Semester', 'Grade 11 - STEM - 2nd Semester', 'Grade 11 - HUMSS - 1st Semester', 'Grade 11 - HUMSS - 2nd Semester', 'Grade 11 - ABM - 1st Semester', 'Grade 11 - ABM - 2nd Semester', 'Grade 12 - STEM - 1st Semester', 'Grade 12 - STEM - 2nd Semester', 'Grade 12 - HUMSS - 1st Semester', 'Grade 12 - HUMSS - 2nd Semester', 'Grade 12 - ABM - 1st Semester', 'Grade 12 - ABM - 2nd Semester'];
   
