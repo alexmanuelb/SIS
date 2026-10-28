@@ -140,9 +140,9 @@ function buildSidebar() {
   const nav = $('sidebar');
   let html = `<div class="portal-title">${session.role.toUpperCase()} PORTAL</div>`;
   MENUS[session.role].forEach(m => {
-    html += `<button onclick="navigate('${m.key}', this)">${m.label}</button>`;
+    html += `<button type="button" onclick="navigate('${m.key}', this)">${m.label}</button>`;
   });
-  html += `<button class="logout-btn" onclick="doLogout()">Logout</button>`;
+  html += `<button type="button" class="logout-btn" onclick="doLogout()">Logout</button>`;
   nav.innerHTML = html;
   nav.querySelector('button').classList.add('active');
 }
@@ -205,7 +205,7 @@ function renderAdminDashboard(c) {
             <option value="1st Semester" ${db.activeTerm === '1st Semester' ? 'selected' : ''}>1st Semester</option>
             <option value="2nd Semester" ${db.activeTerm === '2nd Semester' ? 'selected' : ''}>2nd Semester</option>
           </select>
-          <button class="btn" onclick="updateGlobalTerm()">Update</button>
+          <button type="button" class="btn" onclick="updateGlobalTerm()">Update</button>
         </div>
       </div>
     </div>`;
@@ -265,17 +265,17 @@ function renderActiveDirectory(c) {
   // --- TOTAL STUDENTS COUNT ---
   const totalStudents = active.length;
   
-  // --- INI-AYOS NA EDIT BUTTON ---
+  // --- INI-AYOS NA EDIT BUTTON (May type="button") ---
   let rows = active.map(s => [
       esc(s.id), esc(s.last), esc(s.first), esc(s.yr), 
       `<span class="badge ${s.status === 'Active' ? 'active' : 'inactive'}">${esc(s.status)}</span>`,
-      `<button class="btn secondary" onclick="openStudentForm('${esc(s.id)}')">Edit</button>`
+      `<button type="button" class="btn secondary" onclick="openStudentForm('${esc(s.id)}')">Edit</button>`
   ]);
 
   c.innerHTML = `<div class="panel">
     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
       <h2 style="margin:0;">Student Directory</h2>
-      <button class="btn" onclick="openStudentForm()">+ Add New Student</button>
+      <button type="button" class="btn" onclick="openStudentForm()">+ Add New Student</button>
     </div>
     
     <div class="form-panel" style="margin-bottom: 20px; background: #f9eaea; border-left: 4px solid #5c0000; display:flex; align-items:center; gap:20px; flex-wrap:wrap;">
@@ -303,8 +303,6 @@ function renderActiveDirectory(c) {
     ${simpleTable(['Student ID','Last Name','First Name','Year Level','Status','Action'], rows)}
   </div>`;
 }
-
-// Tinanggal na ang window.editStudentBtn dahil direkta na natin tinatawag ang openStudentForm
 
 function computeAge() {
   const bday = document.getElementById('f_birthday').value;
@@ -388,8 +386,8 @@ function openStudentForm(id) {
           <select id="f_status">${statuses.map(st => `<option value="${st}" ${s?.status === st ? 'selected' : ''}>${st}</option>`).join('')}</select>
         </div>
       </div>
-      <button class="btn" onclick="saveStudent('${esc(s?.id||'')}')">Save</button>
-      <button class="btn secondary" onclick="$('enrollFormArea').innerHTML=''">Cancel</button>
+      <button type="button" class="btn" onclick="saveStudent('${esc(s?.id||'')}')">Save</button>
+      <button type="button" class="btn secondary" onclick="$('enrollFormArea').innerHTML=''">Cancel</button>
     </div>`;
 }
 
@@ -443,13 +441,13 @@ function renderFacultyDirectory(c) {
   const rows = facultyList.map(f => {
     const advised = db.courses.filter(crs => crs.adviser === f.name).map(crs => `${crs.gradeLevel} (Sec ${crs.section})`);
     const advisoryDisplay = advised.length > 0 ? advised[0] : '<span style="color:#999;">None</span>';
-    return [`<b>${esc(f.username)}</b>`, esc(f.name), esc(f.email || 'N/A'), advisoryDisplay, `<button class="btn secondary" onclick="openEditFacultyForm('${esc(f.username)}')">Edit</button>`];
+    return [`<b>${esc(f.username)}</b>`, esc(f.name), esc(f.email || 'N/A'), advisoryDisplay, `<button type="button" class="btn secondary" onclick="openEditFacultyForm('${esc(f.username)}')">Edit</button>`];
   });
 
   c.innerHTML = `<div class="panel">
     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
       <h2 style="margin:0;">Faculty Directory</h2>
-      <button class="btn" onclick="openAddFacultyForm()">+ Add New Teacher</button>
+      <button type="button" class="btn" onclick="openAddFacultyForm()">+ Add New Teacher</button>
     </div>
     <div id="facultyFormArea"></div>
     ${simpleTable(['Username', 'Full Name', 'Email', 'Advisory Class', 'Action'], rows)}
@@ -476,8 +474,8 @@ function openAddFacultyForm() {
           </select>
         </div>
       </div>
-      <button class="btn" onclick="saveFaculty()">Create Teacher</button>
-      <button class="btn secondary" onclick="$('facultyFormArea').innerHTML=''">Cancel</button>
+      <button type="button" class="btn" onclick="saveFaculty()">Create Teacher</button>
+      <button type="button" class="btn secondary" onclick="$('facultyFormArea').innerHTML=''">Cancel</button>
     </div>`;
 }
 
@@ -544,8 +542,8 @@ function openEditFacultyForm(username) {
           </select>
         </div>
       </div>
-      <button class="btn" onclick="updateFaculty('${esc(user.username)}')">Save Changes</button>
-      <button class="btn secondary" onclick="$('facultyFormArea').innerHTML=''">Cancel</button>
+      <button type="button" class="btn" onclick="updateFaculty('${esc(user.username)}')">Save Changes</button>
+      <button type="button" class="btn secondary" onclick="$('facultyFormArea').innerHTML=''">Cancel</button>
     </div>`;
 }
 
@@ -586,8 +584,8 @@ function renderCourses(c) {
     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
       <h2 style="margin:0;">Course & Section Management</h2>
       <div style="display:flex; gap:10px;">
-        <button class="btn" onclick="openAddCourseForm()">+ Add New Course</button>
-        <button class="btn secondary" onclick="openAddSectionForm()">+ Add New Section</button>
+        <button type="button" class="btn" onclick="openAddCourseForm()">+ Add New Course</button>
+        <button type="button" class="btn secondary" onclick="openAddSectionForm()">+ Add New Section</button>
       </div>
     </div>
     <div class="form-panel" style="margin-bottom: 20px; background: #f9eaea; border-left: 4px solid #5c0000;">
@@ -623,8 +621,8 @@ function openAddCourseForm() {
         <div class="field"><label>Section</label><input id="c_section" placeholder="e.g., 3"></div>
         <div class="field" style="grid-column: span 2;"><label>Subject Teacher</label><input id="c_subjectTeacher" placeholder="e.g., T. Jose Rizal"></div>
       </div>
-      <button class="btn" onclick="saveNewCourse()">Save Course</button>
-      <button class="btn secondary" onclick="$('courseFormArea').innerHTML=''">Cancel</button>
+      <button type="button" class="btn" onclick="saveNewCourse()">Save Course</button>
+      <button type="button" class="btn secondary" onclick="$('courseFormArea').innerHTML=''">Cancel</button>
     </div>`;
 }
 
@@ -647,8 +645,8 @@ function openAddSectionForm() {
         <div class="field"><label>New Section Name</label><input id="s_section" placeholder="e.g., 3"></div>
         <div class="field" style="grid-column: span 2;"><label>Advisory Teacher</label><input id="s_adviser" placeholder="e.g., T. Maria Clara"></div>
       </div>
-      <button class="btn" onclick="saveNewSection()">Create Section</button>
-      <button class="btn secondary" onclick="$('courseFormArea').innerHTML=''">Cancel</button>
+      <button type="button" class="btn" onclick="saveNewSection()">Create Section</button>
+      <button type="button" class="btn secondary" onclick="$('courseFormArea').innerHTML=''">Cancel</button>
     </div>`;
 }
 
@@ -684,7 +682,7 @@ function renderUsers(c) {
   const rows = filteredUsers.map(u => [
     esc(u.username), esc(u.name), esc(u.role), esc(u.section||'—'),
     `<div style="display:flex; gap:5px;">
-        ${u.role === 'Student' ? `<button class="btn secondary" onclick="alert('Please edit student details in Student Directory')">Edit</button>` : (u.role === 'Faculty' ? `<button class="btn secondary" onclick="openEditFacultyForm('${esc(u.username)}')">Edit</button>` : '')}
+        ${u.role === 'Student' ? `<button type="button" class="btn secondary" onclick="alert('Please edit student details in Student Directory')">Edit</button>` : (u.role === 'Faculty' ? `<button type="button" class="btn secondary" onclick="openEditFacultyForm('${esc(u.username)}')">Edit</button>` : '')}
         ${u.role !== 'Admin' ? `<button type="button" class="btn" style="background:#a00;" onclick="deleteUser('${esc(u.username)}')">Delete</button>` : ''}
      </div>`
   ]);
@@ -758,13 +756,13 @@ async function showClassFolder(gradeLevel, secName) {
   let rows = students.map(s => {
       const studentAbsences = attendanceHistory.filter(a => a.studentId === s.id && a.status === 'Absent').length;
       const statusBadge = s.status === 'Active' ? 'badge active' : 'badge inactive';
-      return [esc(s.id), esc(s.last+', '+s.first), esc(s.yr), `<span style="color:${studentAbsences > 0 ? 'red' : 'green'}; font-weight:bold;">${studentAbsences}</span>`, `<span class="${statusBadge}">${esc(s.status)}</span>`, `<button class="btn secondary" style="padding:5px 10px; font-size:11px;" onclick="openEditStatusModal('${esc(s.id)}', '${esc(s.status)}')">Edit Status</button>`];
+      return [esc(s.id), esc(s.last+', '+s.first), esc(s.yr), `<span style="color:${studentAbsences > 0 ? 'red' : 'green'}; font-weight:bold;">${studentAbsences}</span>`, `<span class="${statusBadge}">${esc(s.status)}</span>`, `<button type="button" class="btn secondary" style="padding:5px 10px; font-size:11px;" onclick="openEditStatusModal('${esc(s.id)}', '${esc(s.status)}')">Edit Status</button>`];
   });
 
   $('classFolderView').innerHTML = `<div class="panel" style="border:2px solid #5c0000;">
     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
         <h3 style="margin:0; color:#5c0000;">${esc(keyStr)} — Enrolled Students</h3>
-        <button class="btn secondary" onclick="$('classFolderView').innerHTML=''">Close</button>
+        <button type="button" class="btn secondary" onclick="$('classFolderView').innerHTML=''">Close</button>
     </div>
     ${simpleTable(['ID','Name','Year Level','Absences', 'Status', 'Action'], rows)}
   </div>`;
@@ -827,8 +825,8 @@ async function showGradeEntryFolder(gradeLevel, secName) {
       </div>
     </div>
     <div style="margin-top:20px; text-align:right; display:flex; justify-content:space-between;">
-        <button class="btn secondary" onclick="$('gradeEntryView').innerHTML=''">Close</button>
-        <button class="btn" onclick="submitBulkGrades()">Submit All Grades for ${esc(keyStr)}</button>
+        <button type="button" class="btn secondary" onclick="$('gradeEntryView').innerHTML=''">Close</button>
+        <button type="button" class="btn" onclick="submitBulkGrades()">Submit All Grades for ${esc(keyStr)}</button>
     </div>
   </div>`;
   $('gradeEntryView').innerHTML = html;
@@ -868,7 +866,7 @@ function renderAttendance(c) {
     <div class="form-panel" style="display:flex; gap:20px; align-items:flex-end; margin-bottom:30px;">
       <div class="field" style="flex:1;"><label>Course</label><select id="att_course">${myCourses.map(x=>`<option value="${esc(x.code)}">${esc(x.name)} — Sec ${esc(x.section)}</option>`).join('')}</select></div>
       <div class="field" style="flex:1;"><label>Date</label><input type="date" id="att_date" value="${new Date().toISOString().slice(0,10)}"></div>
-      <button class="btn" style="margin-bottom:2px;" onclick="loadAttendance()">Load Students</button>
+      <button type="button" class="btn" style="margin-bottom:2px;" onclick="loadAttendance()">Load Students</button>
     </div>
     <div id="att_list" style="margin-bottom:30px;"></div>
     <hr style="border:0; border-top:1px solid #eaeaea; margin-bottom:20px;">
@@ -910,7 +908,7 @@ async function loadAttendance() {
       </select>
     </td></tr>`).join('')}</tbody></table>
     <div style="margin-top:20px; text-align:right;">
-        <button class="btn" onclick="saveBulkAttendance('${code}', '${crs.section}', '${date}', '${crs.gradeLevel}')">Save Attendance</button>
+        <button type="button" class="btn" onclick="saveBulkAttendance('${code}', '${crs.section}', '${date}', '${crs.gradeLevel}')">Save Attendance</button>
     </div>
   </div>`;
 }
@@ -959,7 +957,7 @@ async function showAttendanceHistory(gradeLevel, section) {
   let html = `<div class="panel" style="border:2px solid #5c0000;">
       <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
         <h3 style="color:#5c0000; margin:0;">History: ${esc(gradeLevel)} | Section ${esc(section)}</h3>
-        <button class="btn secondary" onclick="$('attendance_history_view').innerHTML=''">Close</button>
+        <button type="button" class="btn secondary" onclick="$('attendance_history_view').innerHTML=''">Close</button>
       </div>
       <div style="display:grid; gap:20px;">`;
 
