@@ -3,7 +3,7 @@ let session = null;
 const $ = id => document.getElementById(id);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 
-// --- SMART MATCHING HELPER PARA SA SHS AT JHS/ELEM ---
+// --- SMART MATCHING HELPER ---
 function isStudentInSection(studentYr, courseGradeLevel, courseSection) {
     if (!studentYr || !courseGradeLevel) return false;
     const studentGrade = studentYr.split(' - ')[0].trim();
@@ -257,11 +257,11 @@ function renderActiveDirectory(c) {
   
   const totalStudents = active.length;
   
-  // GUMAGANA NA STUDENT EDIT BUTTON
+  // GUMAGANA NA STUDENT EDIT BUTTON GAMIT ANG CLASS
   let rows = active.map(s => [
       esc(s.id), esc(s.last), esc(s.first), esc(s.yr), 
       `<span class="badge ${s.status === 'Active' ? 'active' : 'inactive'}">${esc(s.status)}</span>`,
-      `<button type="button" class="btn secondary" data-id="${esc(s.id)}" onclick="window.editStudent(this)">Edit</button>`
+      `<button type="button" class="btn secondary edit-student-btn" data-id="${esc(s.id)}">Edit</button>`
   ]);
 
   c.innerHTML = `<div class="panel">
@@ -295,12 +295,6 @@ function renderActiveDirectory(c) {
     ${simpleTable(['Student ID','Last Name','First Name','Year Level','Status','Action'], rows)}
   </div>`;
 }
-
-// BAGONG HELPER PARA SA STUDENT EDIT (Katulad ng Faculty)
-window.editStudent = function(btn) {
-  const id = btn.getAttribute('data-id');
-  if(id) openStudentForm(id);
-};
 
 function computeAge() {
   const bday = document.getElementById('f_birthday').value;
@@ -434,7 +428,6 @@ async function saveStudent(existingId) {
   $('enrollFormArea').innerHTML = ''; renderActiveDirectory($('content')); 
 }
 
-// --- FACULTY DIRECTORY ---
 function renderFacultyDirectory(c) {
   const facultyList = db.users.filter(u => u.role === 'Faculty');
   
@@ -446,7 +439,7 @@ function renderFacultyDirectory(c) {
         esc(f.name), 
         esc(f.email || 'N/A'), 
         advisoryDisplay, 
-        `<button type="button" class="btn secondary" data-username="${esc(f.username)}" onclick="window.editFaculty(this)">Edit</button>`
+        `<button type="button" class="btn secondary edit-faculty-btn" data-username="${esc(f.username)}">Edit</button>`
     ];
   });
 
@@ -459,12 +452,6 @@ function renderFacultyDirectory(c) {
     ${simpleTable(['Username', 'Full Name', 'Email', 'Advisory Class', 'Action'], rows)}
   </div>`;
 }
-
-// BAGONG HELPER PARA SA FACULTY EDIT
-window.editFaculty = function(btn) {
-  const username = btn.getAttribute('data-username');
-  if(username) openEditFacultyForm(username);
-};
 
 function openAddFacultyForm() {
   const grades = ['Grade 1', 'Grade 2', 'Grade 3', 'Grade 4', 'Grade 5', 'Grade 6', 'Grade 7', 'Grade 8', 'Grade 9', 'Grade 10', 'Grade 11 - STEM', 'Grade 11 - HUMSS', 'Grade 11 - ABM', 'Grade 12 - STEM', 'Grade 12 - HUMSS', 'Grade 12 - ABM'];
@@ -694,7 +681,7 @@ function renderUsers(c) {
   const rows = filteredUsers.map(u => [
     esc(u.username), esc(u.name), esc(u.role), esc(u.section||'—'),
     `<div style="display:flex; gap:5px;">
-        ${u.role === 'Student' ? `<button type="button" class="btn secondary" onclick="alert('Please edit student details in Student Directory')">Edit</button>` : (u.role === 'Faculty' ? `<button type="button" class="btn secondary" data-username="${esc(u.username)}" onclick="window.editFaculty(this)">Edit</button>` : '')}
+        ${u.role === 'Student' ? `<button type="button" class="btn secondary" onclick="alert('Please edit student details in Student Directory')">Edit</button>` : (u.role === 'Faculty' ? `<button type="button" class="btn secondary edit-faculty-btn" data-username="${esc(u.username)}">Edit</button>` : '')}
         ${u.role !== 'Admin' ? `<button type="button" class="btn" style="background:#a00;" onclick="deleteUser('${esc(u.username)}')">Delete</button>` : ''}
      </div>`
   ]);
@@ -1152,3 +1139,18 @@ function renderStudentProfile(c) {
       </div>
     </div>`;
 }
+
+// --- EVENT DELEGATION PARA SA EDIT BUTTONS ---
+document.addEventListener('click', (e) => {
+  // Para sa Student Edit Button
+  if (e.target && e.target.classList.contains('edit-student-btn')) {
+    const id = e.target.getAttribute('data-id');
+    if(id) openStudentForm(id);
+  }
+  
+  // Para sa Faculty Edit Button (pati na sa Users tab)
+  if (e.target && e.target.classList.contains('edit-faculty-btn')) {
+    const username = e.target.getAttribute('data-username');
+    if(username) openEditFacultyForm(username);
+  }
+});
