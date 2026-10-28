@@ -390,18 +390,34 @@ app.post('/api/grades', (req, res) => {
 app.get('/api/student/grades/:studentId', (req, res) => db.all("SELECT * FROM grades WHERE studentId = ?", [req.params.studentId], (err, rows) => res.json(err ? [] : rows)));
 app.get('/api/schedules', (req, res) => db.all("SELECT * FROM schedules", [], (err, rows) => res.json(err ? [] : rows)));
 
-// INI-AYOS NA SCHEDULE ROUTE PARA MAKUHA ANG SUBJECT TEACHER
 app.get('/api/schedules/:gradeLevel/:section', (req, res) => {
     db.all(`SELECT s.*, c.name AS courseName, c.subjectTeacher AS teacherName FROM schedules s JOIN courses c ON s.courseCode = c.code WHERE c.gradeLevel = ? AND s.section = ?`, [req.params.gradeLevel, req.params.section], (err, rows) => {
         res.json(err ? [] : rows);
     });
 });
 
+// ATTENDANCE ROUTES
 app.get('/api/attendance/:courseCode/:section/:date', (req, res) => db.all(`SELECT * FROM attendance WHERE courseCode = ? AND section = ? AND date = ?`, [req.params.courseCode, req.params.section, req.params.date], (err, rows) => res.json(err ? [] : rows)));
 app.post('/api/attendance', (req, res) => {
     const { courseCode, section, studentId, date, status } = req.body;
     db.run(`INSERT INTO attendance (courseCode, section, studentId, date, status) VALUES (?,?,?,?,?) ON CONFLICT(courseCode, section, studentId, date) DO UPDATE SET status=excluded.status`, [courseCode, section, studentId, date, status], (e) => res.json({ message: "Recorded" }));
 });
+
+// BAGONG ROUTE PARA SA ATTENDANCE HISTORY PER SECTION
+app.get('/api/attendance/history/:section', (req, res) => {
+    const sectionStr = req.params.section;
+    // Kunin ang lahat ng attendance records para sa section na ito, i-group by date at courseCode
+    db.all(`SELECT a.*, s.first, s.last, c.name as courseName, c.gradeLevel 
+            FROM attendance a 
+            JOIN students s ON a.studentId = s.id 
+            JOIN courses c ON a.courseCode = c.code 
+            WHERE a.section = ? 
+            ORDER BY a.date DESC, a.courseCode`, [sectionStr], (err, rows) => {
+        if (err) return res.status(500).json({ error: err.message });
+        res.json(rows);
+    });
+});
+
 app.get('/api/student/records/:studentId', (req, res) => db.all("SELECT * FROM student_records WHERE studentId = ? ORDER BY gradeLevel", [req.params.studentId], (err, rows) => res.json(err ? [] : rows)));
 
 app.listen(port, () => console.log(`✅ Server running on port ${port}`));

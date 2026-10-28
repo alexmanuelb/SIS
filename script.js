@@ -691,7 +691,15 @@ async function deleteUser(username) {
 }
 
 async function renderClassRecords(c) {
-  const myCourses = db.courses.filter(x => x.adviser === session.name || x.subjectTeacher === session.name);
+  const myCourses = db.courses.filter(x => {
+    const isTeacher = x.adviser === session.name || x.subjectTeacher === session.name;
+    if (!isTeacher) return false;
+    if (x.gradeLevel.includes('Grade 11') || x.gradeLevel.includes('Grade 12')) {
+        return x.gradeLevel.includes(db.activeTerm);
+    }
+    return true;
+  });
+
   const groups = {};
   for (const crs of myCourses) {
     const key = crs.gradeLevel + ' | Section ' + crs.section;
@@ -700,7 +708,7 @@ async function renderClassRecords(c) {
   }
   let html = `<div class="panel"><h2>Class Records</h2><p>Click a folder to view enrolled students.</p>`;
   for (const key of Object.keys(groups)) html += `<div class="folder" onclick="showClassFolder('${esc(key)}')"><span>📁 ${esc(key)}</span> <span>&rarr;</span></div>`;
-  if(Object.keys(groups).length === 0) html += `<p style="color:#999;">No classes assigned to you.</p>`;
+  if(Object.keys(groups).length === 0) html += `<p style="color:#999;">No classes assigned to you for ${esc(db.activeTerm)}.</p>`;
   html += `<div id="classFolderView"></div></div>`;
   c.innerHTML = html;
 }
@@ -719,13 +727,21 @@ async function showClassFolder(key) {
 }
 
 function renderGradeEntry(c) {
-  const myCourses = db.courses.filter(x => x.adviser === session.name || x.subjectTeacher === session.name);
+  const myCourses = db.courses.filter(x => {
+    const isTeacher = x.adviser === session.name || x.subjectTeacher === session.name;
+    if (!isTeacher) return false;
+    if (x.gradeLevel.includes('Grade 11') || x.gradeLevel.includes('Grade 12')) {
+        return x.gradeLevel.includes(db.activeTerm);
+    }
+    return true;
+  });
+
   const sections = [...new Set(myCourses.map(x => x.gradeLevel + ' | Section ' + x.section))];
 
   let html = `<div class="panel"><h2>Grade Entry</h2><p>Select a section folder to view students and enter grades.</p>`;
   
   if(sections.length === 0) {
-      html += `<p style="color:#999;">No classes assigned to you.</p>`;
+      html += `<p style="color:#999;">No classes assigned to you for ${esc(db.activeTerm)}.</p>`;
   } else {
       sections.forEach(sec => {
           html += `<div class="folder" onclick="showGradeEntryFolder('${esc(sec)}')"><span>📁 ${esc(sec)}</span> <span>&rarr;</span></div>`;
@@ -816,15 +832,36 @@ async function submitBulkGrades() {
   }
 }
 
+// --- UPDATED ATTENDANCE SECTION WITH LOGS ---
 function renderAttendance(c) {
   const myCourses = db.courses.filter(x => x.adviser === session.name || x.subjectTeacher === session.name);
-  c.innerHTML = `<div class="panel"><h2>Attendance</h2><div class="form-panel" style="display:flex; gap:20px; align-items:flex-end;">
-    <div class="field" style="flex:1;"><label>Course</label><select id="att_course">${myCourses.map(x=>`<option value="${esc(x.code)}">${esc(x.name)} — Sec ${esc(x.section)}</option>`).join('')}</select></div>
-    <div class="field" style="flex:1;"><label>Date</label><input type="date" id="att_date" value="${new Date().toISOString().slice(0,10)}"></div>
-    <button class="btn" style="margin-bottom:2px;" onclick="loadAttendance()">Load Students</button>
-  </div><div id="att_list" style="margin-top:20px;"></div></div>`;
+  const sections = [...new Set(myCourses.map(x => x.section))]; // Kunin lahat ng sections na hawak
+
+  let html = `<div class="panel"><h2>Attendance</h2>
+    <div class="form-panel" style="display:flex; gap:20px; align-items:flex-end; margin-bottom:20px;">
+      <div class="field" style="flex:1;"><label>Course</label><select id="att_course">${myCourses.map(x=>`<option value="${esc(x.code)}">${esc(x.name)} — Sec ${esc(x.section)}</option>`).join('')}</select></div>
+      <div class="field" style="flex:1;"><label>Date</label><input type="date" id="att_date" value="${new Date().toISOString().slice(0,10)}"></div>
+      <button class="btn" style="margin-bottom:2px;" onclick="loadAttendance()">Load Students</button>
+    </div>
+    <div id="att_list" style="margin-bottom:30px;"></div>
+    
+    <hr style="border:0; border-top:1px solid #eaeaea; margin-bottom:20px;">
+    <h3 style="color:#5c0000; margin-bottom:15px;">Attendance Records History</h3>
+    <p style="color:#666; margin-bottom:15px; font-size:14px;">Click a folder below to view all submitted attendance records for a specific section.</p>
+    <div style="display:grid; gap:10px;">`;
+
+  if(sections.length === 0) {
+      html += `<p style="color:#999;">No classes assigned to you.</p>`;
+  } else {
+      sections.forEach(sec => {
+          html += `<div class="folder" onclick="showAttendanceHistory('${esc(sec)}')"><span>📁 Section ${esc(sec)}</span> <span>&rarr;</span></div>`;
+      });
+  }
+  html += `</div><div id="attendance_history_view" style="margin-top:20px;"></div></div>`;
+  c.innerHTML = html;
 }
 
+// Function para i-load ang students sa form
 async function loadAttendance() {
   const code = $('att_course').value;
   const date = $('att_date').value;
@@ -837,7 +874,8 @@ async function loadAttendance() {
   }
   const existing = await (await fetch(`/api/attendance/${code}/${crs.section}/${date}`)).json();
   const map = {}; existing.forEach(e => map[e.studentId] = e.status);
-  $('att_list').innerHTML = `<table><thead><tr><th>Student Name</th><th>Status</th></tr></thead><tbody>
+  $('att_list').innerHTML = `<h4 style="margin-bottom:10px;">Taking Attendance: ${esc(crs.name)} (${esc(date)})</h4>
+  <table><thead><tr><th>Student Name</th><th>Status</th></tr></thead><tbody>
     ${list.map(s => `<tr><td>${esc(s.last+', '+s.first)}</td><td><select onchange="markAttendance('${code}','${esc(crs.section)}','${esc(s.id)}','${date}', this.value)" style="padding:8px; border-radius:4px; border:1px solid #ccc;">
       <option value="Present" ${map[s.id]==='Present'?'selected':''}>Present</option><option value="Absent" ${map[s.id]==='Absent'?'selected':''}>Absent</option><option value="Late" ${map[s.id]==='Late'?'selected':''}>Late</option>
     </select></td></tr>`).join('')}</tbody></table>`;
@@ -845,6 +883,58 @@ async function loadAttendance() {
 
 async function markAttendance(courseCode, section, studentId, date, status) {
   await fetch('/api/attendance', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ courseCode, section, studentId, date, status }) });
+}
+
+// Function para i-view ang Attendance History per section
+async function showAttendanceHistory(section) {
+  const history = await (await fetch(`/api/attendance/history/${encodeURIComponent(section)}`)).json();
+  
+  if(history.length === 0) {
+      $('attendance_history_view').innerHTML = `<div class="panel" style="background:#f9f9f9; border-left:4px solid #ccc;"><p style="color:#666;">No attendance records found for Section ${esc(section)} yet.</p></div>`;
+      return;
+  }
+
+  // I-group by Date at Subject
+  const grouped = {};
+  history.forEach(h => {
+      const key = `${h.date} | ${h.courseName}`;
+      if(!grouped[key]) grouped[key] = [];
+      grouped[key].push(h);
+  });
+
+  let html = `<div class="panel" style="border:2px solid #5c0000;">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
+        <h3 style="color:#5c0000; margin:0;">History: Section ${esc(section)}</h3>
+        <button class="btn secondary" onclick="$('attendance_history_view').innerHTML=''">Close</button>
+      </div>
+      <div style="display:grid; gap:15px;">`;
+
+  for(const key of Object.keys(grouped).sort().reverse()) { // Pinakabago sa taas
+      const [date, subject] = key.split(' | ');
+      const records = grouped[key];
+
+      html += `<div style="background:#fff0f0; padding:15px; border-radius:8px; border-left:4px solid #a00;">
+          <h4 style="margin-bottom:10px; color:#333;">📅 ${esc(date)} — ${esc(subject)}</h4>
+          <table style="width:100%; font-size:14px; background:white; border-radius:6px; overflow:hidden;">
+              <thead><tr style="background:#f0f0f0;">
+                  <th style="padding:8px; text-align:left;">Student Name</th>
+                  <th style="padding:8px; text-align:left;">Status</th>
+              </tr></thead>
+              <tbody>
+                  ${records.map(r => {
+                      const color = r.status === 'Present' ? 'green' : r.status === 'Late' ? 'orange' : 'red';
+                      return `<tr style="border-bottom:1px solid #eee;">
+                          <td style="padding:8px;">${esc(r.last)}, ${esc(r.first)}</td>
+                          <td style="padding:8px; font-weight:bold; color:${color};">${esc(r.status)}</td>
+                      </tr>`;
+                  }).join('')}
+              </tbody>
+          </table>
+      </div>`;
+  }
+
+  html += `</div></div>`;
+  $('attendance_history_view').innerHTML = html;
 }
 
 function renderRegistration(c) {
@@ -877,7 +967,6 @@ function renderRegistration(c) {
   </div>`;
 }
 
-// INI-AYOS NA SCHEDULE DISPLAY PARA BASAHIN ANG teacherName
 async function renderSchedule(c) {
   const s = currentStudent();
   
