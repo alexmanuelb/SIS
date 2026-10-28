@@ -456,7 +456,6 @@ async function saveFaculty() {
   }
 }
 
-// --- INI-AYOS NA EDIT FACULTY FUNCTION ---
 function openEditFacultyForm(username) {
   const user = db.users.find(u => u.username === username);
   if(!user) return alert('User not found');
@@ -634,14 +633,16 @@ async function saveNewSection() {
   alert(`Section ${newSec} created for ${grade}!`);
 }
 
-// --- UPDATED USERS & ACCESS WITH FILTER AND STUDENTS ---
 function renderUsers(c) {
   let filterVal = 'All';
   if($('userFilter')) filterVal = $('userFilter').value;
 
   let filteredUsers = db.users;
   if(filterVal !== 'All') {
-      filteredUsers = db.users.filter(u => u.role === filterVal);
+      filteredUsers = db.users.filter(u => {
+          if(filterVal === 'Students') return u.role === 'Student';
+          return u.role === filterVal;
+      });
   }
 
   const rows = filteredUsers.map(u => [
@@ -665,7 +666,7 @@ function renderUsers(c) {
         <option value="All" ${filterVal === 'All' ? 'selected' : ''}>All Users</option>
         <option value="Admin" ${filterVal === 'Admin' ? 'selected' : ''}>Admin</option>
         <option value="Faculty" ${filterVal === 'Faculty' ? 'selected' : ''}>Faculty</option>
-        <option value="Student" ${filterVal === 'Student' ? 'selected' : ''}>Students</option>
+        <option value="Students" ${filterVal === 'Students' ? 'selected' : ''}>Students</option>
       </select>
     </div>
 

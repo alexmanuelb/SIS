@@ -76,7 +76,7 @@ function buildDatabase() {
         ];
         teachers.forEach((name, i) => {
             const firstName = name.split(' ')[1] || 'Teacher';
-            const email = `t${firstName.toLowerCase()}${i}@gmail.com`; // Naka-gmail na
+            const email = `t${firstName.toLowerCase()}${i}@gmail.com`;
             insertUser.run(`t${firstName.toLowerCase()}${i}`, `${firstName.toLowerCase()}123`, name, 'Faculty', '', email);
         });
         insertUser.finalize();
@@ -213,7 +213,27 @@ app.post('/api/settings/term', (req, res) => {
     });
 });
 
-app.get('/api/users', (req, res) => db.all("SELECT username, name, role, section, email FROM users", [], (err, rows) => res.json(err ? [] : rows)));
+// INI-AYOS NA USERS ROUTE (May Auto-Sync para sa Students)
+app.get('/api/users', (req, res) => {
+    db.all("SELECT * FROM students", [], (err, students) => {
+        if (err || !students) return res.status(500).json({ error: "DB Error" });
+        
+        db.all("SELECT username FROM users WHERE role = 'Student'", [], (err, existingUsers) => {
+            const existingUsernames = existingUsers.map(u => u.username);
+            
+            // I-save ang mga students sa users table kung wala pa
+            students.forEach(s => {
+                if (!existingUsernames.includes(s.id)) {
+                    db.run(`INSERT INTO users (username, password, name, role, section, email) VALUES (?,?,?,'Student',?,?)`, 
+                    [s.id, s.password || `${s.first.toLowerCase()}123`, `${s.first} ${s.last}`, s.yr, s.email]);
+                }
+            });
+
+            // Kunin ang listahan
+            db.all("SELECT username, name, role, section, email FROM users", [], (err, rows) => res.json(err ? [] : rows));
+        });
+    });
+});
 
 app.post('/api/faculty', (req, res) => {
     const { username, password, name, role, section, email } = req.body;
