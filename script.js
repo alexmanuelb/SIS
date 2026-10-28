@@ -6,12 +6,10 @@ const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt
 // --- SMART MATCHING HELPER PARA SA SHS AT JHS/ELEM ---
 function isStudentInSection(studentYr, courseGradeLevel, courseSection) {
     if (!studentYr || !courseGradeLevel) return false;
-    
     const studentGrade = studentYr.split(' - ')[0].trim();
     const courseBaseGrade = courseGradeLevel.split(' - ')[0].trim();
     const secMatch = studentYr.match(/Sec(?:tion)?\s*(\d+)/i);
     const studentSec = secMatch ? secMatch[1] : '';
-    
     return studentGrade === courseBaseGrade && studentSec === courseSection.toString().trim();
 }
 
@@ -24,7 +22,6 @@ function getSectionFromYr(yrString) {
 function togglePassword() {
   const passInput = $('loginPass');
   const icon = $('toggleIcon');
-  
   if (passInput.type === 'password') {
     passInput.type = 'text';
     icon.innerHTML = `<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle>`;
@@ -314,6 +311,7 @@ function computeAge() {
   document.getElementById('f_age').value = age;
 }
 
+// --- INI-AYOS NA EDIT STUDENT (Form Panel, hindi Prompt) ---
 function openStudentForm(id) {
   const s = id ? db.students.find(x => x.id === id) : null;
   const nextId = s ? s.id : '2026-' + Math.floor(1000 + Math.random() * 9000);
@@ -529,35 +527,67 @@ async function saveFaculty() {
   else alert('Teacher created!');
 }
 
-// --- BAGONG FIX PARA SA EDIT FACULTY (Gumagana kahit saan) ---
+// --- INI-AYOS NA EDIT FACULTY (Form Panel, hindi Prompt) ---
 window.openEditFacultyForm = function(username) {
   const user = db.users.find(u => u.username === username);
   if(!user) return alert('User not found');
   
-  const newName = prompt("Edit Full Name:", user.name);
-  if (newName === null || newName.trim() === "") return; 
-
-  const newPass = prompt("Enter new password (leave blank to keep current):", "");
-  if (newPass === null) return;
-
-  const newDept = prompt("Edit Department:", user.section || "");
-  if (newDept === null) return;
-
-  const rec = { username: user.username, password: newPass, name: newName.trim(), role: 'Faculty', section: newDept.trim() };
+  const currentAdvisory = db.courses.filter(crs => crs.adviser === user.name).map(crs => `${crs.gradeLevel} - Section ${crs.section}`);
+  const currentAdvisoryStr = currentAdvisory.length > 0 ? currentAdvisory[0] : "";
   
-  fetch('/api/users/update', { 
-      method: 'POST', 
-      headers: {'Content-Type': 'application/json'}, 
-      body: JSON.stringify(rec) 
-  }).then(async res => {
-      if(res.ok) {
-          alert('Teacher updated successfully!');
-          db.users = await (await fetch('/api/users')).json();
-          renderFacultyDirectory($('content')); 
-      } else {
-          alert('Failed to update teacher.');
-      }
-  });
+  const grades = ['Grade 1', 'Grade 2', 'Grade 3', 'Grade 4', 'Grade 5', 'Grade 6', 'Grade 7', 'Grade 8', 'Grade 9', 'Grade 10', 'Grade 11 - STEM', 'Grade 11 - HUMSS', 'Grade 11 - ABM', 'Grade 12 - STEM', 'Grade 12 - HUMSS', 'Grade 12 - ABM'];
+  const sections = ['1', '2'];
+  let uniqueSections = [];
+  grades.forEach(g => sections.forEach(s => uniqueSections.push(`${g} - Section ${s}`)));
+
+  $('facultyFormArea').innerHTML = `
+    <div class="form-panel" style="border-left: 4px solid #5c0000;">
+      <h3 style="color:#5c0000; margin-bottom:15px;">Edit Teacher: ${esc(user.name)}</h3>
+      <div class="form-grid">
+        <div class="field"><label>Username (Read-only)</label><input value="${esc(user.username)}" readonly style="background:#e9ecef;"></div>
+        <div class="field"><label>New Password (Leave blank to keep)</label><input id="et_pass" type="password"></div>
+        <div class="field"><label>Full Name</label><input id="et_name" value="${esc(user.name)}"></div>
+        <div class="field"><label>Department</label><input id="et_dept" value="${esc(user.section||'')}"></div>
+        <div class="field" style="grid-column: span 2;"><label>Advisory Class</label>
+          <select id="et_advisory">
+            <option value="">-- No Advisory Class --</option>
+            ${uniqueSections.map(s => `<option value="${esc(s)}" ${currentAdvisoryStr === s ? 'selected' : ''}>${esc(s)}</option>`).join('')}
+          </select>
+        </div>
+      </div>
+      <button type="button" class="btn" onclick="updateFaculty('${esc(user.username)}')">Save Changes</button>
+      <button type="button" class="btn secondary" onclick="$('facultyFormArea').innerHTML=''">Cancel</button>
+    </div>`;
+}
+
+async function updateFaculty(username) {
+  const newName = $('et_name').value.trim();
+  const newPass = $('et_pass').value.trim();
+  const newDept = $('et_dept').value.trim();
+  const newAdvisory = $('et_advisory').value;
+  const oldUser = db.users.find(u => u.username === username);
+
+  const rec = { username, password: newPass, name: newName, role: 'Faculty', section: newDept };
+  await fetch('/api/users/update', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(rec) });
+
+  const oldCourses = db.courses.filter(c => c.adviser === oldUser.name);
+  for(const c of oldCourses) {
+      await fetch('/api/courses', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...c, adviser: '' }) });
+  }
+
+  if (newAdvisory) {
+    const [gradePart, sectionPart] = newAdvisory.split(' - Section ');
+    const newCourses = db.courses.filter(c => c.gradeLevel === gradePart.trim() && c.section === sectionPart.trim());
+    for(const c of newCourses) {
+        await fetch('/api/courses', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...c, adviser: newName }) });
+    }
+  }
+
+  db.users = await (await fetch('/api/users')).json();
+  db.courses = await (await fetch('/api/courses')).json();
+  $('facultyFormArea').innerHTML = '';
+  renderFacultyDirectory($('content'));
+  alert('Teacher updated successfully!');
 }
 
 function renderCourses(c) {
