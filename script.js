@@ -257,7 +257,7 @@ function renderActiveDirectory(c) {
   
   const totalStudents = active.length;
   
-  // BINAGO: Gumamit ng data-id at window.editStudent(this) para iwasan ang syntax error
+  // GUMAGANA NA STUDENT EDIT BUTTON
   let rows = active.map(s => [
       esc(s.id), esc(s.last), esc(s.first), esc(s.yr), 
       `<span class="badge ${s.status === 'Active' ? 'active' : 'inactive'}">${esc(s.status)}</span>`,
@@ -296,7 +296,7 @@ function renderActiveDirectory(c) {
   </div>`;
 }
 
-// BAGONG HELPER PARA SA STUDENT EDIT
+// BAGONG HELPER PARA SA STUDENT EDIT (Katulad ng Faculty)
 window.editStudent = function(btn) {
   const id = btn.getAttribute('data-id');
   if(id) openStudentForm(id);
@@ -438,7 +438,6 @@ async function saveStudent(existingId) {
 function renderFacultyDirectory(c) {
   const facultyList = db.users.filter(u => u.role === 'Faculty');
   
-  // BINAGO: Gumamit ng data-username at window.editFaculty(this)
   const rows = facultyList.map(f => {
     const advised = db.courses.filter(crs => crs.adviser === f.name).map(crs => `${crs.gradeLevel} (Sec ${crs.section})`);
     const advisoryDisplay = advised.length > 0 ? advised[0] : '<span style="color:#999;">None</span>';
