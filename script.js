@@ -3,21 +3,22 @@ let session = null;
 const $ = id => document.getElementById(id);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 
-// --- HELPER PARA SA EXACT MATCH NG STUDENT SA SECTION ---
+// --- SMART MATCHING HELPER PARA SA SHS AT JHS/ELEM ---
 function isStudentInSection(studentYr, courseGradeLevel, courseSection) {
     if (!studentYr || !courseGradeLevel) return false;
     
-    // I-split ang studentYr (e.g., "Grade 11 - STEM - 1st Semester - Sec 1")
-    const parts = studentYr.split(' - ');
+    // Kunin ang Grade Level ng student (e.g., "Grade 11")
+    const studentGrade = studentYr.split(' - ')[0].trim();
     
-    // Ang unang part ay dapat exact match sa grade level (e.g., "Grade 11")
-    const studentGrade = parts[0].trim();
+    // Kunin ang Grade Level ng course (e.g., "Grade 11" from "Grade 11 - STEM - 1st Semester")
+    const courseBaseGrade = courseGradeLevel.split(' - ')[0].trim();
     
-    // Kunin ang section number (pwedeng "Sec 1" o "Section 1")
+    // Kunin ang Section ng student (e.g., "1")
     const secMatch = studentYr.match(/Sec(?:tion)?\s*(\d+)/i);
     const studentSec = secMatch ? secMatch[1] : '';
-
-    return studentGrade === courseGradeLevel.trim() && studentSec === courseSection.toString().trim();
+    
+    // Match: Same Grade Level ba sila? At same Section?
+    return studentGrade === courseBaseGrade && studentSec === courseSection.toString().trim();
 }
 
 // --- EYE ICON TOGGLE LOGIC ---
@@ -244,7 +245,6 @@ function renderActiveDirectory(c) {
   let active = db.students.filter(s => s.status !== 'Archived' && s.status !== 'Graduated');
   
   if (currentFilter !== 'All') {
-      // Exact match sa Grade Level
       active = active.filter(s => s.yr.split(' - ')[0].trim() === currentFilter);
   }
   
@@ -759,7 +759,7 @@ async function deleteUser(username) {
   }
 }
 
-// --- INI-AYOS NA CLASS RECORDS (Exact Match using Helper Function) ---
+// --- INI-AYOS NA CLASS RECORDS (Smart Match) ---
 async function renderClassRecords(c) {
   const myCourses = db.courses.filter(x => {
     const isTeacher = x.adviser === session.name || x.subjectTeacher === session.name;
@@ -784,7 +784,7 @@ async function renderClassRecords(c) {
       const [gradeLevel, secName] = key.split('|');
       const sectionNumber = secName.replace('Section ', '').trim();
       
-      // GAMITIN ANG HELPER FUNCTION PARA SA EKSAKTONG BILANG
+      // SMART MATCH: Gamitin ang helper function
       const studentCount = db.students.filter(s => isStudentInSection(s.yr, gradeLevel, sectionNumber)).length;
       
       html += folderCard(`${esc(gradeLevel)}`, `${esc(secName)} • ${studentCount} Students`, `showClassFolder('${esc(gradeLevel)}', '${esc(secName)}')`);
@@ -799,7 +799,7 @@ async function showClassFolder(gradeLevel, secName) {
   const section = secName.replace('Section ', '').trim();
   const keyStr = `${gradeLevel} | ${secName}`;
   
-  // GAMITIN ANG HELPER FUNCTION PARA SA LISTAHAN
+  // SMART MATCH: Gamitin ang helper function
   let students = db.students.filter(s => isStudentInSection(s.yr, gradeLevel, section));
   
   const attendanceHistory = await (await fetch(`/api/attendance/history/${encodeURIComponent(section)}`)).json();
@@ -884,7 +884,7 @@ async function showGradeEntryFolder(gradeLevel, secName) {
   
   const myCourses = db.courses.filter(x => (x.adviser === session.name || x.subjectTeacher === session.name) && x.gradeLevel === gradeLevel && x.section === section);
   
-  // GAMITIN ANG HELPER FUNCTION
+  // SMART MATCH
   let students = db.students.filter(s => isStudentInSection(s.yr, gradeLevel, section));
 
   const males = students.filter(s => s.gender === 'Male').sort((a, b) => a.last.localeCompare(b.last));
