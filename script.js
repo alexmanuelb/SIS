@@ -182,11 +182,31 @@ async function updateGlobalTerm() {
   alert('Global School Term updated to ' + newTerm + '. Student records and schedules will now reflect this term.');
 }
 
+// --- INI-AYOS NA FACULTY DASHBOARD (May Students Handled) ---
 function renderFacultyDashboard(c) {
   const myCourses = db.courses.filter(x => x.adviser === session.name || x.subjectTeacher === session.name);
+  
+  const uniqueStudents = new Set();
+  
+  myCourses.forEach(crs => {
+      // Exact match para sa Grade Level at Section
+      const enrolled = db.students.filter(s => {
+          const parts = s.yr.split(' - ');
+          const studentGrade = parts[0].trim();
+          const studentSec = s.yr.split('Sec ')[1] ? s.yr.split('Sec ')[1].trim() : '';
+          return studentGrade === crs.gradeLevel && studentSec === crs.section;
+      });
+      enrolled.forEach(s => uniqueStudents.add(s.id));
+  });
+
+  const totalStudentsHandled = uniqueStudents.size;
+
   c.innerHTML = `
     <div class="dashboard-cards">
       <div class="stat-card"><h3>${myCourses.length}</h3><p>MY ASSIGNED CLASSES</p></div>
+      <div class="stat-card" style="background: linear-gradient(135deg, #a00000, #800000);">
+        <h3>${totalStudentsHandled}</h3><p>STUDENTS HANDLED</p>
+      </div>
     </div>
     <div class="panel"><h2>Faculty Dashboard</h2><p>Welcome, <b>${esc(session.name)}</b>.</p></div>`;
 }
@@ -206,17 +226,13 @@ function renderStudentDashboard(c) {
 
 // --- STUDENT DIRECTORY (May Edit Button at Filter) ---
 function renderActiveDirectory(c) {
-  // Kunin ang unique na listahan ng Grade Level para sa dropdown
   const uniqueGrades = [...new Set(db.students.map(s => s.yr.split(' - ')[0]))].filter(Boolean).sort();
-  
-  // Kunin ang kasalukuyang napiling filter
   const currentFilter = $('directoryFilter') ? $('directoryFilter').value : 'All';
 
   let active = db.students.filter(s => s.status !== 'Archived' && s.status !== 'Graduated');
   
-  // I-apply ang filter
   if (currentFilter !== 'All') {
-      active = active.filter(s => s.yr.includes(currentFilter));
+      active = active.filter(s => s.yr.startsWith(currentFilter + ' - ') || s.yr === currentFilter);
   }
   
   let rows = active.map(s => [
@@ -752,7 +768,15 @@ async function renderClassRecords(c) {
     
   for (const key of Object.keys(groups)) {
       const [gradeLevel, secName] = key.split('|');
-      const studentCount = db.students.filter(s => s.yr.includes(gradeLevel) && s.yr.includes(secName.replace('Section ', 'Sec '))).length;
+      const sectionNumber = secName.replace('Section ', '').trim();
+      
+      // EKSAKTONG BILANG NG STUDENTS (Exact Match sa Grade at Sec)
+      const studentCount = db.students.filter(s => {
+          const parts = s.yr.split(' - ');
+          const studentGrade = parts[0].trim();
+          const studentSec = s.yr.split('Sec ')[1] ? s.yr.split('Sec ')[1].trim() : '';
+          return studentGrade === gradeLevel && studentSec === sectionNumber;
+      }).length;
       
       html += folderCard(`${esc(gradeLevel)}`, `${esc(secName)} • ${studentCount} Students`, `showClassFolder('${esc(gradeLevel)}', '${esc(secName)}')`);
   }
@@ -766,7 +790,13 @@ async function showClassFolder(gradeLevel, secName) {
   const section = secName.replace('Section ', '').trim();
   const keyStr = `${gradeLevel} | ${secName}`;
   
-  let students = db.students.filter(s => s.yr.includes(gradeLevel) && s.yr.includes('Sec ' + section));
+  // EKSAKTONG FILTER PARA SA STUDENTS
+  let students = db.students.filter(s => {
+      const parts = s.yr.split(' - ');
+      const studentGrade = parts[0].trim();
+      const studentSec = s.yr.split('Sec ')[1] ? s.yr.split('Sec ')[1].trim() : '';
+      return studentGrade === gradeLevel && studentSec === section;
+  });
   
   const attendanceHistory = await (await fetch(`/api/attendance/history/${encodeURIComponent(section)}`)).json();
 
@@ -805,7 +835,12 @@ async function openEditStatusModal(studentId, currentStatus) {
     if(res.ok) {
         alert('Status updated successfully!');
         db.students = await (await fetch('/api/students')).json();
-        const [gradeLevel, secName] = document.querySelector('#classFolderView h3').innerText.split(' — ')[0].split(' | ');
+        
+        const titleStr = document.querySelector('#classFolderView h3').innerText; 
+        const parts = titleStr.split(' — ')[0].split(' | ');
+        const gradeLevel = parts[0];
+        const secName = parts[1];
+        
         showClassFolder(gradeLevel, secName);
     } else {
         alert('Failed to update status.');
