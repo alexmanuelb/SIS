@@ -3,6 +3,14 @@ let session = null;
 const $ = id => document.getElementById(id);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 
+// --- HELPER: DYNAMIC SECTION LIST ---
+function getAvailableSections() {
+  const secs = [...new Set(
+    db.courses.map(c => String(c.section || '').trim()).filter(Boolean)
+  )].sort((a, b) => Number(a) - Number(b));
+  return secs.length > 0 ? secs : ['1', '2'];
+}
+
 // --- SMART MATCHING HELPER PARA SA SHS AT JHS/ELEM ---
 function isStudentInSection(studentYr, courseGradeLevel, courseSection) {
     if (!studentYr || !courseGradeLevel) return false;
@@ -244,7 +252,7 @@ function renderStudentDashboard(c) {
   setInterval(() => { if($('dash-clock')) $('dash-clock').textContent = new Date().toLocaleTimeString(); }, 1000);
 }
 
-// --- STUDENT DIRECTORY (May Top Edit Button) ---
+// --- STUDENT DIRECTORY (Dynamic Section Filter) ---
 function renderActiveDirectory(c) {
   const uniqueGrades = [...new Set(db.students.map(s => s.yr.split(' - ')[0]))].filter(Boolean).sort();
   const currentGradeFilter = $('directoryGradeFilter') ? $('directoryGradeFilter').value : 'All';
@@ -260,6 +268,8 @@ function renderActiveDirectory(c) {
       `<span class="badge ${s.status === 'Active' ? 'active' : 'inactive'}">${esc(s.status)}</span>`,
       `—`
   ]);
+
+  const availableSections = getAvailableSections();
 
   c.innerHTML = `<div class="panel">
     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
@@ -282,8 +292,7 @@ function renderActiveDirectory(c) {
           <label style="font-weight:bold; color:#5c0000;">Filter by Section:</label>
           <select id="directorySecFilter" onchange="renderActiveDirectory($('content'))" style="padding: 10px; border-radius: 6px; border: 1px solid #ccc; width: 150px; font-size:14px;">
             <option value="All" ${currentSecFilter === 'All' ? 'selected' : ''}>All Sections</option>
-            <option value="1" ${currentSecFilter === '1' ? 'selected' : ''}>Section 1</option>
-            <option value="2" ${currentSecFilter === '2' ? 'selected' : ''}>Section 2</option>
+            ${availableSections.map(sec => `<option value="${sec}" ${currentSecFilter === sec ? 'selected' : ''}>Section ${sec}</option>`).join('')}
           </select>
       </div>
       <div style="margin-left: auto; background:#5c0000; color:white; padding:10px 20px; border-radius:8px; font-weight:bold; font-size:14px; display:flex; align-items:center; gap:8px;">
@@ -366,7 +375,7 @@ async function saveTopEditStudent(id) {
     }
 }
 
-// --- USERS & ACCESS (May Top Edit Button) ---
+// --- USERS & ACCESS ---
 function renderUsers(c) {
   let filterVal = 'All';
   if($('userFilter')) filterVal = $('userFilter').value;
@@ -491,7 +500,7 @@ function computeAge() {
   document.getElementById('f_age').value = age;
 }
 
-// --- ADD STUDENT FORM ---
+// --- ADD STUDENT FORM (Dynamic Section Dropdown) ---
 function openStudentForm(id) {
   const s = id ? db.students.find(x => x.id === id) : null;
   const nextId = s ? s.id : '2026-' + Math.floor(1000 + Math.random() * 9000);
@@ -511,7 +520,14 @@ function openStudentForm(id) {
 
   const yearLevels = ['Grade 1', 'Grade 2', 'Grade 3', 'Grade 4', 'Grade 5', 'Grade 6', 'Grade 7', 'Grade 8', 'Grade 9', 'Grade 10', 'Grade 11', 'Grade 12'];
   const statuses = ['Active', 'Archived', 'Graduated', 'Inactive']; 
-  const sections = ['1', '2'];
+
+  // ✅ DYNAMIC SECTIONS — pull from db.courses
+  const sections = getAvailableSections();
+  // Ensure current student's section is in the list (in case it was archived/removed from courses)
+  if (currentSection && !sections.includes(currentSection)) {
+    sections.push(currentSection);
+    sections.sort((a, b) => Number(a) - Number(b));
+  }
 
   const formArea = $('enrollFormArea');
   if (!formArea) return alert('Form area not found. Please refresh the page.');
@@ -616,7 +632,7 @@ async function saveStudent(existingId) {
   $('enrollFormArea').innerHTML = ''; renderActiveDirectory($('content')); 
 }
 
-// --- FACULTY DIRECTORY (Inayos: Walang Action Column, May Top Edit Button) ---
+// --- FACULTY DIRECTORY ---
 function renderFacultyDirectory(c) {
   const facultyList = db.users.filter(u => u.role === 'Faculty');
   const rows = facultyList.map(f => {
@@ -638,7 +654,7 @@ function renderFacultyDirectory(c) {
   </div>`;
 }
 
-// --- TOP EDIT FORM PARA SA FACULTY ---
+// --- TOP EDIT FORM PARA SA FACULTY (Dynamic Advisory) ---
 function openTopEditFacultyForm() {
     $('facultyFormArea').innerHTML = `
         <div class="form-panel" style="border-left: 4px solid #5c0000; background: #fffdfd;">
@@ -666,9 +682,11 @@ function loadFacultyForTopEdit() {
     const currentAdvisoryStr = currentAdvisory.length > 0 ? currentAdvisory[0] : "";
     
     const grades = ['Grade 1', 'Grade 2', 'Grade 3', 'Grade 4', 'Grade 5', 'Grade 6', 'Grade 7', 'Grade 8', 'Grade 9', 'Grade 10', 'Grade 11 - STEM', 'Grade 11 - HUMSS', 'Grade 11 - ABM', 'Grade 12 - STEM', 'Grade 12 - HUMSS', 'Grade 12 - ABM'];
-    const sections = ['1', '2'];
+    
+    // ✅ DYNAMIC SECTIONS
+    const finalSections = getAvailableSections();
     let uniqueSections = [];
-    grades.forEach(g => sections.forEach(s => uniqueSections.push(`${g} - Section ${s}`)));
+    grades.forEach(g => finalSections.forEach(s => uniqueSections.push(`${g} - Section ${s}`)));
 
     $('top_edit_faculty_fields').innerHTML = `
         <div class="form-grid" style="margin-top:20px; border-top:1px dashed #ccc; padding-top:20px;">
@@ -719,12 +737,14 @@ async function saveTopEditFaculty(username) {
     alert('Teacher updated successfully!');
 }
 
-// --- ADD FACULTY FORM ---
+// --- ADD FACULTY FORM (Dynamic Advisory) ---
 function openAddFacultyForm() {
   const grades = ['Grade 1', 'Grade 2', 'Grade 3', 'Grade 4', 'Grade 5', 'Grade 6', 'Grade 7', 'Grade 8', 'Grade 9', 'Grade 10', 'Grade 11 - STEM', 'Grade 11 - HUMSS', 'Grade 11 - ABM', 'Grade 12 - STEM', 'Grade 12 - HUMSS', 'Grade 12 - ABM'];
-  const sections = ['1', '2'];
+  
+  // ✅ DYNAMIC SECTIONS
+  const finalSections = getAvailableSections();
   let uniqueSections = [];
-  grades.forEach(g => sections.forEach(s => uniqueSections.push(`${g} - Section ${s}`)));
+  grades.forEach(g => finalSections.forEach(s => uniqueSections.push(`${g} - Section ${s}`)));
 
   const formArea = $('facultyFormArea');
   if (!formArea) return alert('Form area not found. Please refresh the page.');
@@ -786,7 +806,7 @@ async function saveFaculty() {
   else alert('Teacher created!');
 }
 
-// --- IBA PANG FUNCTIONS (Walang binago) ---
+// --- COURSES ---
 function renderCourses(c) {
   const grades = ['Grade 1', 'Grade 2', 'Grade 3', 'Grade 4', 'Grade 5', 'Grade 6', 'Grade 7', 'Grade 8', 'Grade 9', 'Grade 10', 'Grade 11 - STEM - 1st Semester', 'Grade 11 - STEM - 2nd Semester', 'Grade 11 - HUMSS - 1st Semester', 'Grade 11 - HUMSS - 2nd Semester', 'Grade 11 - ABM - 1st Semester', 'Grade 11 - ABM - 2nd Semester', 'Grade 12 - STEM - 1st Semester', 'Grade 12 - STEM - 2nd Semester', 'Grade 12 - HUMSS - 1st Semester', 'Grade 12 - HUMSS - 2nd Semester', 'Grade 12 - ABM - 1st Semester', 'Grade 12 - ABM - 2nd Semester'];
   
@@ -1152,7 +1172,6 @@ function renderRegistration(c) {
   const s = currentStudent();
   const studentYear = s.yr.split('-')[0].trim(); 
   const studentTrack = s.yr.includes('STEM') ? 'STEM' : s.yr.includes('HUMSS') ? 'HUMSS' : s.yr.includes('ABM') ? 'ABM' : '';
-  const studentSem = s.yr.includes('2nd Semester') ? '2nd Semester' : '1st Semester';
   let studentSec = '1'; 
   if (s.yr.includes('Sec ')) studentSec = s.yr.split('Sec ')[1].trim();
 
