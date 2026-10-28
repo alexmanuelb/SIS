@@ -251,7 +251,7 @@ function renderStudentDashboard(c) {
   setInterval(() => { if($('dash-clock')) $('dash-clock').textContent = new Date().toLocaleTimeString(); }, 1000);
 }
 
-// --- STUDENT DIRECTORY (May Grade at Section Filter) ---
+// --- STUDENT DIRECTORY (May Grade at Section Filter + Total Count) ---
 function renderActiveDirectory(c) {
   const uniqueGrades = [...new Set(db.students.map(s => s.yr.split(' - ')[0]))].filter(Boolean).sort();
   const currentGradeFilter = $('directoryGradeFilter') ? $('directoryGradeFilter').value : 'All';
@@ -261,6 +261,9 @@ function renderActiveDirectory(c) {
   
   if (currentGradeFilter !== 'All') active = active.filter(s => s.yr.split(' - ')[0].trim() === currentGradeFilter);
   if (currentSecFilter !== 'All') active = active.filter(s => getSectionFromYr(s.yr) === currentSecFilter);
+  
+  // --- TOTAL STUDENTS COUNT ---
+  const totalStudents = active.length;
   
   let rows = active.map(s => [
       esc(s.id), esc(s.last), esc(s.first), esc(s.yr), 
@@ -289,6 +292,10 @@ function renderActiveDirectory(c) {
             <option value="1" ${currentSecFilter === '1' ? 'selected' : ''}>Section 1</option>
             <option value="2" ${currentSecFilter === '2' ? 'selected' : ''}>Section 2</option>
           </select>
+      </div>
+      <div style="margin-left: auto; background:#5c0000; color:white; padding:10px 20px; border-radius:8px; font-weight:bold; font-size:14px; display:flex; align-items:center; gap:8px;">
+        <span style="font-size:18px;">👥</span>
+        Total Students: <span style="font-size:20px;">${totalStudents}</span>
       </div>
     </div>
     <div id="enrollFormArea"></div>
