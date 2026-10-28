@@ -82,7 +82,7 @@ function buildDatabase() {
         });
         insertUser.finalize();
 
-        // --- STUDENT GENERATION LOGIC (30 per section for Elem/JHS, 27 for SHS) ---
+        // --- STUDENT GENERATION LOGIC (27 per section, unique names) ---
         const insertStudent = db.prepare(`INSERT INTO students (id, last, first, mi, address, course, yr, status, enrol, username, password, birthday, email, age, gender, guardianName, guardianContact) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
         
         const firstNamesList = ['Juan', 'Maria', 'Jose', 'Ana', 'Pedro', 'Rosa', 'Mark', 'Katie', 'Alexandra', 'Paul', 'Liza', 'Carlo', 'Mia', 'Leo', 'Ella', 'Ben', 'Sarah', 'David', 'Mary', 'James', 'John', 'Emily', 'Alan', 'Jane', 'Michael', 'Sarah', 'David', 'Jessica', 'Daniel', 'Ashley', 'Matthew', 'Amanda', 'Christopher', 'Melissa', 'Andrew', 'Stephanie', 'Joshua', 'Nicole', 'Ryan', 'Angela', 'Nicholas', 'Heather', 'Tyler', 'Amber', 'Brandon', 'Michelle', 'Zachary', 'Tiffany', 'Jacob', 'Christina'];
@@ -94,10 +94,8 @@ function buildDatabase() {
         let globalStudentCount = 0;
 
         for (let grade = 1; grade <= 12; grade++) {
-            // 2 sections per grade level
             for (let sec = 1; sec <= 2; sec++) {
-                // Elem/JHS = 30 per section. SHS = 27 per section.
-                let targetCount = (grade >= 11) ? 27 : 30;
+                let targetCount = (grade >= 11) ? 27 : 30; // 30 for Elem/JHS, 27 for SHS
 
                 for (let i = 0; i < targetCount; i++) {
                     const first = firstNamesList[globalStudentCount % firstNamesList.length];
@@ -116,7 +114,6 @@ function buildDatabase() {
                     if (grade >= 7 && grade <= 10) courseType = 'JHS';
                     if (grade >= 11) courseType = 'SHS';
 
-                    // Tamang format ng yr field
                     if (courseType === 'SHS') {
                         yrLevel = `Grade ${grade} - STEM - 1st Semester - Sec ${sec}`;
                     } else {
@@ -347,6 +344,7 @@ app.delete('/api/users/:username', (req, res) => {
     });
 });
 
+// --- INI-AYOS NA /api/students ROUTE (May Capacity Check) ---
 app.get('/api/students', (req, res) => db.all("SELECT * FROM students", [], (err, rows) => res.json(err ? [] : rows)));
 app.post('/api/students', (req, res) => {
     const { id, last, first, mi, address, course, yr, status, enrol, birthday, email, age, gender, guardianName, guardianContact } = req.body;
@@ -354,36 +352,55 @@ app.post('/api/students', (req, res) => {
     const fullName = `${first} ${last}`;
     const generatedPass = `${first.toLowerCase()}123`;
 
+    // Extract Grade Level and Section for capacity check
+    const parts = yr.split(' - ');
+    const gradeLevel = parts[0].trim();
+    const secMatch = yr.match(/Sec(?:tion)?\s*(\d+)/i);
+    const section = secMatch ? secMatch[1] : '';
+
     db.get("SELECT id FROM students WHERE id = ?", [id], async (err, row) => {
         if (row) {
+            // Kung EDIT, payagan lang (walang capacity check)
             db.run(`UPDATE students SET last=?, first=?, mi=?, address=?, course=?, yr=?, status=?, enrol=?, birthday=?, email=?, age=?, gender=?, guardianName=?, guardianContact=? WHERE id=?`, 
             [last, first, mi, address, course, yr, status, enrol, birthday, email, age, gender, guardianName, guardianContact, id], (e) => res.json({ message: e ? e.message : "Updated" }));
         } else {
-            db.run(`INSERT INTO students (id, last, first, mi, address, course, yr, status, enrol, username, password, birthday, email, age, gender, guardianName, guardianContact) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, 
-            [id, last, first, mi, address, course, yr, status, enrol, id, generatedPass, birthday, email, age, gender, guardianName, guardianContact], async (e) => {
-                if (e) return res.status(400).json({ error: e.message });
-                
-                db.run(`INSERT INTO users (username, password, name, role, section, email) VALUES (?,?,?,'Student',?,?)`, [id, generatedPass, fullName, yr, email], async () => {
-                    if (email && email.trim() !== "") {
-                        try {
-                            if(process.env.RESEND_API_KEY) {
-                                await resend.emails.send({
-                                    from: 'EduTrack <onboarding@resend.dev>', 
-                                    to: [email],
-                                    subject: 'Your EduTrack SIS Account',
-                                    html: `<div style="font-family: Arial, sans-serif; padding: 20px; color: #333;">
-                                            <h2 style="color: #5c0000;">Welcome to EduTrack, ${first}!</h2>
-                                            <p>Your student account has been successfully created. Here are your login credentials:</p>
-                                            <table style="margin-top: 15px; border-collapse: collapse;">
-                                                <tr><td style="padding: 5px; font-weight: bold;">Username:</td><td style="padding: 5px;">${id}</td></tr>
-                                                <tr><td style="padding: 5px; font-weight: bold;">Password:</td><td style="padding: 5px;">${generatedPass}</td></tr>
-                                            </table>
-                                        </div>`
-                                });
-                            }
-                        } catch (error) { console.error("❌ Failed to send email:", error); }
-                    }
-                    res.json({ message: "Student created!" });
+            // Kung NEW, i-check ang capacity
+            db.get(`SELECT COUNT(*) as count FROM students WHERE yr LIKE ? AND yr LIKE ?`, [`${gradeLevel}%`, `%Sec ${section}%`], (errCount, countRes) => {
+                if (errCount) return res.status(500).json({ error: "DB Error" });
+
+                const maxCapacity = (gradeLevel === 'Grade 11' || gradeLevel === 'Grade 12') ? 27 : 30;
+
+                if (countRes.count >= maxCapacity) {
+                    return res.status(400).json({ error: `Cannot add student. Section ${section} is already full (${countRes.count}/${maxCapacity} students).` });
+                }
+
+                // Kung may space pa, mag-insert
+                db.run(`INSERT INTO students (id, last, first, mi, address, course, yr, status, enrol, username, password, birthday, email, age, gender, guardianName, guardianContact) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, 
+                [id, last, first, mi, address, course, yr, status, enrol, id, generatedPass, birthday, email, age, gender, guardianName, guardianContact], async (e) => {
+                    if (e) return res.status(400).json({ error: e.message });
+                    
+                    db.run(`INSERT INTO users (username, password, name, role, section, email) VALUES (?,?,?,'Student',?,?)`, [id, generatedPass, fullName, yr, email], async () => {
+                        if (email && email.trim() !== "") {
+                            try {
+                                if(process.env.RESEND_API_KEY) {
+                                    await resend.emails.send({
+                                        from: 'EduTrack <onboarding@resend.dev>', 
+                                        to: [email],
+                                        subject: 'Your EduTrack SIS Account',
+                                        html: `<div style="font-family: Arial, sans-serif; padding: 20px; color: #333;">
+                                                <h2 style="color: #5c0000;">Welcome to EduTrack, ${first}!</h2>
+                                                <p>Your student account has been successfully created. Here are your login credentials:</p>
+                                                <table style="margin-top: 15px; border-collapse: collapse;">
+                                                    <tr><td style="padding: 5px; font-weight: bold;">Username:</td><td style="padding: 5px;">${id}</td></tr>
+                                                    <tr><td style="padding: 5px; font-weight: bold;">Password:</td><td style="padding: 5px;">${generatedPass}</td></tr>
+                                                </table>
+                                            </div>`
+                                    });
+                                }
+                            } catch (error) { console.error("❌ Failed to send email:", error); }
+                        }
+                        res.json({ message: "Student created!" });
+                    });
                 });
             });
         }

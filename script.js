@@ -206,7 +206,7 @@ async function updateGlobalTerm() {
   alert('Global School Term updated to ' + newTerm + '. Student records and schedules will now reflect this term.');
 }
 
-// --- FACULTY DASHBOARD (Tama na bilang ng Students Handled) ---
+// --- FACULTY DASHBOARD ---
 function renderFacultyDashboard(c) {
   const myCourses = db.courses.filter(x => x.adviser === session.name || x.subjectTeacher === session.name);
   
@@ -242,28 +242,25 @@ function renderStudentDashboard(c) {
   setInterval(() => { if($('dash-clock')) $('dash-clock').textContent = new Date().toLocaleTimeString(); }, 1000);
 }
 
-// --- INI-AYOS NA STUDENT DIRECTORY (May Grade Level at Section Filter) ---
+// --- STUDENT DIRECTORY (May Grade at Section Filter) ---
 function renderActiveDirectory(c) {
-  // Kunin ang unique na Grade Levels
   const uniqueGrades = [...new Set(db.students.map(s => s.yr.split(' - ')[0]))].filter(Boolean).sort();
   
-  // Kunin ang unique na Sections
-  const uniqueSections = [...new Set(db.students.map(s => getSectionFromYr(s.yr)))].filter(Boolean).sort();
-
-  // Kunin ang kasalukuyang napiling filters
   const currentGradeFilter = $('directoryGradeFilter') ? $('directoryGradeFilter').value : 'All';
-  const currentSectionFilter = $('directorySectionFilter') ? $('directorySectionFilter').value : 'All';
+  const currentSecFilter = $('directorySecFilter') ? $('directorySecFilter').value : 'All';
 
   let active = db.students.filter(s => s.status !== 'Archived' && s.status !== 'Graduated');
   
-  // I-apply ang Grade Level Filter
   if (currentGradeFilter !== 'All') {
       active = active.filter(s => s.yr.split(' - ')[0].trim() === currentGradeFilter);
   }
-  
-  // I-apply ang Section Filter
-  if (currentSectionFilter !== 'All') {
-      active = active.filter(s => getSectionFromYr(s.yr) === currentSectionFilter);
+
+  if (currentSecFilter !== 'All') {
+      active = active.filter(s => {
+          const secMatch = s.yr.match(/Sec(?:tion)?\s*(\d+)/i);
+          const studentSec = secMatch ? secMatch[1] : '';
+          return studentSec === currentSecFilter;
+      });
   }
   
   let rows = active.map(s => [
@@ -292,9 +289,10 @@ function renderActiveDirectory(c) {
 
       <div style="display:flex; align-items:center; gap:10px;">
           <label style="font-weight:bold; color:#5c0000;">Filter by Section:</label>
-          <select id="directorySectionFilter" onchange="renderActiveDirectory($('content'))" style="padding: 10px; border-radius: 6px; border: 1px solid #ccc; width: 150px; font-size:14px;">
-            <option value="All" ${currentSectionFilter === 'All' ? 'selected' : ''}>All Sections</option>
-            ${uniqueSections.map(s => `<option value="${s}" ${currentSectionFilter === s ? 'selected' : ''}>Section ${s}</option>`).join('')}
+          <select id="directorySecFilter" onchange="renderActiveDirectory($('content'))" style="padding: 10px; border-radius: 6px; border: 1px solid #ccc; width: 150px; font-size:14px;">
+            <option value="All" ${currentSecFilter === 'All' ? 'selected' : ''}>All Sections</option>
+            <option value="1" ${currentSecFilter === '1' ? 'selected' : ''}>Section 1</option>
+            <option value="2" ${currentSecFilter === '2' ? 'selected' : ''}>Section 2</option>
           </select>
       </div>
     </div>
@@ -440,7 +438,12 @@ async function saveStudent(existingId) {
   };
   
   const res = await fetch('/api/students', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(rec) });
-  if(!res.ok) return alert('Error saving');
+  
+  // I-check kung may error (e.g., Section is Full)
+  if(!res.ok) {
+      const errorData = await res.json();
+      return alert(errorData.error || 'Error saving');
+  }
   
   if (!existingId && email) {
     alert('Student added! An email containing their login credentials has been sent to ' + email);
