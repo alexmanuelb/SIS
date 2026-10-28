@@ -159,52 +159,47 @@ function buildDatabase() {
 
         // --- CUSTOM TEACHER ASSIGNMENT LOGIC ---
         let teacherLoads = {};
-        let jhsAdv = new Set(); // Keep track of Elem/JHS advisers
         teachers.forEach(t => teacherLoads[t] = 0);
-
-        function getSubjectTeacher(isSHS, isAdvisoryRole) {
+        
+        let teacherIndex = 0;
+        function getNextTeacher(maxLoad = 10) {
             for (let i = 0; i < teachers.length; i++) {
-                let t = teachers[i];
-                
-                // Rule 1: Max 10 subjects
-                if (teacherLoads[t] >= 10) continue;
-
-                // Rule 2: Elem/JHS Advisers cannot teach SHS
-                if (isSHS && jhsAdv.has(t) && !isAdvisoryRole) continue;
-
-                teacherLoads[t]++;
-                return t;
+                let t = teachers[teacherIndex];
+                if (teacherLoads[t] < maxLoad) {
+                    teacherIndex = (teacherIndex + 1) % teachers.length;
+                    return t;
+                }
+                teacherIndex = (teacherIndex + 1) % teachers.length;
             }
-            // Fallback (should not happen)
-            return teachers[Math.floor(Math.random() * teachers.length)];
+            return teachers[Math.floor(Math.random() * teachers.length)]; // fallback
         }
 
-        // 1. Assign Advisory Teachers first (1 per section)
-        let gradeSectionAdv = {}; 
+        // 1. I-ASSIGN ANG MGA ADVISERS (Tiyak isa kada section)
+        let sectionAdvisers = {};
         gradeConfigs.forEach(config => {
-            const isSHS = config.level.includes('Grade 11') || config.level.includes('Grade 12');
             for (let sec = 1; sec <= 3; sec++) {
-                let adv = getSubjectTeacher(false, true);
-                gradeSectionAdv[`${config.level}-${sec}`] = adv;
-                if (!isSHS) jhsAdv.add(adv); // Tag as Elem/JHS adviser
+                let adv = getNextTeacher();
+                sectionAdvisers[`${config.level}-${sec}`] = adv;
+                teacherLoads[adv]++; // Bilangin ang pagiging adviser sa load
             }
         });
 
-        // 2. Assign Subject Teachers
+        // 2. I-ASSIGN ANG MGA SUBJECT TEACHERS
         gradeConfigs.forEach(config => {
-            const isSHS = config.level.includes('Grade 11') || config.level.includes('Grade 12');
             for (let sec = 1; sec <= 3; sec++) {
                 const sectionStr = sec.toString();
                 const gradePrefix = config.level.replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
                 
-                const advisoryTeacher = gradeSectionAdv[`${config.level}-${sec}`];
+                const advisoryTeacher = sectionAdvisers[`${config.level}-${sec}`];
 
                 config.subjects.forEach((sub, idx) => {
                     const subCode = sub[0];
                     const subName = sub[1];
                     const courseCode = `${subCode}-${gradePrefix}-${sec}`;
                     
-                    const subjectTeacher = getSubjectTeacher(isSHS, false);
+                    // Kunin ang susunod na teacher na hindi pa 10 ang load
+                    const subjectTeacher = getNextTeacher();
+                    teacherLoads[subjectTeacher]++; // Bilangin sa load
                     
                     insertCourse.run(courseCode, `${subName} (${config.level})`, config.level, sectionStr, config.capacity, advisoryTeacher, subjectTeacher, 'Open');
                 });
