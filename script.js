@@ -18,7 +18,6 @@ function getSectionFromYr(yrString) {
     return secMatch ? secMatch[1] : '';
 }
 
-// --- EYE ICON TOGGLE LOGIC ---
 function togglePassword() {
   const passInput = $('loginPass');
   const icon = $('toggleIcon');
@@ -31,7 +30,6 @@ function togglePassword() {
   }
 }
 
-// --- LOGIN LOGIC ---
 async function doLogin() {
   const username = $('loginUser').value.trim();
   const password = $('loginPass').value.trim();
@@ -257,11 +255,11 @@ function renderActiveDirectory(c) {
   
   const totalStudents = active.length;
   
-  // GUMAGANA NA STUDENT EDIT BUTTON GAMIT ANG CLASS
+  // INLINE ARROW FUNCTION PARA SIGURADONG GAGANA
   let rows = active.map(s => [
       esc(s.id), esc(s.last), esc(s.first), esc(s.yr), 
       `<span class="badge ${s.status === 'Active' ? 'active' : 'inactive'}">${esc(s.status)}</span>`,
-      `<button type="button" class="btn secondary edit-student-btn" data-id="${esc(s.id)}">Edit</button>`
+      `<button type="button" class="btn secondary" onclick="openStudentForm('${esc(s.id)}')">Edit</button>`
   ]);
 
   c.innerHTML = `<div class="panel">
@@ -439,7 +437,7 @@ function renderFacultyDirectory(c) {
         esc(f.name), 
         esc(f.email || 'N/A'), 
         advisoryDisplay, 
-        `<button type="button" class="btn secondary edit-faculty-btn" data-username="${esc(f.username)}">Edit</button>`
+        `<button type="button" class="btn secondary" onclick="openEditFacultyForm('${esc(f.username)}')">Edit</button>`
     ];
   });
 
@@ -681,7 +679,7 @@ function renderUsers(c) {
   const rows = filteredUsers.map(u => [
     esc(u.username), esc(u.name), esc(u.role), esc(u.section||'—'),
     `<div style="display:flex; gap:5px;">
-        ${u.role === 'Student' ? `<button type="button" class="btn secondary" onclick="alert('Please edit student details in Student Directory')">Edit</button>` : (u.role === 'Faculty' ? `<button type="button" class="btn secondary edit-faculty-btn" data-username="${esc(u.username)}">Edit</button>` : '')}
+        ${u.role === 'Student' ? `<button type="button" class="btn secondary" onclick="alert('Please edit student details in Student Directory')">Edit</button>` : (u.role === 'Faculty' ? `<button type="button" class="btn secondary" onclick="openEditFacultyForm('${esc(u.username)}')">Edit</button>` : '')}
         ${u.role !== 'Admin' ? `<button type="button" class="btn" style="background:#a00;" onclick="deleteUser('${esc(u.username)}')">Delete</button>` : ''}
      </div>`
   ]);
@@ -1139,18 +1137,3 @@ function renderStudentProfile(c) {
       </div>
     </div>`;
 }
-
-// --- EVENT DELEGATION PARA SA EDIT BUTTONS ---
-document.addEventListener('click', (e) => {
-  // Para sa Student Edit Button
-  if (e.target && e.target.classList.contains('edit-student-btn')) {
-    const id = e.target.getAttribute('data-id');
-    if(id) openStudentForm(id);
-  }
-  
-  // Para sa Faculty Edit Button (pati na sa Users tab)
-  if (e.target && e.target.classList.contains('edit-faculty-btn')) {
-    const username = e.target.getAttribute('data-username');
-    if(username) openEditFacultyForm(username);
-  }
-});
