@@ -157,43 +157,54 @@ function buildDatabase() {
             { level: 'Grade 12 - STEM - 2nd Semester', subjects: [['PAGS', 'Pagsulat'], ['PE12B', 'PE & Health 4'], ['ENTR', 'Entrepreneurship'], ['INQ', 'Inquiries'], ['PHY2', 'Gen Physics 2'], ['BIO2', 'Gen Biology 2'], ['STEMW', 'Work Immersion']], capacity: 30 }
         ];
 
-        // --- CUSTOM TEACHER ASSIGNMENT LOGIC (MAX 3 SUBJECTS) ---
+        // --- CUSTOM TEACHER ASSIGNMENT LOGIC ---
         let teacherLoads = {};
+        let jhsAdv = new Set(); // Keep track of Elem/JHS advisers
         teachers.forEach(t => teacherLoads[t] = 0);
-        let tIndex = 0;
 
-        function getTeacherForSubject() {
-            // Hanapin ang teacher na may load < 3
+        function getSubjectTeacher(isSHS, isAdvisoryRole) {
             for (let i = 0; i < teachers.length; i++) {
-                let checkIdx = (tIndex + i) % teachers.length;
-                if (teacherLoads[teachers[checkIdx]] < 3) {
-                    teacherLoads[teachers[checkIdx]]++;
-                    tIndex = (checkIdx + 1) % teachers.length;
-                    return teachers[checkIdx];
-                }
+                let t = teachers[i];
+                
+                // Rule 1: Max 10 subjects
+                if (teacherLoads[t] >= 10) continue;
+
+                // Rule 2: Elem/JHS Advisers cannot teach SHS
+                if (isSHS && jhsAdv.has(t) && !isAdvisoryRole) continue;
+
+                teacherLoads[t]++;
+                return t;
             }
-            // Fallback kung lahat full (should not happen with 30 teachers)
-            const fallback = teachers[tIndex % teachers.length];
-            teacherLoads[fallback]++;
-            tIndex++;
-            return fallback;
+            // Fallback (should not happen)
+            return teachers[Math.floor(Math.random() * teachers.length)];
         }
 
+        // 1. Assign Advisory Teachers first (1 per section)
+        let gradeSectionAdv = {}; 
         gradeConfigs.forEach(config => {
+            const isSHS = config.level.includes('Grade 11') || config.level.includes('Grade 12');
+            for (let sec = 1; sec <= 3; sec++) {
+                let adv = getSubjectTeacher(false, true);
+                gradeSectionAdv[`${config.level}-${sec}`] = adv;
+                if (!isSHS) jhsAdv.add(adv); // Tag as Elem/JHS adviser
+            }
+        });
+
+        // 2. Assign Subject Teachers
+        gradeConfigs.forEach(config => {
+            const isSHS = config.level.includes('Grade 11') || config.level.includes('Grade 12');
             for (let sec = 1; sec <= 3; sec++) {
                 const sectionStr = sec.toString();
                 const gradePrefix = config.level.replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
                 
-                // Advisory teacher (hiwalay na logic, pwedeng mag-overlap sa subject load)
-                const advisoryTeacher = getTeacherForSubject();
+                const advisoryTeacher = gradeSectionAdv[`${config.level}-${sec}`];
 
                 config.subjects.forEach((sub, idx) => {
                     const subCode = sub[0];
                     const subName = sub[1];
                     const courseCode = `${subCode}-${gradePrefix}-${sec}`;
                     
-                    // Gagamit ng round-robin max 3 load logic
-                    const subjectTeacher = getTeacherForSubject();
+                    const subjectTeacher = getSubjectTeacher(isSHS, false);
                     
                     insertCourse.run(courseCode, `${subName} (${config.level})`, config.level, sectionStr, config.capacity, advisoryTeacher, subjectTeacher, 'Open');
                 });

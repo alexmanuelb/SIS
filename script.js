@@ -1020,10 +1020,10 @@ async function showGradeEntryFolder(gradeLevel, secName) {
     </div>
     <div style="display:grid; grid-template-columns: 1fr 1fr; gap:20px;">
       <div><h4 style="color:#333; border-bottom:2px solid #ccc; padding-bottom:5px; margin-bottom:10px;">Male Students</h4>
-        ${males.length === 0 ? '<p style="color:#999;">No male students</p>' : `<table style="width:100%; font-size:14px;"><thead><tr style="background:#f0f0f0;"><th style="padding:8px; text-align:left;">Name</th><th style="padding:8px; text-align:left;">Grade</th></tr></thead><tbody>${males.map(s => `<tr><td style="padding:8px; border-bottom:1px solid #eee;">${esc(s.last)}, ${esc(s.first)}</td><td style="padding:8px; border-bottom:1px solid #eee;"><input type="number" step="0.25" min="1" max="5" placeholder="1.0" style="width:80px; padding:5px;" id="grade_${s.id}"></td></tr>`).join('')}</tbody></table>`}
+        ${males.length === 0 ? '<p style="color:#999;">No male students</p>' : `<table style="width:100%; font-size:14px;"><thead><tr style="background:#f0f0f0;"><th style="padding:8px; text-align:left;">Name</th><th style="padding:8px; text-align:left;">Grade</th></tr></thead><tbody>${males.map(s => `<tr><td style="padding:8px; border-bottom:1px solid #eee;">${esc(s.last)}, ${esc(s.first)}</td><td style="padding:8px; border-bottom:1px solid #eee;"><input type="number" step="0.25" min="1" max="100" placeholder="e.g. 95" style="width:80px; padding:5px;" id="grade_${s.id}"></td></tr>`).join('')}</tbody></table>`}
       </div>
       <div><h4 style="color:#333; border-bottom:2px solid #ccc; padding-bottom:5px; margin-bottom:10px;">Female Students</h4>
-        ${females.length === 0 ? '<p style="color:#999;">No female students</p>' : `<table style="width:100%; font-size:14px;"><thead><tr style="background:#f0f0f0;"><th style="padding:8px; text-align:left;">Name</th><th style="padding:8px; text-align:left;">Grade</th></tr></thead><tbody>${females.map(s => `<tr><td style="padding:8px; border-bottom:1px solid #eee;">${esc(s.last)}, ${esc(s.first)}</td><td style="padding:8px; border-bottom:1px solid #eee;"><input type="number" step="0.25" min="1" max="5" placeholder="1.0" style="width:80px; padding:5px;" id="grade_${s.id}"></td></tr>`).join('')}</tbody></table>`}
+        ${females.length === 0 ? '<p style="color:#999;">No female students</p>' : `<table style="width:100%; font-size:14px;"><thead><tr style="background:#f0f0f0;"><th style="padding:8px; text-align:left;">Name</th><th style="padding:8px; text-align:left;">Grade</th></tr></thead><tbody>${females.map(s => `<tr><td style="padding:8px; border-bottom:1px solid #eee;">${esc(s.last)}, ${esc(s.first)}</td><td style="padding:8px; border-bottom:1px solid #eee;"><input type="number" step="0.25" min="1" max="100" placeholder="e.g. 95" style="width:80px; padding:5px;" id="grade_${s.id}"></td></tr>`).join('')}</tbody></table>`}
       </div>
     </div>
     <div style="margin-top:20px; text-align:right; display:flex; justify-content:space-between;">
@@ -1039,11 +1039,12 @@ async function submitBulkGrades() {
   const courseName = $('ge_course').value;
   const students = window._currentGradeSectionStudents || [];
   let successCount = 0;
+
   for(const s of students) {
       const input = $(`grade_${s.id}`);
-      if(input && input.value.trim() !== "") {
+      if(input && input.value && String(input.value).trim() !== "") {
           const gradeVal = parseFloat(input.value);
-          if(gradeVal >= 1 && gradeVal <= 5) {
+          if(!isNaN(gradeVal)) {
               const rec = { studentId: s.id, courseCode: 'N/A', courseName: courseName, grade: gradeVal, term: `${db.activeTerm} 2026-2027` };
               await fetch('/api/grades', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(rec) });
               successCount++;
@@ -1247,8 +1248,6 @@ async function renderSchedule(c) {
     if (da !== dbb) return da - dbb;
     return a.startTime.localeCompare(b.startTime);
   });
-
-  const isSHS = s.course === 'SHS';
 
   let html = `<div class="panel">
     <h2>Class Schedule</h2>
