@@ -93,18 +93,17 @@ function buildDatabase() {
 
         let globalStudentCount = 0;
 
-        // Grade 1 = 2026, Grade 12 = 2015
         for (let grade = 1; grade <= 12; grade++) {
             const yearPrefix = 2027 - grade; // 2026 for G1, 2015 for G12
             
             for (let sec = 1; sec <= 2; sec++) {
-                let targetCount = (grade >= 11) ? 27 : 30; // 30 for Elem/JHS, 27 for SHS
+                // --- BINAGO: 30 students na lahat ---
+                let targetCount = 30; 
 
                 for (let i = 0; i < targetCount; i++) {
                     const first = firstNamesList[globalStudentCount % firstNamesList.length];
                     const last = lastNamesList[globalStudentCount % lastNamesList.length];
                     
-                    // --- ITINAMA: Dynamic year based on grade level ---
                     let studentId = `${yearPrefix}-${String(grade).padStart(2, '0')}${sec}${String(i + 1).padStart(2, '0')}`;
                     
                     let birthday = `200${10 - grade}-05-14`;
@@ -127,10 +126,8 @@ function buildDatabase() {
 
                     const generatedPass = `${first.toLowerCase()}123`;
 
-                    // Insert sa students table
                     insertStudent.run(studentId, last, first, 'A', 'Mariveles, Bataan', courseType, yrLevel, 'Active', 'Enrolled', studentId, generatedPass, birthday, email, age, gender, `Parent ${last}`, '0917-000-0000');
                     
-                    // Sabay insert sa users table
                     db.run(`INSERT INTO users (username, password, name, role, section, email) VALUES (?,?,?,'Student',?,?)`, 
                         [studentId, generatedPass, `${first} ${last}`, yrLevel, email]);
 
@@ -148,14 +145,14 @@ function buildDatabase() {
             { level: 'Grade 4', subjects: [['ENG', 'English'], ['FIL', 'Filipino'], ['MATH', 'Mathematics'], ['SCI', 'Science'], ['AP', 'Araling Panlipunan'], ['ESP', 'Values Ed'], ['MAPEH', 'MAPEH'], ['EPP', 'EPP']], capacity: 30 },
             { level: 'Grade 5', subjects: [['ENG', 'English'], ['FIL', 'Filipino'], ['MATH', 'Mathematics'], ['SCI', 'Science'], ['AP', 'Araling Panlipunan'], ['ESP', 'Values Ed'], ['MAPEH', 'MAPEH'], ['EPP', 'EPP']], capacity: 30 },
             { level: 'Grade 6', subjects: [['ENG', 'English'], ['FIL', 'Filipino'], ['MATH', 'Mathematics'], ['SCI', 'Science'], ['AP', 'Araling Panlipunan'], ['ESP', 'Values Ed'], ['MAPEH', 'MAPEH'], ['TLE', 'TLE']], capacity: 30 },
-            { level: 'Grade 7', subjects: [['ENG', 'English'], ['FIL', 'Filipino'], ['MATH', 'Mathematics'], ['SCI', 'Science'], ['AP', 'Araling Panlipunan'], ['ESP', 'Values Ed'], ['MAPEH', 'MAPEH'], ['TLE', 'TLE']], capacity: 35 },
-            { level: 'Grade 8', subjects: [['ENG', 'English'], ['FIL', 'Filipino'], ['MATH', 'Mathematics'], ['SCI', 'Science'], ['AP', 'Araling Panlipunan'], ['ESP', 'Values Ed'], ['MAPEH', 'MAPEH'], ['TLE', 'TLE']], capacity: 35 },
-            { level: 'Grade 9', subjects: [['ENG', 'English'], ['FIL', 'Filipino'], ['MATH', 'Mathematics'], ['SCI', 'Science'], ['AP', 'Araling Panlipunan'], ['ESP', 'Values Ed'], ['MAPEH', 'MAPEH'], ['TLE', 'TLE']], capacity: 35 },
-            { level: 'Grade 10', subjects: [['ENG', 'English'], ['FIL', 'Filipino'], ['MATH', 'Mathematics'], ['SCI', 'Science'], ['AP', 'Araling Panlipunan'], ['ESP', 'Values Ed'], ['MAPEH', 'MAPEH'], ['TLE', 'TLE']], capacity: 35 },
-            { level: 'Grade 11 - STEM - 1st Semester', subjects: [['ORAL', 'Oral Communication'], ['KOMU', 'Komunikasyon'], ['GENM', 'General Math'], ['EALS', 'Earth & Life Science'], ['PERD', 'Personal Dev'], ['EMPW', 'Empowerment Tech'], ['PE11', 'PE & Health 1'], ['PREC', 'Pre-Calculus'], ['CHEM1', 'Gen Chem 1']], capacity: 40 },
-            { level: 'Grade 11 - STEM - 2nd Semester', subjects: [['READ', 'Reading & Writing'], ['PAGB', 'Pagbasa'], ['STAT', 'Statistics'], ['PHYS', 'Physical Science'], ['PE11B', 'PE & Health 2'], ['PR1', 'Practical Research 1'], ['BASC', 'Basic Calculus'], ['CHEM2', 'Gen Chem 2']], capacity: 40 },
-            { level: 'Grade 12 - STEM - 1st Semester', subjects: [['21ST', '21st Century Lit'], ['UCSP', 'UCSP'], ['PHIL', 'Philosophy'], ['PE12', 'PE & Health 3'], ['EAPP', 'EAPP'], ['PR2', 'Practical Research 2'], ['CPAR', 'Contemporary Arts'], ['MIL', 'Media & Info Lit'], ['PHY1', 'Gen Physics 1'], ['BIO1', 'Gen Biology 1']], capacity: 40 },
-            { level: 'Grade 12 - STEM - 2nd Semester', subjects: [['PAGS', 'Pagsulat'], ['PE12B', 'PE & Health 4'], ['ENTR', 'Entrepreneurship'], ['INQ', 'Inquiries'], ['PHY2', 'Gen Physics 2'], ['BIO2', 'Gen Biology 2'], ['STEMW', 'Work Immersion']], capacity: 40 }
+            { level: 'Grade 7', subjects: [['ENG', 'English'], ['FIL', 'Filipino'], ['MATH', 'Mathematics'], ['SCI', 'Science'], ['AP', 'Araling Panlipunan'], ['ESP', 'Values Ed'], ['MAPEH', 'MAPEH'], ['TLE', 'TLE']], capacity: 30 },
+            { level: 'Grade 8', subjects: [['ENG', 'English'], ['FIL', 'Filipino'], ['MATH', 'Mathematics'], ['SCI', 'Science'], ['AP', 'Araling Panlipunan'], ['ESP', 'Values Ed'], ['MAPEH', 'MAPEH'], ['TLE', 'TLE']], capacity: 30 },
+            { level: 'Grade 9', subjects: [['ENG', 'English'], ['FIL', 'Filipino'], ['MATH', 'Mathematics'], ['SCI', 'Science'], ['AP', 'Araling Panlipunan'], ['ESP', 'Values Ed'], ['MAPEH', 'MAPEH'], ['TLE', 'TLE']], capacity: 30 },
+            { level: 'Grade 10', subjects: [['ENG', 'English'], ['FIL', 'Filipino'], ['MATH', 'Mathematics'], ['SCI', 'Science'], ['AP', 'Araling Panlipunan'], ['ESP', 'Values Ed'], ['MAPEH', 'MAPEH'], ['TLE', 'TLE']], capacity: 30 },
+            { level: 'Grade 11 - STEM - 1st Semester', subjects: [['ORAL', 'Oral Communication'], ['KOMU', 'Komunikasyon'], ['GENM', 'General Math'], ['EALS', 'Earth & Life Science'], ['PERD', 'Personal Dev'], ['EMPW', 'Empowerment Tech'], ['PE11', 'PE & Health 1'], ['PREC', 'Pre-Calculus'], ['CHEM1', 'Gen Chem 1']], capacity: 30 },
+            { level: 'Grade 11 - STEM - 2nd Semester', subjects: [['READ', 'Reading & Writing'], ['PAGB', 'Pagbasa'], ['STAT', 'Statistics'], ['PHYS', 'Physical Science'], ['PE11B', 'PE & Health 2'], ['PR1', 'Practical Research 1'], ['BASC', 'Basic Calculus'], ['CHEM2', 'Gen Chem 2']], capacity: 30 },
+            { level: 'Grade 12 - STEM - 1st Semester', subjects: [['21ST', '21st Century Lit'], ['UCSP', 'UCSP'], ['PHIL', 'Philosophy'], ['PE12', 'PE & Health 3'], ['EAPP', 'EAPP'], ['PR2', 'Practical Research 2'], ['CPAR', 'Contemporary Arts'], ['MIL', 'Media & Info Lit'], ['PHY1', 'Gen Physics 1'], ['BIO1', 'Gen Biology 1']], capacity: 30 },
+            { level: 'Grade 12 - STEM - 2nd Semester', subjects: [['PAGS', 'Pagsulat'], ['PE12B', 'PE & Health 4'], ['ENTR', 'Entrepreneurship'], ['INQ', 'Inquiries'], ['PHY2', 'Gen Physics 2'], ['BIO2', 'Gen Biology 2'], ['STEMW', 'Work Immersion']], capacity: 30 }
         ];
 
         let globalSubCount = 0;
@@ -381,7 +378,8 @@ app.post('/api/students', (req, res) => {
             db.get(`SELECT COUNT(*) as count FROM students WHERE yr LIKE ? AND yr LIKE ?`, [`${gradeLevel}%`, `%Sec ${section}%`], (errCount, countRes) => {
                 if (errCount) return res.status(500).json({ error: "DB Error" });
 
-                const maxCapacity = (gradeLevel === 'Grade 11' || gradeLevel === 'Grade 12') ? 27 : 30;
+                // --- BINAGO: 30 max capacity for all ---
+                const maxCapacity = 30;
 
                 if (countRes.count >= maxCapacity) {
                     return res.status(400).json({ error: `Cannot add student. Section ${section} is already full (${countRes.count}/${maxCapacity} students).` });
