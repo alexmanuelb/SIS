@@ -255,7 +255,6 @@ function renderActiveDirectory(c) {
   
   const totalStudents = active.length;
   
-  // INLINE ARROW FUNCTION PARA SIGURADONG GAGANA
   let rows = active.map(s => [
       esc(s.id), esc(s.last), esc(s.first), esc(s.yr), 
       `<span class="badge ${s.status === 'Active' ? 'active' : 'inactive'}">${esc(s.status)}</span>`,
@@ -290,7 +289,7 @@ function renderActiveDirectory(c) {
       </div>
     </div>
     <div id="enrollFormArea"></div>
-    ${simpleTable(['Student ID','Last Name','First Name','Year Level','Status','Action'], rows)}
+    <div id="studentTableContainer">${simpleTable(['Student ID','Last Name','First Name','Year Level','Status','Action'], rows)}</div>
   </div>`;
 }
 
@@ -326,7 +325,10 @@ function openStudentForm(id) {
   const statuses = ['Active', 'Archived', 'Graduated', 'Inactive']; 
   const sections = ['1', '2'];
 
-  $('enrollFormArea').innerHTML = `
+  const formArea = $('enrollFormArea');
+  if (!formArea) return alert('Form area not found. Please refresh the page.');
+
+  formArea.innerHTML = `
     <div class="form-panel">
       <h3 style="color:#5c0000; margin-bottom:15px;">${s ? 'Edit' : 'New'} Student Record</h3>
       <div class="form-grid">
@@ -423,7 +425,8 @@ async function saveStudent(existingId) {
 
   db.students = await (await fetch('/api/students')).json();
   db.users = await (await fetch('/api/users')).json();
-  $('enrollFormArea').innerHTML = ''; renderActiveDirectory($('content')); 
+  $('enrollFormArea').innerHTML = ''; 
+  renderActiveDirectory($('content')); 
 }
 
 function renderFacultyDirectory(c) {
@@ -447,7 +450,7 @@ function renderFacultyDirectory(c) {
       <button type="button" class="btn" onclick="openAddFacultyForm()">+ Add New Teacher</button>
     </div>
     <div id="facultyFormArea"></div>
-    ${simpleTable(['Username', 'Full Name', 'Email', 'Advisory Class', 'Action'], rows)}
+    <div id="facultyTableContainer">${simpleTable(['Username', 'Full Name', 'Email', 'Advisory Class', 'Action'], rows)}</div>
   </div>`;
 }
 
@@ -457,7 +460,10 @@ function openAddFacultyForm() {
   let uniqueSections = [];
   grades.forEach(g => sections.forEach(s => uniqueSections.push(`${g} - Section ${s}`)));
 
-  $('facultyFormArea').innerHTML = `
+  const formArea = $('facultyFormArea');
+  if (!formArea) return alert('Form area not found. Please refresh the page.');
+
+  formArea.innerHTML = `
     <div class="form-panel" style="border-left: 4px solid #5c0000;">
       <h3 style="color:#5c0000; margin-bottom:15px;">Add New Teacher</h3>
       <div class="form-grid">
@@ -524,7 +530,10 @@ function openEditFacultyForm(username) {
   let uniqueSections = [];
   grades.forEach(g => sections.forEach(s => uniqueSections.push(`${g} - Section ${s}`)));
 
-  $('facultyFormArea').innerHTML = `
+  const formArea = $('facultyFormArea');
+  if (!formArea) return alert('Form area not found. Please refresh the page.');
+
+  formArea.innerHTML = `
     <div class="form-panel" style="border-left: 4px solid #5c0000;">
       <h3 style="color:#5c0000; margin-bottom:15px;">Edit Teacher: ${esc(user.name)}</h3>
       <div class="form-grid">
@@ -608,7 +617,11 @@ function renderCoursesTable() {
 
 function openAddCourseForm() {
   const grades = ['Grade 1', 'Grade 2', 'Grade 3', 'Grade 4', 'Grade 5', 'Grade 6', 'Grade 7', 'Grade 8', 'Grade 9', 'Grade 10', 'Grade 11 - STEM - 1st Semester', 'Grade 11 - STEM - 2nd Semester', 'Grade 11 - HUMSS - 1st Semester', 'Grade 11 - HUMSS - 2nd Semester', 'Grade 11 - ABM - 1st Semester', 'Grade 11 - ABM - 2nd Semester', 'Grade 12 - STEM - 1st Semester', 'Grade 12 - STEM - 2nd Semester', 'Grade 12 - HUMSS - 1st Semester', 'Grade 12 - HUMSS - 2nd Semester', 'Grade 12 - ABM - 1st Semester', 'Grade 12 - ABM - 2nd Semester'];
-  $('courseFormArea').innerHTML = `
+  
+  const formArea = $('courseFormArea');
+  if (!formArea) return alert('Form area not found. Please refresh the page.');
+
+  formArea.innerHTML = `
     <div class="form-panel" style="border-left: 4px solid #5c0000;">
       <h3 style="color:#5c0000; margin-bottom:15px;">Add New Course</h3>
       <div class="form-grid">
@@ -634,7 +647,11 @@ async function saveNewCourse() {
 
 function openAddSectionForm() {
   const grades = ['Grade 1', 'Grade 2', 'Grade 3', 'Grade 4', 'Grade 5', 'Grade 6', 'Grade 7', 'Grade 8', 'Grade 9', 'Grade 10', 'Grade 11 - STEM - 1st Semester', 'Grade 11 - STEM - 2nd Semester', 'Grade 11 - HUMSS - 1st Semester', 'Grade 11 - HUMSS - 2nd Semester', 'Grade 11 - ABM - 1st Semester', 'Grade 11 - ABM - 2nd Semester', 'Grade 12 - STEM - 1st Semester', 'Grade 12 - STEM - 2nd Semester', 'Grade 12 - HUMSS - 1st Semester', 'Grade 12 - HUMSS - 2nd Semester', 'Grade 12 - ABM - 1st Semester', 'Grade 12 - ABM - 2nd Semester'];
-  $('courseFormArea').innerHTML = `
+  
+  const formArea = $('courseFormArea');
+  if (!formArea) return alert('Form area not found. Please refresh the page.');
+
+  formArea.innerHTML = `
     <div class="form-panel" style="border-left: 4px solid #5c0000;">
       <h3 style="color:#5c0000; margin-bottom:15px;">Add New Section</h3>
       <div class="form-grid">
@@ -696,7 +713,7 @@ function renderUsers(c) {
         <option value="Students" ${filterVal === 'Students' ? 'selected' : ''}>Students</option>
       </select>
     </div>
-    ${simpleTable(['Username','Name','Role','Section','Action'], rows)}
+    <div id="userTableContainer">${simpleTable(['Username','Name','Role','Section','Action'], rows)}</div>
   </div>`;
 }
 
@@ -710,7 +727,7 @@ async function deleteUser(username) {
       db.students = await (await fetch('/api/students')).json();
       renderUsers($('content'));
   } catch (error) {
-      alert('Error deleting user.');
+      alert('Error deleting user: ' + error.message);
   }
 }
 
