@@ -82,7 +82,7 @@ function buildDatabase() {
         });
         insertUser.finalize();
 
-        // --- STUDENT GENERATION LOGIC (27 per section, unique names) ---
+        // --- STUDENT GENERATION LOGIC ---
         const insertStudent = db.prepare(`INSERT INTO students (id, last, first, mi, address, course, yr, status, enrol, username, password, birthday, email, age, gender, guardianName, guardianContact) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
         
         const firstNamesList = ['Juan', 'Maria', 'Jose', 'Ana', 'Pedro', 'Rosa', 'Mark', 'Katie', 'Alexandra', 'Paul', 'Liza', 'Carlo', 'Mia', 'Leo', 'Ella', 'Ben', 'Sarah', 'David', 'Mary', 'James', 'John', 'Emily', 'Alan', 'Jane', 'Michael', 'Sarah', 'David', 'Jessica', 'Daniel', 'Ashley', 'Matthew', 'Amanda', 'Christopher', 'Melissa', 'Andrew', 'Stephanie', 'Joshua', 'Nicole', 'Ryan', 'Angela', 'Nicholas', 'Heather', 'Tyler', 'Amber', 'Brandon', 'Michelle', 'Zachary', 'Tiffany', 'Jacob', 'Christina'];
@@ -93,7 +93,10 @@ function buildDatabase() {
 
         let globalStudentCount = 0;
 
+        // Grade 1 = 2026, Grade 12 = 2015
         for (let grade = 1; grade <= 12; grade++) {
+            const yearPrefix = 2027 - grade; // 2026 for G1, 2015 for G12
+            
             for (let sec = 1; sec <= 2; sec++) {
                 let targetCount = (grade >= 11) ? 27 : 30; // 30 for Elem/JHS, 27 for SHS
 
@@ -101,7 +104,9 @@ function buildDatabase() {
                     const first = firstNamesList[globalStudentCount % firstNamesList.length];
                     const last = lastNamesList[globalStudentCount % lastNamesList.length];
                     
-                    let studentId = `2026-${String(grade).padStart(2, '0')}${sec}${String(i + 1).padStart(2, '0')}`;
+                    // --- ITINAMA: Dynamic year based on grade level ---
+                    let studentId = `${yearPrefix}-${String(grade).padStart(2, '0')}${sec}${String(i + 1).padStart(2, '0')}`;
+                    
                     let birthday = `200${10 - grade}-05-14`;
                     let email = `${first.toLowerCase()}.${last.toLowerCase()}${globalStudentCount}@example.com`;
                     let age = (12 - grade) + 6;
@@ -120,7 +125,15 @@ function buildDatabase() {
                         yrLevel = `Grade ${grade} - Sec ${sec}`;
                     }
 
-                    insertStudent.run(studentId, last, first, 'A', 'Mariveles, Bataan', courseType, yrLevel, 'Active', 'Enrolled', studentId, `${first.toLowerCase()}123`, birthday, email, age, gender, `Parent ${last}`, '0917-000-0000');
+                    const generatedPass = `${first.toLowerCase()}123`;
+
+                    // Insert sa students table
+                    insertStudent.run(studentId, last, first, 'A', 'Mariveles, Bataan', courseType, yrLevel, 'Active', 'Enrolled', studentId, generatedPass, birthday, email, age, gender, `Parent ${last}`, '0917-000-0000');
+                    
+                    // Sabay insert sa users table
+                    db.run(`INSERT INTO users (username, password, name, role, section, email) VALUES (?,?,?,'Student',?,?)`, 
+                        [studentId, generatedPass, `${first} ${last}`, yrLevel, email]);
+
                     globalStudentCount++;
                 }
             }
@@ -344,7 +357,6 @@ app.delete('/api/users/:username', (req, res) => {
     });
 });
 
-// --- INI-AYOS NA /api/students ROUTE (May Capacity Check) ---
 app.get('/api/students', (req, res) => db.all("SELECT * FROM students", [], (err, rows) => res.json(err ? [] : rows)));
 app.post('/api/students', (req, res) => {
     const { id, last, first, mi, address, course, yr, status, enrol, birthday, email, age, gender, guardianName, guardianContact } = req.body;
@@ -352,7 +364,6 @@ app.post('/api/students', (req, res) => {
     const fullName = `${first} ${last}`;
     const generatedPass = `${first.toLowerCase()}123`;
 
-    // Extract Grade Level and Section for capacity check
     const parts = yr.split(' - ');
     const gradeLevel = parts[0].trim();
     const secMatch = yr.match(/Sec(?:tion)?\s*(\d+)/i);
@@ -360,11 +371,13 @@ app.post('/api/students', (req, res) => {
 
     db.get("SELECT id FROM students WHERE id = ?", [id], async (err, row) => {
         if (row) {
-            // Kung EDIT, payagan lang (walang capacity check)
             db.run(`UPDATE students SET last=?, first=?, mi=?, address=?, course=?, yr=?, status=?, enrol=?, birthday=?, email=?, age=?, gender=?, guardianName=?, guardianContact=? WHERE id=?`, 
-            [last, first, mi, address, course, yr, status, enrol, birthday, email, age, gender, guardianName, guardianContact, id], (e) => res.json({ message: e ? e.message : "Updated" }));
+            [last, first, mi, address, course, yr, status, enrol, birthday, email, age, gender, guardianName, guardianContact, id], (e) => {
+                if (e) return res.status(400).json({ error: e.message });
+                db.run(`UPDATE users SET name=?, section=? WHERE username=?`, [fullName, yr, id]);
+                res.json({ message: "Updated" });
+            });
         } else {
-            // Kung NEW, i-check ang capacity
             db.get(`SELECT COUNT(*) as count FROM students WHERE yr LIKE ? AND yr LIKE ?`, [`${gradeLevel}%`, `%Sec ${section}%`], (errCount, countRes) => {
                 if (errCount) return res.status(500).json({ error: "DB Error" });
 
@@ -374,7 +387,6 @@ app.post('/api/students', (req, res) => {
                     return res.status(400).json({ error: `Cannot add student. Section ${section} is already full (${countRes.count}/${maxCapacity} students).` });
                 }
 
-                // Kung may space pa, mag-insert
                 db.run(`INSERT INTO students (id, last, first, mi, address, course, yr, status, enrol, username, password, birthday, email, age, gender, guardianName, guardianContact) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, 
                 [id, last, first, mi, address, course, yr, status, enrol, id, generatedPass, birthday, email, age, gender, guardianName, guardianContact], async (e) => {
                     if (e) return res.status(400).json({ error: e.message });
