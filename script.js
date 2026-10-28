@@ -885,18 +885,24 @@ function renderAttendance(c) {
   c.innerHTML = html;
 }
 
+// --- INI-AYOS NA LOADATTENDANCE ---
 async function loadAttendance() {
   const code = $('att_course').value;
   const date = $('att_date').value;
   const crs = db.courses.find(x => x.code === code);
   if (!crs) return;
-  let list = [];
-  for (const s of db.students) {
-    const en = await (await fetch('/api/enrollments/' + s.id)).json();
-    if (en.some(e => e.courseCode === code)) list.push(s);
+
+  // Direktang hanapin sa db.students base sa gradeLevel at section
+  let list = db.students.filter(s => isStudentInSection(s.yr, crs.gradeLevel, crs.section));
+
+  if (list.length === 0) {
+      $('att_list').innerHTML = `<div class="panel" style="background:#f9eaea; border-left:4px solid #a00;"><p style="color:#a00; font-weight:bold;">Walang estudyanteng naka-assign sa Grade Level at Section na ito.</p></div>`;
+      return;
   }
+
   const existing = await (await fetch(`/api/attendance/${code}/${crs.section}/${date}`)).json();
   const map = {}; existing.forEach(e => map[e.studentId] = e.status);
+  
   $('att_list').innerHTML = `<div class="panel" style="background:#f9f9f9; border:1px solid #ddd; padding:20px;">
   <h4 style="margin-bottom:15px; color:#5c0000;">Taking Attendance: ${esc(crs.name)} (${esc(date)})</h4>
   <table style="width:100%;"><thead><tr><th>Student Name</th><th>Status</th></tr></thead><tbody>
