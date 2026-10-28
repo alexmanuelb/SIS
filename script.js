@@ -706,7 +706,7 @@ async function renderClassRecords(c) {
     if (!groups[key]) groups[key] = [];
     groups[key].push(crs);
   }
-  let html = `<div class="panel"><h2>Class Records</h2><p>Click a folder to view enrolled students.</p>`;
+  let html = `<div class="panel"><h2>Class Records (${esc(db.activeTerm)})</h2><p>Click a folder to view enrolled students.</p>`;
   for (const key of Object.keys(groups)) html += `<div class="folder" onclick="showClassFolder('${esc(key)}')"><span>📁 ${esc(key)}</span> <span>&rarr;</span></div>`;
   if(Object.keys(groups).length === 0) html += `<p style="color:#999;">No classes assigned to you for ${esc(db.activeTerm)}.</p>`;
   html += `<div id="classFolderView"></div></div>`;
@@ -832,10 +832,18 @@ async function submitBulkGrades() {
   }
 }
 
-// --- UPDATED ATTENDANCE SECTION WITH LOGS ---
+// --- ATTENDANCE (May Filter at Maayos na History) ---
 function renderAttendance(c) {
-  const myCourses = db.courses.filter(x => x.adviser === session.name || x.subjectTeacher === session.name);
-  // Gumawa ng unique list ng "GradeLevel|Section"
+  const myCourses = db.courses.filter(x => {
+    const isTeacher = x.adviser === session.name || x.subjectTeacher === session.name;
+    if (!isTeacher) return false;
+    
+    if (x.gradeLevel.includes('Grade 11') || x.gradeLevel.includes('Grade 12')) {
+        return x.gradeLevel.includes(db.activeTerm);
+    }
+    return true;
+  });
+
   const uniqueSections = [...new Set(myCourses.map(x => `${x.gradeLevel}|${x.section}`))];
 
   let html = `<div class="panel"><h2>Attendance</h2>
@@ -847,12 +855,12 @@ function renderAttendance(c) {
     <div id="att_list" style="margin-bottom:30px;"></div>
     
     <hr style="border:0; border-top:1px solid #eaeaea; margin-bottom:20px;">
-    <h3 style="color:#5c0000; margin-bottom:15px;">Attendance Records History</h3>
-    <p style="color:#666; margin-bottom:15px; font-size:14px;">Click a folder below to view all submitted attendance records for a specific section.</p>
+    <h3 style="color:#5c0000; margin-bottom:15px;">Attendance Records History (${esc(db.activeTerm)})</h3>
+    <p style="color:#666; margin-bottom:15px; font-size:14px;">Click a folder below to view all submitted attendance records.</p>
     <div style="display:grid; gap:10px;">`;
 
   if(uniqueSections.length === 0) {
-      html += `<p style="color:#999;">No classes assigned to you.</p>`;
+      html += `<p style="color:#999;">No classes assigned to you for ${esc(db.activeTerm)}.</p>`;
   } else {
       uniqueSections.forEach(secString => {
           const [gradeLevel, section] = secString.split('|');
@@ -890,10 +898,7 @@ async function markAttendance(courseCode, section, studentId, date, status) {
 }
 
 async function showAttendanceHistory(gradeLevel, section) {
-  // Kunin ang history gamit ang section filter
   const history = await (await fetch(`/api/attendance/history/${encodeURIComponent(section)}`)).json();
-  
-  // I-filter lang yung para sa specific Grade Level na ito
   const filteredHistory = history.filter(h => h.gradeLevel === gradeLevel);
 
   if(filteredHistory.length === 0) {
@@ -901,44 +906,61 @@ async function showAttendanceHistory(gradeLevel, section) {
       return;
   }
 
-  // I-group by Date at Course Name (Subject)
-  const grouped = {};
+  // I-group by DATE
+  const groupedByDate = {};
   filteredHistory.forEach(h => {
-      const key = `${h.date} | ${h.courseName}`;
-      if(!grouped[key]) grouped[key] = [];
-      grouped[key].push(h);
+      if (!groupedByDate[h.date]) groupedByDate[h.date] = [];
+      groupedByDate[h.date].push(h);
   });
 
+  const sortedDates = Object.keys(groupedByDate).sort().reverse();
+
   let html = `<div class="panel" style="border:2px solid #5c0000;">
-      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
         <h3 style="color:#5c0000; margin:0;">History: ${esc(gradeLevel)} | Section ${esc(section)}</h3>
         <button class="btn secondary" onclick="$('attendance_history_view').innerHTML=''">Close</button>
       </div>
-      <div style="display:grid; gap:15px;">`;
+      <div style="display:grid; gap:20px;">`;
 
-  for(const key of Object.keys(grouped).sort().reverse()) { // Pinakabago sa taas
-      const [date, subject] = key.split(' | ');
-      const records = grouped[key];
+  sortedDates.forEach(date => {
+      const dailyRecords = groupedByDate[date];
 
-      html += `<div style="background:#fff0f0; padding:15px; border-radius:8px; border-left:4px solid #a00;">
-          <h4 style="margin-bottom:10px; color:#333;">📅 ${esc(date)} — ${esc(subject)}</h4>
-          <table style="width:100%; font-size:14px; background:white; border-radius:6px; overflow:hidden;">
-              <thead><tr style="background:#f0f0f0;">
-                  <th style="padding:8px; text-align:left;">Student Name</th>
-                  <th style="padding:8px; text-align:left;">Status</th>
-              </tr></thead>
-              <tbody>
-                  ${records.map(r => {
-                      const color = r.status === 'Present' ? 'green' : r.status === 'Late' ? 'orange' : 'red';
-                      return `<tr style="border-bottom:1px solid #eee;">
-                          <td style="padding:8px;">${esc(r.last)}, ${esc(r.first)}</td>
-                          <td style="padding:8px; font-weight:bold; color:${color};">${esc(r.status)}</td>
-                      </tr>`;
-                  }).join('')}
-              </tbody>
-          </table>
-      </div>`;
-  }
+      // I-group ulit by SUBJECT (courseName)
+      const groupedBySubject = {};
+      dailyRecords.forEach(r => {
+          if (!groupedBySubject[r.courseName]) groupedBySubject[r.courseName] = [];
+          groupedBySubject[r.courseName].push(r);
+      });
+
+      html += `<div style="background:#f9eaea; padding:15px; border-radius:8px; border-left:4px solid #5c0000;">
+          <h4 style="margin-bottom:15px; color:#333;">📅 ${esc(date)}</h4>
+          <div style="display:grid; gap:15px;">`;
+
+      Object.keys(groupedBySubject).forEach(subject => {
+          const subjectRecords = groupedBySubject[subject];
+          
+          html += `<div style="background:white; padding:15px; border-radius:6px; box-shadow:0 2px 4px rgba(0,0,0,0.05);">
+              <h5 style="margin-bottom:10px; color:#5c0000; border-bottom:1px solid #eee; padding-bottom:5px;">${esc(subject)}</h5>
+              <table style="width:100%; font-size:13px;">
+                  <thead><tr style="background:#f8f9fa; color:#555;">
+                      <th style="padding:8px; text-align:left;">Student Name</th>
+                      <th style="padding:8px; text-align:left;">Status</th>
+                  </tr></thead>
+                  <tbody>`;
+
+          subjectRecords.forEach(r => {
+              const color = r.status === 'Present' ? 'green' : r.status === 'Late' ? 'orange' : 'red';
+              html += `<tr style="border-bottom:1px solid #f0f0f0;">
+                  <td style="padding:8px;">${esc(r.last)}, ${esc(r.first)}</td>
+                  <td style="padding:8px; font-weight:bold; color:${color};">${esc(r.status)}</td>
+              </tr>`;
+          });
+
+          html += `</tbody></table></div>`;
+      });
+
+      html += `</div></div>`;
+  });
 
   html += `</div></div>`;
   $('attendance_history_view').innerHTML = html;
@@ -960,7 +982,7 @@ function renderRegistration(c) {
     if (s.course === 'SHS') {
       return cr.gradeLevel.includes(studentYear) && 
              cr.gradeLevel.includes(studentTrack) && 
-             cr.gradeLevel.includes(studentSem) && 
+             cr.gradeLevel.includes(db.activeTerm) && 
              cr.section === studentSec && 
              cr.status === 'Open';
     } else {
@@ -969,7 +991,7 @@ function renderRegistration(c) {
   });
   
   c.innerHTML = `<div class="panel"><h2>My Subjects</h2>
-    <p style="margin-bottom:15px; color:#666;">These are the subjects you are officially enrolled in for <b>${esc(s.yr)}</b>.</p>
+    <p style="margin-bottom:15px; color:#666;">These are the subjects you are officially enrolled in for <b>${esc(db.activeTerm)}</b>.</p>
     ${simpleTable(['Code','Name','Section','Teacher'], mySubjects.map(x => [esc(x.code), esc(x.name), esc(x.section), esc(x.subjectTeacher)]))}
   </div>`;
 }
