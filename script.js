@@ -199,19 +199,38 @@ function renderStudentDashboard(c) {
   setInterval(() => { if($('dash-clock')) $('dash-clock').textContent = new Date().toLocaleTimeString(); }, 1000);
 }
 
+// --- INI-AYOS NA STUDENT DIRECTORY EDIT BUTTON ---
 function renderActiveDirectory(c) {
   const active = db.students.filter(s => s.status !== 'Archived' && s.status !== 'Graduated');
+  
+  let rows = active.map(s => [
+      esc(s.id), 
+      esc(s.last), 
+      esc(s.first), 
+      esc(s.yr), 
+      `<span class="badge ${s.status === 'Active' ? 'active' : 'inactive'}">${esc(s.status)}</span>`,
+      `<button class="btn secondary" data-id="${esc(s.id)}" onclick="window.editStudentBtn(this)">Edit</button>`
+  ]);
+
   c.innerHTML = `<div class="panel">
     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
       <h2 style="margin:0;">Student Directory</h2>
       <button class="btn" onclick="openStudentForm()">+ Add New Student</button>
     </div>
     <div id="enrollFormArea"></div>
-    ${simpleTable(['Student ID','Last Name','First Name','Year Level','Status','Action'],
-      active.map(s => [esc(s.id), esc(s.last), esc(s.first), esc(s.yr), `<span class="badge ${s.status === 'Active' ? 'active' : 'inactive'}">${esc(s.status)}</span>`,
-        `<button class="btn secondary" onclick="openStudentForm('${esc(s.id)}')">Edit</button>`]))}
+    ${simpleTable(['Student ID','Last Name','First Name','Year Level','Status','Action'], rows)}
   </div>`;
 }
+
+// Global function para siguradong nake-click
+window.editStudentBtn = function(btn) {
+  const id = btn.getAttribute('data-id');
+  if(id) {
+    openStudentForm(id);
+  } else {
+    alert('Error: Student ID not found.');
+  }
+};
 
 function computeAge() {
   const bday = document.getElementById('f_birthday').value;
