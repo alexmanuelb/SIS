@@ -97,7 +97,6 @@ function buildDatabase() {
             const yearPrefix = 2027 - grade; // 2026 for G1, 2015 for G12
             
             for (let sec = 1; sec <= 2; sec++) {
-                // --- BINAGO: 30 students na lahat ---
                 let targetCount = 30; 
 
                 for (let i = 0; i < targetCount; i++) {
@@ -354,6 +353,7 @@ app.delete('/api/users/:username', (req, res) => {
     });
 });
 
+// --- INI-AYOS NA /api/students ROUTE (Para sa Edit at Update) ---
 app.get('/api/students', (req, res) => db.all("SELECT * FROM students", [], (err, rows) => res.json(err ? [] : rows)));
 app.post('/api/students', (req, res) => {
     const { id, last, first, mi, address, course, yr, status, enrol, birthday, email, age, gender, guardianName, guardianContact } = req.body;
@@ -368,6 +368,7 @@ app.post('/api/students', (req, res) => {
 
     db.get("SELECT id FROM students WHERE id = ?", [id], async (err, row) => {
         if (row) {
+            // Kung EDIT, payagan lang (walang capacity check)
             db.run(`UPDATE students SET last=?, first=?, mi=?, address=?, course=?, yr=?, status=?, enrol=?, birthday=?, email=?, age=?, gender=?, guardianName=?, guardianContact=? WHERE id=?`, 
             [last, first, mi, address, course, yr, status, enrol, birthday, email, age, gender, guardianName, guardianContact, id], (e) => {
                 if (e) return res.status(400).json({ error: e.message });
@@ -375,10 +376,10 @@ app.post('/api/students', (req, res) => {
                 res.json({ message: "Updated" });
             });
         } else {
+            // Kung NEW, i-check ang capacity
             db.get(`SELECT COUNT(*) as count FROM students WHERE yr LIKE ? AND yr LIKE ?`, [`${gradeLevel}%`, `%Sec ${section}%`], (errCount, countRes) => {
                 if (errCount) return res.status(500).json({ error: "DB Error" });
 
-                // --- BINAGO: 30 max capacity for all ---
                 const maxCapacity = 30;
 
                 if (countRes.count >= maxCapacity) {
