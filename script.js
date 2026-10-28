@@ -1300,7 +1300,13 @@ async function renderProfileGrades(c) {
   const rows = mySubjects.map(sub => {
     const gradeRec = grades.find(g => g.courseName === sub.name);
     const gradeVal = gradeRec ? gradeRec.grade : '--';
-    const remarks = gradeRec ? (gradeRec.grade <= 3.0 ? 'PASSED' : 'FAILED') : 'ONGOING';
+    
+    // ✅ TAMANG LOGIC PARA SA BASIC EDUCATION (Grade 12): 75 pataas ang Passing
+    let remarks = 'ONGOING';
+    if (gradeRec) {
+        remarks = gradeRec.grade >= 75 ? 'PASSED' : 'FAILED';
+    }
+    
     return [esc(sub.code), esc(sub.name), esc(sub.subjectTeacher), `<b>${gradeVal}</b>`, remarks];
   });
 
