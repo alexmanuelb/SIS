@@ -65,7 +65,6 @@ function buildDatabase() {
         db.run(`INSERT INTO users (username, password, name, role, section, email) VALUES ('admin', 'admin123', 'Admin User', 'Admin', '', 'admin@edutrack.com')`);
         db.run(`INSERT INTO users (username, password, name, role, section, email) VALUES ('registrar', 'reg123', 'Registrar Staff', 'Registrar', '', 'registrar@edutrack.com')`);
 
-        // IBINALIK SA ORIHINAL NA 30 TEACHERS
         const teachers = [
             'T. John Emmanuel S.', 'T. Emily Bronte', 'T. Alan Turing', 'T. Liza Soberano', 'T. Andres Bonifacio',
             'T. Enrique Gil', 'T. Kathryn Bernardo', 'T. Marie Curie', 'T. Daniel Padilla', 'T. Angel Locsin',
@@ -107,7 +106,6 @@ function buildDatabase() {
             { level: 'Grade 12 - STEM - 2nd Semester', subjects: [['PAGS', 'Pagsulat'], ['PE12B', 'PE & Health 4'], ['ENTR', 'Entrepreneurship'], ['INQ', 'Inquiries'], ['PHY2', 'Gen Physics 2'], ['BIO2', 'Gen Biology 2'], ['STEMW', 'Work Immersion']], capacity: 40 }
         ];
 
-        // LOGIC PARA SA 2-3 SUBJECTS PER TEACHER AT ALTERNATION
         let globalSubCount = 0;
 
         gradeConfigs.forEach(config => {
@@ -115,7 +113,6 @@ function buildDatabase() {
                 const sectionStr = sec.toString();
                 const gradePrefix = config.level.replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
                 
-                // Advisory teacher (Iba-iba per section)
                 const advisoryTeacher = teachers[(globalSubCount + sec) % teachers.length];
 
                 config.subjects.forEach((sub, idx) => {
@@ -123,15 +120,12 @@ function buildDatabase() {
                     const subName = sub[1];
                     const courseCode = `${subCode}-${gradePrefix}-${sec}`;
                     
-                    // Formula para ma-distribute ang teachers (2-3 subjects each) at walang magkapareho sa loob ng isang section
-                    // Nag-add tayo ng multiplier para maiba ang teacher per subject at per section
                     const teacherIdx = (globalSubCount + idx + (sec * 2)) % teachers.length;
                     const subjectTeacher = teachers[teacherIdx];
                     
                     insertCourse.run(courseCode, `${subName} (${config.level})`, config.level, sectionStr, config.capacity, advisoryTeacher, subjectTeacher, 'Open');
                 });
                 
-                // I-update ang counter base sa dami ng subjects sa section na ito
                 globalSubCount += config.subjects.length;
             }
         });
@@ -395,7 +389,14 @@ app.post('/api/grades', (req, res) => {
 
 app.get('/api/student/grades/:studentId', (req, res) => db.all("SELECT * FROM grades WHERE studentId = ?", [req.params.studentId], (err, rows) => res.json(err ? [] : rows)));
 app.get('/api/schedules', (req, res) => db.all("SELECT * FROM schedules", [], (err, rows) => res.json(err ? [] : rows)));
-app.get('/api/schedules/:gradeLevel/:section', (req, res) => db.all(`SELECT s.*, c.name AS courseName, c.adviser FROM schedules s JOIN courses c ON s.courseCode = c.code WHERE c.gradeLevel = ? AND s.section = ?`, [req.params.gradeLevel, req.params.section], (err, rows) => res.json(err ? [] : rows)));
+
+// INI-AYOS NA SCHEDULE ROUTE PARA MAKUHA ANG SUBJECT TEACHER
+app.get('/api/schedules/:gradeLevel/:section', (req, res) => {
+    db.all(`SELECT s.*, c.name AS courseName, c.subjectTeacher AS teacherName FROM schedules s JOIN courses c ON s.courseCode = c.code WHERE c.gradeLevel = ? AND s.section = ?`, [req.params.gradeLevel, req.params.section], (err, rows) => {
+        res.json(err ? [] : rows);
+    });
+});
+
 app.get('/api/attendance/:courseCode/:section/:date', (req, res) => db.all(`SELECT * FROM attendance WHERE courseCode = ? AND section = ? AND date = ?`, [req.params.courseCode, req.params.section, req.params.date], (err, rows) => res.json(err ? [] : rows)));
 app.post('/api/attendance', (req, res) => {
     const { courseCode, section, studentId, date, status } = req.body;

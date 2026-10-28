@@ -877,6 +877,7 @@ function renderRegistration(c) {
   </div>`;
 }
 
+// INI-AYOS NA SCHEDULE DISPLAY PARA BASAHIN ANG teacherName
 async function renderSchedule(c) {
   const s = currentStudent();
   
@@ -920,7 +921,7 @@ async function renderSchedule(c) {
         html += `<tr style="border-bottom:1px solid #eee;">
           <td style="padding:10px; font-weight:bold; color:#5c0000; font-size:13px;">${item.startTime} - ${item.endTime}</td>
           <td style="padding:10px; font-size:14px;"><b>${esc(item.courseName)}</b></td>
-          <td style="padding:10px; font-size:13px; color:#555;">${esc(item.adviser)}</td>
+          <td style="padding:10px; font-size:13px; color:#555;">${esc(item.teacherName)}</td>
         </tr>`;
       });
       html += `</tbody></table></div>`;
