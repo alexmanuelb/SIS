@@ -265,10 +265,11 @@ function renderActiveDirectory(c) {
   // --- TOTAL STUDENTS COUNT ---
   const totalStudents = active.length;
   
+  // --- INI-AYOS NA EDIT BUTTON ---
   let rows = active.map(s => [
       esc(s.id), esc(s.last), esc(s.first), esc(s.yr), 
       `<span class="badge ${s.status === 'Active' ? 'active' : 'inactive'}">${esc(s.status)}</span>`,
-      `<button class="btn secondary" data-id="${esc(s.id)}" onclick="window.editStudentBtn(this)">Edit</button>`
+      `<button class="btn secondary" onclick="openStudentForm('${esc(s.id)}')">Edit</button>`
   ]);
 
   c.innerHTML = `<div class="panel">
@@ -303,11 +304,7 @@ function renderActiveDirectory(c) {
   </div>`;
 }
 
-window.editStudentBtn = function(btn) {
-  const id = btn.getAttribute('data-id');
-  if(id) openStudentForm(id);
-  else alert('Error: Student ID not found.');
-};
+// Tinanggal na ang window.editStudentBtn dahil direkta na natin tinatawag ang openStudentForm
 
 function computeAge() {
   const bday = document.getElementById('f_birthday').value;
