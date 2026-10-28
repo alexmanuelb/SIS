@@ -3,13 +3,15 @@ let session = null;
 const $ = id => document.getElementById(id);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 
-// --- SMART MATCHING HELPER ---
+// --- SMART MATCHING HELPER PARA SA SHS AT JHS/ELEM ---
 function isStudentInSection(studentYr, courseGradeLevel, courseSection) {
     if (!studentYr || !courseGradeLevel) return false;
+    
     const studentGrade = studentYr.split(' - ')[0].trim();
     const courseBaseGrade = courseGradeLevel.split(' - ')[0].trim();
     const secMatch = studentYr.match(/Sec(?:tion)?\s*(\d+)/i);
     const studentSec = secMatch ? secMatch[1] : '';
+    
     return studentGrade === courseBaseGrade && studentSec === courseSection.toString().trim();
 }
 
@@ -18,9 +20,11 @@ function getSectionFromYr(yrString) {
     return secMatch ? secMatch[1] : '';
 }
 
+// --- EYE ICON TOGGLE LOGIC ---
 function togglePassword() {
   const passInput = $('loginPass');
   const icon = $('toggleIcon');
+  
   if (passInput.type === 'password') {
     passInput.type = 'text';
     icon.innerHTML = `<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle>`;
@@ -30,6 +34,7 @@ function togglePassword() {
   }
 }
 
+// --- FAST LOGIN LOGIC ---
 async function doLogin() {
   const username = $('loginUser').value.trim();
   const password = $('loginPass').value.trim();
@@ -242,7 +247,7 @@ function renderStudentDashboard(c) {
   setInterval(() => { if($('dash-clock')) $('dash-clock').textContent = new Date().toLocaleTimeString(); }, 1000);
 }
 
-// --- STUDENT DIRECTORY ---
+// --- INI-AYOS NA STUDENT DIRECTORY (May Edit Button at Total Count) ---
 function renderActiveDirectory(c) {
   const uniqueGrades = [...new Set(db.students.map(s => s.yr.split(' - ')[0]))].filter(Boolean).sort();
   const currentGradeFilter = $('directoryGradeFilter') ? $('directoryGradeFilter').value : 'All';
@@ -253,12 +258,10 @@ function renderActiveDirectory(c) {
   if (currentGradeFilter !== 'All') active = active.filter(s => s.yr.split(' - ')[0].trim() === currentGradeFilter);
   if (currentSecFilter !== 'All') active = active.filter(s => getSectionFromYr(s.yr) === currentSecFilter);
   
-  const totalStudents = active.length;
-  
   let rows = active.map(s => [
       esc(s.id), esc(s.last), esc(s.first), esc(s.yr), 
       `<span class="badge ${s.status === 'Active' ? 'active' : 'inactive'}">${esc(s.status)}</span>`,
-      `<button type="button" class="btn secondary" onclick="openStudentForm('${esc(s.id)}')">Edit</button>`
+      `<button type="button" class="btn secondary" data-id="${esc(s.id)}" onclick="window.editStudentBtn(this)">Edit</button>`
   ]);
 
   c.innerHTML = `<div class="panel">
@@ -285,13 +288,20 @@ function renderActiveDirectory(c) {
       </div>
       <div style="margin-left: auto; background:#5c0000; color:white; padding:10px 20px; border-radius:8px; font-weight:bold; font-size:14px; display:flex; align-items:center; gap:8px;">
         <span style="font-size:18px;">👥</span>
-        Total Students: <span style="font-size:20px;">${totalStudents}</span>
+        Total Students: <span style="font-size:20px;">${active.length}</span>
       </div>
     </div>
+
     <div id="enrollFormArea"></div>
-    <div id="studentTableContainer">${simpleTable(['Student ID','Last Name','First Name','Year Level','Status','Action'], rows)}</div>
+    ${simpleTable(['Student ID','Last Name','First Name','Year Level','Status','Action'], rows)}
   </div>`;
 }
+
+window.editStudentBtn = function(btn) {
+  const id = btn.getAttribute('data-id');
+  if(id) openStudentForm(id);
+  else alert('Error: Student ID not found.');
+};
 
 function computeAge() {
   const bday = document.getElementById('f_birthday').value;
@@ -425,8 +435,7 @@ async function saveStudent(existingId) {
 
   db.students = await (await fetch('/api/students')).json();
   db.users = await (await fetch('/api/users')).json();
-  $('enrollFormArea').innerHTML = ''; 
-  renderActiveDirectory($('content')); 
+  $('enrollFormArea').innerHTML = ''; renderActiveDirectory($('content')); 
 }
 
 function renderFacultyDirectory(c) {
@@ -440,7 +449,7 @@ function renderFacultyDirectory(c) {
         esc(f.name), 
         esc(f.email || 'N/A'), 
         advisoryDisplay, 
-        `<button type="button" class="btn secondary" onclick="openEditFacultyForm('${esc(f.username)}')">Edit</button>`
+        `<button type="button" class="btn secondary" onclick="window.openEditFacultyForm('${esc(f.username)}')">Edit</button>`
     ];
   });
 
@@ -450,7 +459,7 @@ function renderFacultyDirectory(c) {
       <button type="button" class="btn" onclick="openAddFacultyForm()">+ Add New Teacher</button>
     </div>
     <div id="facultyFormArea"></div>
-    <div id="facultyTableContainer">${simpleTable(['Username', 'Full Name', 'Email', 'Advisory Class', 'Action'], rows)}</div>
+    ${simpleTable(['Username', 'Full Name', 'Email', 'Advisory Class', 'Action'], rows)}
   </div>`;
 }
 
@@ -521,21 +530,19 @@ async function saveFaculty() {
 }
 
 // --- BAGONG FIX PARA SA EDIT FACULTY (Gumagana kahit saan) ---
-function openEditFacultyForm(username) {
+window.openEditFacultyForm = function(username) {
   const user = db.users.find(u => u.username === username);
   if(!user) return alert('User not found');
   
-  // Gumamit tayo ng Prompt para siguradong lalabas kahit saang page
   const newName = prompt("Edit Full Name:", user.name);
-  if (newName === null || newName.trim() === "") return; // Kinancel
-
-  const newDept = prompt("Edit Department:", user.section || "");
-  if (newDept === null) return;
+  if (newName === null || newName.trim() === "") return; 
 
   const newPass = prompt("Enter new password (leave blank to keep current):", "");
   if (newPass === null) return;
 
-  // I-update agad via API
+  const newDept = prompt("Edit Department:", user.section || "");
+  if (newDept === null) return;
+
   const rec = { username: user.username, password: newPass, name: newName.trim(), role: 'Faculty', section: newDept.trim() };
   
   fetch('/api/users/update', { 
@@ -546,7 +553,6 @@ function openEditFacultyForm(username) {
       if(res.ok) {
           alert('Teacher updated successfully!');
           db.users = await (await fetch('/api/users')).json();
-          // I-refresh ang kasalukuyang page
           renderFacultyDirectory($('content')); 
       } else {
           alert('Failed to update teacher.');
@@ -667,7 +673,7 @@ function renderUsers(c) {
   const rows = filteredUsers.map(u => [
     esc(u.username), esc(u.name), esc(u.role), esc(u.section||'—'),
     `<div style="display:flex; gap:5px;">
-        ${u.role === 'Student' ? `<button type="button" class="btn secondary" onclick="openEditStudentFromUsers('${esc(u.username)}')">Edit</button>` : (u.role === 'Faculty' ? `<button type="button" class="btn secondary" onclick="openEditFacultyForm('${esc(u.username)}')">Edit</button>` : '')}
+        ${u.role === 'Student' ? `<button type="button" class="btn secondary" onclick="window.editStudentFromUsers('${esc(u.username)}')">Edit</button>` : (u.role === 'Faculty' ? `<button type="button" class="btn secondary" onclick="window.openEditFacultyForm('${esc(u.username)}')">Edit</button>` : '')}
         ${u.role !== 'Admin' ? `<button type="button" class="btn" style="background:#a00;" onclick="deleteUser('${esc(u.username)}')">Delete</button>` : ''}
      </div>`
   ]);
@@ -688,16 +694,11 @@ function renderUsers(c) {
   </div>`;
 }
 
-// --- BAGONG FIX PARA SA STUDENT EDIT MULA SA USERS PAGE ---
-function openEditStudentFromUsers(username) {
-    // Ire-redirect sa Student Directory at bubuksan ang form
+window.editStudentFromUsers = function(username) {
     const student = db.students.find(s => s.id === username || s.username === username);
     if (!student) return alert('Student record not found in directory.');
     
-    // Pumunta sa Student Directory page
     navigate('activeDirectory');
-    
-    // Mag-antay ng konti tapos buksan ang form
     setTimeout(() => {
         openStudentForm(student.id);
     }, 300);
@@ -885,53 +886,23 @@ async function loadAttendance() {
   const date = $('att_date').value;
   const crs = db.courses.find(x => x.code === code);
   if (!crs) return;
-
-  let list = db.students.filter(s => isStudentInSection(s.yr, crs.gradeLevel, crs.section));
-
-  if (list.length === 0) {
-      $('att_list').innerHTML = `<div class="panel" style="background:#f9eaea; border-left:4px solid #a00;"><p style="color:#a00; font-weight:bold;">Walang estudyanteng naka-assign sa Grade Level at Section na ito.</p></div>`;
-      return;
+  let list = [];
+  for (const s of db.students) {
+    const en = await (await fetch('/api/enrollments/' + s.id)).json();
+    if (en.some(e => e.courseCode === code)) list.push(s);
   }
-
   const existing = await (await fetch(`/api/attendance/${code}/${crs.section}/${date}`)).json();
   const map = {}; existing.forEach(e => map[e.studentId] = e.status);
-  
   $('att_list').innerHTML = `<div class="panel" style="background:#f9f9f9; border:1px solid #ddd; padding:20px;">
   <h4 style="margin-bottom:15px; color:#5c0000;">Taking Attendance: ${esc(crs.name)} (${esc(date)})</h4>
   <table style="width:100%;"><thead><tr><th>Student Name</th><th>Status</th></tr></thead><tbody>
-    ${list.map(s => `<tr><td style="padding:10px; border-bottom:1px solid #eee;">${esc(s.last+', '+s.first)}</td><td style="padding:10px; border-bottom:1px solid #eee;">
-      <select id="att_status_${s.id}" style="padding:8px; border-radius:4px; border:1px solid #ccc;">
-        <option value="Present" ${map[s.id]==='Present' || !map[s.id] ? 'selected' : ''}>Present</option>
-        <option value="Absent" ${map[s.id]==='Absent'?'selected':''}>Absent</option>
-        <option value="Late" ${map[s.id]==='Late'?'selected':''}>Late</option>
-      </select>
-    </td></tr>`).join('')}</tbody></table>
-    <div style="margin-top:20px; text-align:right;">
-        <button type="button" class="btn" onclick="saveBulkAttendance('${code}', '${crs.section}', '${date}', '${crs.gradeLevel}')">Save Attendance</button>
-    </div>
-  </div>`;
+    ${list.map(s => `<tr><td style="padding:10px; border-bottom:1px solid #eee;">${esc(s.last+', '+s.first)}</td><td style="padding:10px; border-bottom:1px solid #eee;"><select onchange="markAttendance('${code}','${esc(crs.section)}','${esc(s.id)}','${date}', this.value)" style="padding:8px; border-radius:4px; border:1px solid #ccc;">
+      <option value="Present" ${map[s.id]==='Present'?'selected':''}>Present</option><option value="Absent" ${map[s.id]==='Absent'?'selected':''}>Absent</option><option value="Late" ${map[s.id]==='Late'?'selected':''}>Late</option>
+    </select></td></tr>`).join('')}</tbody></table></div>`;
 }
 
-async function saveBulkAttendance(courseCode, section, date, gradeLevel) {
-  const crs = db.courses.find(x => x.code === courseCode);
-  let list = db.students.filter(s => isStudentInSection(s.yr, crs.gradeLevel, crs.section));
-  let successCount = 0;
-
-  for (const s of list) {
-    const statusSelect = $(`att_status_${s.id}`);
-    if (statusSelect) {
-      const status = statusSelect.value;
-      await fetch('/api/attendance', { 
-        method: 'POST', 
-        headers: {'Content-Type':'application/json'}, 
-        body: JSON.stringify({ courseCode, section, studentId: s.id, date, status }) 
-      });
-      successCount++;
-    }
-  }
-
-  alert(`Successfully saved attendance for ${successCount} students!`);
-  showAttendanceHistory(gradeLevel, section);
+async function markAttendance(courseCode, section, studentId, date, status) {
+  await fetch('/api/attendance', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ courseCode, section, studentId, date, status }) });
 }
 
 async function showAttendanceHistory(gradeLevel, section) {
