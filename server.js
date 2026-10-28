@@ -82,54 +82,50 @@ function buildDatabase() {
         });
         insertUser.finalize();
 
-        // --- STUDENT GENERATION LOGIC (Unique Names, 27 per section) ---
+        // --- STUDENT GENERATION LOGIC (30 per section for Elem/JHS, 27 for SHS) ---
         const insertStudent = db.prepare(`INSERT INTO students (id, last, first, mi, address, course, yr, status, enrol, username, password, birthday, email, age, gender, guardianName, guardianContact) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
         
-        // Malaking listahan ng names para hindi masyadong magkakapareho
         const firstNamesList = ['Juan', 'Maria', 'Jose', 'Ana', 'Pedro', 'Rosa', 'Mark', 'Katie', 'Alexandra', 'Paul', 'Liza', 'Carlo', 'Mia', 'Leo', 'Ella', 'Ben', 'Sarah', 'David', 'Mary', 'James', 'John', 'Emily', 'Alan', 'Jane', 'Michael', 'Sarah', 'David', 'Jessica', 'Daniel', 'Ashley', 'Matthew', 'Amanda', 'Christopher', 'Melissa', 'Andrew', 'Stephanie', 'Joshua', 'Nicole', 'Ryan', 'Angela', 'Nicholas', 'Heather', 'Tyler', 'Amber', 'Brandon', 'Michelle', 'Zachary', 'Tiffany', 'Jacob', 'Christina'];
-        
         const lastNamesList = ['Dela Cruz', 'Reyes', 'Santos', 'Manuel', 'Garcia', 'Mendoza', 'Torres', 'Flores', 'Ramos', 'Rivera', 'Cruz', 'Bautista', 'Ocampo', 'Aquino', 'Navarro', 'Villanueva', 'Gonzales', 'Perez', 'Castillo', 'Soriano', 'Smith', 'Johnson', 'Williams', 'Brown', 'Jones', 'Garcia', 'Miller', 'Davis', 'Rodriguez', 'Martinez', 'Hernandez', 'Lopez', 'Gonzalez', 'Wilson', 'Anderson', 'Thomas', 'Taylor', 'Moore', 'Jackson', 'Martin', 'Lee', 'Perez', 'Thompson', 'White', 'Harris', 'Sanchez', 'Clark', 'Ramirez', 'Lewis', 'Robinson'];
 
-        // Shuffle arrays para random ang combination
         firstNamesList.sort(() => Math.random() - 0.5);
         lastNamesList.sort(() => Math.random() - 0.5);
 
         let globalStudentCount = 0;
 
         for (let grade = 1; grade <= 12; grade++) {
-            // Logic: 30 students per year level (27 sa Sec 1, 3 sa Sec 2).
-            // Sa SHS (Grade 11 & 12), 27 lang total (27 sa Sec 1, 0 sa Sec 2).
-            let totalStudentsTarget = (grade >= 11) ? 27 : 30; 
-            
-            for (let i = 0; i < totalStudentsTarget; i++) {
-                // Kunin ang susunod na name sa shuffled list
-                const first = firstNamesList[globalStudentCount % firstNamesList.length];
-                const last = lastNamesList[globalStudentCount % lastNamesList.length];
-                
-                // Distribution: Kung i < 27, Sec 1. Kung i >= 27, Sec 2.
-                const sec = (i < 27) ? '1' : '2'; 
-                
-                let studentId = `2026-${String(grade).padStart(2, '0')}${String(i + 1).padStart(2, '0')}`;
-                let birthday = `200${10 - grade}-05-14`;
-                let email = `${first.toLowerCase()}.${last.toLowerCase()}${globalStudentCount}@example.com`;
-                let age = (12 - grade) + 6;
-                if(age < 5) age = 5;
-                let gender = (globalStudentCount % 2 === 0) ? 'Male' : 'Female';
+            // 2 sections per grade level
+            for (let sec = 1; sec <= 2; sec++) {
+                // Elem/JHS = 30 per section. SHS = 27 per section.
+                let targetCount = (grade >= 11) ? 27 : 30;
 
-                let courseType = 'Elem';
-                let yrLevel = `Grade ${grade}`;
-                
-                if (grade >= 7 && grade <= 10) courseType = 'JHS';
-                if (grade >= 11) courseType = 'SHS';
+                for (let i = 0; i < targetCount; i++) {
+                    const first = firstNamesList[globalStudentCount % firstNamesList.length];
+                    const last = lastNamesList[globalStudentCount % lastNamesList.length];
+                    
+                    let studentId = `2026-${String(grade).padStart(2, '0')}${sec}${String(i + 1).padStart(2, '0')}`;
+                    let birthday = `200${10 - grade}-05-14`;
+                    let email = `${first.toLowerCase()}.${last.toLowerCase()}${globalStudentCount}@example.com`;
+                    let age = (12 - grade) + 6;
+                    if(age < 5) age = 5;
+                    let gender = (globalStudentCount % 2 === 0) ? 'Male' : 'Female';
 
-                if (courseType === 'SHS') {
-                    yrLevel = `Grade ${grade} - STEM - 1st Semester - Sec ${sec}`;
-                } else {
-                    yrLevel = `Grade ${grade} - Sec ${sec}`;
+                    let courseType = 'Elem';
+                    let yrLevel = `Grade ${grade}`;
+                    
+                    if (grade >= 7 && grade <= 10) courseType = 'JHS';
+                    if (grade >= 11) courseType = 'SHS';
+
+                    // Tamang format ng yr field
+                    if (courseType === 'SHS') {
+                        yrLevel = `Grade ${grade} - STEM - 1st Semester - Sec ${sec}`;
+                    } else {
+                        yrLevel = `Grade ${grade} - Sec ${sec}`;
+                    }
+
+                    insertStudent.run(studentId, last, first, 'A', 'Mariveles, Bataan', courseType, yrLevel, 'Active', 'Enrolled', studentId, `${first.toLowerCase()}123`, birthday, email, age, gender, `Parent ${last}`, '0917-000-0000');
+                    globalStudentCount++;
                 }
-
-                insertStudent.run(studentId, last, first, 'A', 'Mariveles, Bataan', courseType, yrLevel, 'Active', 'Enrolled', studentId, `${first.toLowerCase()}123`, birthday, email, age, gender, `Parent ${last}`, '0917-000-0000');
-                globalStudentCount++;
             }
         }
         insertStudent.finalize();
