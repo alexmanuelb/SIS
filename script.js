@@ -807,7 +807,6 @@ function renderCourses(c) {
     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
       <h2 style="margin:0;">Course & Section Management</h2>
       <div style="display:flex; gap:10px;">
-        <button type="button" class="btn" onclick="generateSchedulesManual()">⚡ Generate Schedules</button>
         <button type="button" class="btn" onclick="openAddCourseForm()">+ Add New Course</button>
         <button type="button" class="btn secondary" onclick="openAddSectionForm()">+ Add New Section</button>
       </div>
@@ -831,13 +830,6 @@ function renderCoursesTable() {
   $('courseTableContainer').innerHTML = simpleTable(['Code','Name','Grade Level','Section','Adviser','Subject Teacher'],
     filtered.map(x => [esc(x.code), esc(x.name), esc(x.gradeLevel), esc(x.section), esc(x.adviser), esc(x.subjectTeacher)])
   );
-}
-
-async function generateSchedulesManual() {
-    if (!confirm('I-regenerate ang LAHAT ng schedules? Mapapatungan ang existing.')) return;
-    await fetch('/api/schedules/generate', { method: 'POST' });
-    alert('Schedules regenerated successfully!');
-    db.schedules = await (await fetch('/api/schedules')).json();
 }
 
 function openAddCourseForm() {
@@ -1286,15 +1278,7 @@ async function renderSchedule(c) {
     }
   });
 
-  html += `</div>
-    <div style="margin-top:20px; background:#f0f0f0; padding:12px; border-radius:6px; font-size:13px; color:#555;">
-      <b>📌 Schedule Rules:</b> 
-      Snack Break: 9:30 AM – 10:00 AM &nbsp;|&nbsp; Lunch Break: 12:00 PM – 1:00 PM
-      <br>${isSHS 
-        ? 'SHS: 1.5 hrs per subject • 3–4 subjects/day • 2 meetings per week per subject (no repeat within same day)' 
-        : 'Elem/JHS: 1 hr per subject • 1 meeting per subject per day'}
-    </div>
-  </div>`;
+  html += `</div></div>`;
   c.innerHTML = html;
 }
 

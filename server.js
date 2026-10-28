@@ -85,7 +85,7 @@ function buildDatabase() {
         });
         insertUser.finalize();
 
-        // --- STUDENT GENERATION LOGIC (Sections 1 to 3) ---
+        // --- STUDENT GENERATION LOGIC ---
         const insertStudent = db.prepare(`INSERT INTO students (id, last, first, mi, address, course, yr, status, enrol, username, password, birthday, email, age, gender, guardianName, guardianContact) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
         
         const firstNamesList = ['Juan', 'Maria', 'Jose', 'Ana', 'Pedro', 'Rosa', 'Mark', 'Katie', 'Alexandra', 'Paul', 'Liza', 'Carlo', 'Mia', 'Leo', 'Ella', 'Ben', 'Sarah', 'David', 'Mary', 'James', 'John', 'Emily', 'Alan', 'Jane', 'Michael', 'Sarah', 'David', 'Jessica', 'Daniel', 'Ashley', 'Matthew', 'Amanda', 'Christopher', 'Melissa', 'Andrew', 'Stephanie', 'Joshua', 'Nicole', 'Ryan', 'Angela', 'Nicholas', 'Heather', 'Tyler', 'Amber', 'Brandon', 'Michelle', 'Zachary', 'Tiffany', 'Jacob', 'Christina'];
@@ -99,7 +99,7 @@ function buildDatabase() {
         for (let grade = 1; grade <= 12; grade++) {
             const yearPrefix = 2027 - grade;
             
-            for (let sec = 1; sec <= 3; sec++) { // Sections 1, 2, 3
+            for (let sec = 1; sec <= 3; sec++) {
                 let targetCount = 30; 
 
                 for (let i = 0; i < targetCount; i++) {
@@ -157,27 +157,46 @@ function buildDatabase() {
             { level: 'Grade 12 - STEM - 2nd Semester', subjects: [['PAGS', 'Pagsulat'], ['PE12B', 'PE & Health 4'], ['ENTR', 'Entrepreneurship'], ['INQ', 'Inquiries'], ['PHY2', 'Gen Physics 2'], ['BIO2', 'Gen Biology 2'], ['STEMW', 'Work Immersion']], capacity: 30 }
         ];
 
-        let globalSubCount = 0;
+        // --- CUSTOM TEACHER ASSIGNMENT LOGIC (MAX 3 SUBJECTS) ---
+        let teacherLoads = {};
+        teachers.forEach(t => teacherLoads[t] = 0);
+        let tIndex = 0;
+
+        function getTeacherForSubject() {
+            // Hanapin ang teacher na may load < 3
+            for (let i = 0; i < teachers.length; i++) {
+                let checkIdx = (tIndex + i) % teachers.length;
+                if (teacherLoads[teachers[checkIdx]] < 3) {
+                    teacherLoads[teachers[checkIdx]]++;
+                    tIndex = (checkIdx + 1) % teachers.length;
+                    return teachers[checkIdx];
+                }
+            }
+            // Fallback kung lahat full (should not happen with 30 teachers)
+            const fallback = teachers[tIndex % teachers.length];
+            teacherLoads[fallback]++;
+            tIndex++;
+            return fallback;
+        }
 
         gradeConfigs.forEach(config => {
             for (let sec = 1; sec <= 3; sec++) {
                 const sectionStr = sec.toString();
                 const gradePrefix = config.level.replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
                 
-                const advisoryTeacher = teachers[(globalSubCount + sec) % teachers.length];
+                // Advisory teacher (hiwalay na logic, pwedeng mag-overlap sa subject load)
+                const advisoryTeacher = getTeacherForSubject();
 
                 config.subjects.forEach((sub, idx) => {
                     const subCode = sub[0];
                     const subName = sub[1];
                     const courseCode = `${subCode}-${gradePrefix}-${sec}`;
                     
-                    const teacherIdx = (globalSubCount + idx + (sec * 2)) % teachers.length;
-                    const subjectTeacher = teachers[teacherIdx];
+                    // Gagamit ng round-robin max 3 load logic
+                    const subjectTeacher = getTeacherForSubject();
                     
                     insertCourse.run(courseCode, `${subName} (${config.level})`, config.level, sectionStr, config.capacity, advisoryTeacher, subjectTeacher, 'Open');
                 });
-                
-                globalSubCount += config.subjects.length;
             }
         });
         
@@ -346,7 +365,6 @@ app.post('/api/sections/add', (req, res) => {
     const { gradeLevel, newSection, adviser } = req.body;
     if (!gradeLevel || !newSection) return res.status(400).json({ error: "Missing fields" });
 
-    // Hanapin ang template courses (galing sa Section 1)
     db.all("SELECT * FROM courses WHERE gradeLevel = ? AND section = '1'", [gradeLevel], (err, templates) => {
         if (err || !templates || templates.length === 0) {
             return res.status(400).json({ error: "No template courses found in Section 1 for this grade level." });
@@ -362,7 +380,6 @@ app.post('/api/sections/add', (req, res) => {
                 insertCount++;
                 if (insertCount === templates.length) {
                     insertCourse.finalize(() => {
-                        // Auto-enroll existing students na nasa bagong section
                         db.all("SELECT * FROM students", [], (errS, students) => {
                             if (errS || !students) {
                                 generateSchedules();
@@ -370,8 +387,6 @@ app.post('/api/sections/add', (req, res) => {
                             }
                             
                             const insertEnroll = db.prepare(`INSERT INTO enrollments (studentId, courseCode, section, term) VALUES (?, ?, ?, ?)`);
-                            let enrolledCount = 0;
-
                             students.forEach(s => {
                                 const secMatch = s.yr.match(/Sec(?:tion)?\s*(\d+)/i);
                                 const studentSec = secMatch ? secMatch[1] : '';
@@ -381,7 +396,6 @@ app.post('/api/sections/add', (req, res) => {
                                 const studentGrade = parts[0].trim();
                                 if (studentGrade !== gradeLevel.split(' - ')[0].trim()) return;
 
-                                // Hanapin ang newly created courses for this student
                                 db.all("SELECT * FROM courses WHERE gradeLevel = ? AND section = ?", [gradeLevel, newSection], (errC, newCourses) => {
                                     if (errC || !newCourses) return;
                                     newCourses.forEach(nc => {
@@ -400,14 +414,6 @@ app.post('/api/sections/add', (req, res) => {
             });
         });
     });
-});
-
-// ==========================================
-// ✅ NEW ENDPOINT: Generate Schedules Manually
-// ==========================================
-app.post('/api/schedules/generate', (req, res) => {
-    generateSchedules();
-    res.json({ message: "Schedules generated successfully!" });
 });
 
 // REST OF THE API ROUTES
@@ -540,7 +546,6 @@ app.post('/api/students', (req, res) => {
                 if (e) return res.status(400).json({ error: e.message });
                 db.run(`UPDATE users SET name=?, section=? WHERE username=?`, [fullName, yr, id]);
                 
-                // AUTO ENROLL: Check kung may bagong section na dapat i-enroll
                 db.all("SELECT * FROM courses WHERE section = ?", [section], (errC, coursesInSec) => {
                     if (errC || !coursesInSec) return res.json({ message: "Updated" });
                     
@@ -572,7 +577,6 @@ app.post('/api/students', (req, res) => {
                     if (e) return res.status(400).json({ error: e.message });
                     
                     db.run(`INSERT INTO users (username, password, name, role, section, email) VALUES (?,?,?,'Student',?,?)`, [id, generatedPass, fullName, yr, email], async () => {
-                        // AUTO ENROLL NEW STUDENT
                         db.all("SELECT * FROM courses WHERE section = ?", [section], (errC, coursesInSec) => {
                             if (!errC && coursesInSec) {
                                 const insertEnroll = db.prepare(`INSERT INTO enrollments (studentId, courseCode, section, term) VALUES (?, ?, ?, ?)`);
