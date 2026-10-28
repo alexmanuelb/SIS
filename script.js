@@ -3,6 +3,23 @@ let session = null;
 const $ = id => document.getElementById(id);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 
+// --- HELPER PARA SA EXACT MATCH NG STUDENT SA SECTION ---
+function isStudentInSection(studentYr, courseGradeLevel, courseSection) {
+    if (!studentYr || !courseGradeLevel) return false;
+    
+    // I-split ang studentYr (e.g., "Grade 11 - STEM - 1st Semester - Sec 1")
+    const parts = studentYr.split(' - ');
+    
+    // Ang unang part ay dapat exact match sa grade level (e.g., "Grade 11")
+    const studentGrade = parts[0].trim();
+    
+    // Kunin ang section number (pwedeng "Sec 1" o "Section 1")
+    const secMatch = studentYr.match(/Sec(?:tion)?\s*(\d+)/i);
+    const studentSec = secMatch ? secMatch[1] : '';
+
+    return studentGrade === courseGradeLevel.trim() && studentSec === courseSection.toString().trim();
+}
+
 // --- EYE ICON TOGGLE LOGIC ---
 function togglePassword() {
   const passInput = $('loginPass');
@@ -182,20 +199,15 @@ async function updateGlobalTerm() {
   alert('Global School Term updated to ' + newTerm + '. Student records and schedules will now reflect this term.');
 }
 
-// --- INI-AYOS NA FACULTY DASHBOARD (May Students Handled) ---
+// --- FACULTY DASHBOARD (Tama na bilang ng Students Handled) ---
 function renderFacultyDashboard(c) {
   const myCourses = db.courses.filter(x => x.adviser === session.name || x.subjectTeacher === session.name);
   
   const uniqueStudents = new Set();
   
   myCourses.forEach(crs => {
-      // Exact match para sa Grade Level at Section
-      const enrolled = db.students.filter(s => {
-          const parts = s.yr.split(' - ');
-          const studentGrade = parts[0].trim();
-          const studentSec = s.yr.split('Sec ')[1] ? s.yr.split('Sec ')[1].trim() : '';
-          return studentGrade === crs.gradeLevel && studentSec === crs.section;
-      });
+      // Gamitin ang helper function para sa exact match
+      const enrolled = db.students.filter(s => isStudentInSection(s.yr, crs.gradeLevel, crs.section));
       enrolled.forEach(s => uniqueStudents.add(s.id));
   });
 
@@ -224,7 +236,7 @@ function renderStudentDashboard(c) {
   setInterval(() => { if($('dash-clock')) $('dash-clock').textContent = new Date().toLocaleTimeString(); }, 1000);
 }
 
-// --- STUDENT DIRECTORY (May Edit Button at Filter) ---
+// --- STUDENT DIRECTORY (May Filter at Edit) ---
 function renderActiveDirectory(c) {
   const uniqueGrades = [...new Set(db.students.map(s => s.yr.split(' - ')[0]))].filter(Boolean).sort();
   const currentFilter = $('directoryFilter') ? $('directoryFilter').value : 'All';
@@ -232,7 +244,8 @@ function renderActiveDirectory(c) {
   let active = db.students.filter(s => s.status !== 'Archived' && s.status !== 'Graduated');
   
   if (currentFilter !== 'All') {
-      active = active.filter(s => s.yr.startsWith(currentFilter + ' - ') || s.yr === currentFilter);
+      // Exact match sa Grade Level
+      active = active.filter(s => s.yr.split(' - ')[0].trim() === currentFilter);
   }
   
   let rows = active.map(s => [
@@ -746,6 +759,7 @@ async function deleteUser(username) {
   }
 }
 
+// --- INI-AYOS NA CLASS RECORDS (Exact Match using Helper Function) ---
 async function renderClassRecords(c) {
   const myCourses = db.courses.filter(x => {
     const isTeacher = x.adviser === session.name || x.subjectTeacher === session.name;
@@ -770,13 +784,8 @@ async function renderClassRecords(c) {
       const [gradeLevel, secName] = key.split('|');
       const sectionNumber = secName.replace('Section ', '').trim();
       
-      // EKSAKTONG BILANG NG STUDENTS (Exact Match sa Grade at Sec)
-      const studentCount = db.students.filter(s => {
-          const parts = s.yr.split(' - ');
-          const studentGrade = parts[0].trim();
-          const studentSec = s.yr.split('Sec ')[1] ? s.yr.split('Sec ')[1].trim() : '';
-          return studentGrade === gradeLevel && studentSec === sectionNumber;
-      }).length;
+      // GAMITIN ANG HELPER FUNCTION PARA SA EKSAKTONG BILANG
+      const studentCount = db.students.filter(s => isStudentInSection(s.yr, gradeLevel, sectionNumber)).length;
       
       html += folderCard(`${esc(gradeLevel)}`, `${esc(secName)} • ${studentCount} Students`, `showClassFolder('${esc(gradeLevel)}', '${esc(secName)}')`);
   }
@@ -790,13 +799,8 @@ async function showClassFolder(gradeLevel, secName) {
   const section = secName.replace('Section ', '').trim();
   const keyStr = `${gradeLevel} | ${secName}`;
   
-  // EKSAKTONG FILTER PARA SA STUDENTS
-  let students = db.students.filter(s => {
-      const parts = s.yr.split(' - ');
-      const studentGrade = parts[0].trim();
-      const studentSec = s.yr.split('Sec ')[1] ? s.yr.split('Sec ')[1].trim() : '';
-      return studentGrade === gradeLevel && studentSec === section;
-  });
+  // GAMITIN ANG HELPER FUNCTION PARA SA LISTAHAN
+  let students = db.students.filter(s => isStudentInSection(s.yr, gradeLevel, section));
   
   const attendanceHistory = await (await fetch(`/api/attendance/history/${encodeURIComponent(section)}`)).json();
 
@@ -880,12 +884,8 @@ async function showGradeEntryFolder(gradeLevel, secName) {
   
   const myCourses = db.courses.filter(x => (x.adviser === session.name || x.subjectTeacher === session.name) && x.gradeLevel === gradeLevel && x.section === section);
   
-  let students = [];
-  for (const s of db.students) {
-    if (s.yr.includes(gradeLevel) && s.yr.includes('Sec ' + section)) {
-        students.push(s);
-    }
-  }
+  // GAMITIN ANG HELPER FUNCTION
+  let students = db.students.filter(s => isStudentInSection(s.yr, gradeLevel, section));
 
   const males = students.filter(s => s.gender === 'Male').sort((a, b) => a.last.localeCompare(b.last));
   const females = students.filter(s => s.gender === 'Female').sort((a, b) => a.last.localeCompare(b.last));
