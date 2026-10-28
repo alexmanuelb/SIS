@@ -252,7 +252,7 @@ function renderStudentDashboard(c) {
   setInterval(() => { if($('dash-clock')) $('dash-clock').textContent = new Date().toLocaleTimeString(); }, 1000);
 }
 
-// --- STUDENT DIRECTORY (Dynamic Section Filter) ---
+// --- STUDENT DIRECTORY ---
 function renderActiveDirectory(c) {
   const uniqueGrades = [...new Set(db.students.map(s => s.yr.split(' - ')[0]))].filter(Boolean).sort();
   const currentGradeFilter = $('directoryGradeFilter') ? $('directoryGradeFilter').value : 'All';
@@ -500,7 +500,7 @@ function computeAge() {
   document.getElementById('f_age').value = age;
 }
 
-// --- ADD STUDENT FORM (Dynamic Section Dropdown) ---
+// --- ADD STUDENT FORM ---
 function openStudentForm(id) {
   const s = id ? db.students.find(x => x.id === id) : null;
   const nextId = s ? s.id : '2026-' + Math.floor(1000 + Math.random() * 9000);
@@ -521,9 +521,7 @@ function openStudentForm(id) {
   const yearLevels = ['Grade 1', 'Grade 2', 'Grade 3', 'Grade 4', 'Grade 5', 'Grade 6', 'Grade 7', 'Grade 8', 'Grade 9', 'Grade 10', 'Grade 11', 'Grade 12'];
   const statuses = ['Active', 'Archived', 'Graduated', 'Inactive']; 
 
-  // ✅ DYNAMIC SECTIONS — pull from db.courses
   const sections = getAvailableSections();
-  // Ensure current student's section is in the list (in case it was archived/removed from courses)
   if (currentSection && !sections.includes(currentSection)) {
     sections.push(currentSection);
     sections.sort((a, b) => Number(a) - Number(b));
@@ -654,7 +652,6 @@ function renderFacultyDirectory(c) {
   </div>`;
 }
 
-// --- TOP EDIT FORM PARA SA FACULTY (Dynamic Advisory) ---
 function openTopEditFacultyForm() {
     $('facultyFormArea').innerHTML = `
         <div class="form-panel" style="border-left: 4px solid #5c0000; background: #fffdfd;">
@@ -683,7 +680,6 @@ function loadFacultyForTopEdit() {
     
     const grades = ['Grade 1', 'Grade 2', 'Grade 3', 'Grade 4', 'Grade 5', 'Grade 6', 'Grade 7', 'Grade 8', 'Grade 9', 'Grade 10', 'Grade 11 - STEM', 'Grade 11 - HUMSS', 'Grade 11 - ABM', 'Grade 12 - STEM', 'Grade 12 - HUMSS', 'Grade 12 - ABM'];
     
-    // ✅ DYNAMIC SECTIONS
     const finalSections = getAvailableSections();
     let uniqueSections = [];
     grades.forEach(g => finalSections.forEach(s => uniqueSections.push(`${g} - Section ${s}`)));
@@ -737,11 +733,9 @@ async function saveTopEditFaculty(username) {
     alert('Teacher updated successfully!');
 }
 
-// --- ADD FACULTY FORM (Dynamic Advisory) ---
 function openAddFacultyForm() {
   const grades = ['Grade 1', 'Grade 2', 'Grade 3', 'Grade 4', 'Grade 5', 'Grade 6', 'Grade 7', 'Grade 8', 'Grade 9', 'Grade 10', 'Grade 11 - STEM', 'Grade 11 - HUMSS', 'Grade 11 - ABM', 'Grade 12 - STEM', 'Grade 12 - HUMSS', 'Grade 12 - ABM'];
   
-  // ✅ DYNAMIC SECTIONS
   const finalSections = getAvailableSections();
   let uniqueSections = [];
   grades.forEach(g => finalSections.forEach(s => uniqueSections.push(`${g} - Section ${s}`)));
@@ -1189,30 +1183,80 @@ function renderRegistration(c) {
   </div>`;
 }
 
+// ==========================================
+// ✅ FIXED renderSchedule — multiple fallbacks + rules display
+// ==========================================
 async function renderSchedule(c) {
   const s = currentStudent();
-  let studentYear = s.yr.split('-')[0].trim(); 
-  let queryYr = s.yr;
-  if (s.course === 'SHS') {
-     const studentTrack = s.yr.includes('STEM') ? 'STEM' : s.yr.includes('HUMSS') ? 'HUMSS' : s.yr.includes('ABM') ? 'ABM' : '';
-     queryYr = `${studentYear} - ${studentTrack} - ${db.activeTerm}`;
-  }
-  let studentSec = '1'; 
-  if (s.yr.includes('Sec ')) studentSec = s.yr.split('Sec ')[1].trim();
-
-  const sched = await (await fetch(`/api/schedules/${encodeURIComponent(queryYr)}/${studentSec}`)).json();
-  
-  if (sched.length === 0) {
-    c.innerHTML = `<div class="panel"><h2>Class Schedule</h2><p style="color:#999;">No schedule found for ${esc(db.activeTerm)}.</p></div>`;
+  if (!s) {
+    c.innerHTML = `<div class="panel"><h2>Class Schedule</h2><p style="color:#999;">Student record not found.</p></div>`;
     return;
   }
 
-  const daysOrder = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday']; 
-  let html = `<div class="panel"><h2>Class Schedule</h2><p style="margin-bottom:15px; color:#666;">Weekly schedule for <b>${esc(s.yr)}</b> | <b>${esc(db.activeTerm)}</b></p>
+  const studentYear = s.yr.split(' - ')[0].trim();
+  const studentTrack = s.yr.includes('STEM') ? 'STEM' : s.yr.includes('HUMSS') ? 'HUMSS' : s.yr.includes('ABM') ? 'ABM' : '';
+  let studentSec = '1';
+  const secMatch = s.yr.match(/Sec(?:tion)?\s*(\d+)/i);
+  if (secMatch) studentSec = secMatch[1];
+
+  // Build query candidates
+  const candidates = [];
+  if (s.course === 'SHS' && studentTrack) {
+    candidates.push(`${studentYear} - ${studentTrack} - ${db.activeTerm}`);
+    candidates.push(`${studentYear} - ${studentTrack} - 1st Semester`);
+    candidates.push(`${studentYear} - ${studentTrack} - 2nd Semester`);
+  }
+  candidates.push(studentYear);
+  candidates.push(s.yr);
+
+  let sched = [];
+  for (const q of candidates) {
+    try {
+      const r = await (await fetch(`/api/schedules/${encodeURIComponent(q)}/${studentSec}`)).json();
+      if (Array.isArray(r) && r.length > 0) { sched = r; break; }
+    } catch (e) { /* ignore */ }
+  }
+
+  // Fallback: pull from local db.schedules
+  if (sched.length === 0 && db.schedules && db.schedules.length > 0) {
+    sched = db.schedules.filter(x => {
+      const gradeMatch = x.gradeLevel && x.gradeLevel.includes(studentYear);
+      const secMatch2 = String(x.section) === String(studentSec);
+      if (s.course === 'SHS') {
+        return gradeMatch && x.gradeLevel.includes(studentTrack) && secMatch2;
+      }
+      return gradeMatch && secMatch2;
+    });
+  }
+
+  if (sched.length === 0) {
+    c.innerHTML = `<div class="panel">
+      <h2>Class Schedule</h2>
+      <p style="color:#999;">No schedule found for <b>${esc(s.yr)}</b> — ${esc(db.activeTerm)}.</p>
+      <div style="margin-top:15px; padding:12px; background:#fff7e6; border-left:4px solid #d4a200; border-radius:6px; font-size:13px; color:#7a5c00;">
+        <b>⚠️ Admin action needed:</b> I-generate ang schedules sa <b>Course Management</b> page o i-restart ang server para mag-auto-generate.
+      </div>
+    </div>`;
+    return;
+  }
+
+  const daysOrder = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
+  sched.sort((a, b) => {
+    const da = daysOrder.indexOf(a.day);
+    const dbb = daysOrder.indexOf(b.day);
+    if (da !== dbb) return da - dbb;
+    return a.startTime.localeCompare(b.startTime);
+  });
+
+  const isSHS = s.course === 'SHS';
+
+  let html = `<div class="panel">
+    <h2>Class Schedule</h2>
+    <p style="margin-bottom:15px; color:#666;">Weekly schedule for <b>${esc(s.yr)}</b> | <b>${esc(db.activeTerm)}</b></p>
     <div style="display:grid; gap:20px;">`;
 
   daysOrder.forEach(day => {
-    const daySched = sched.filter(x => x.day === day).sort((a,b) => a.startTime.localeCompare(b.startTime));
+    const daySched = sched.filter(x => x.day === day);
     if (daySched.length > 0) {
       html += `<div style="background:#f9eaea; padding:15px; border-radius:8px; border-left:4px solid #5c0000;">
         <h3 style="color:#5c0000; margin-bottom:10px; text-transform:uppercase; font-size:14px;">${day}</h3>
@@ -1225,15 +1269,24 @@ async function renderSchedule(c) {
           <tbody>`;
       daySched.forEach(item => {
         html += `<tr style="border-bottom:1px solid #eee;">
-          <td style="padding:10px; font-weight:bold; color:#5c0000; font-size:13px;">${item.startTime} - ${item.endTime}</td>
-          <td style="padding:10px; font-size:14px;"><b>${esc(item.courseName)}</b></td>
-          <td style="padding:10px; font-size:13px; color:#555;">${esc(item.teacherName)}</td>
+          <td style="padding:10px; font-weight:bold; color:#5c0000; font-size:13px;">${esc(item.startTime)} - ${esc(item.endTime)}</td>
+          <td style="padding:10px; font-size:14px;"><b>${esc(item.courseName || item.code)}</b></td>
+          <td style="padding:10px; font-size:13px; color:#555;">${esc(item.teacherName || 'TBA')}</td>
         </tr>`;
       });
       html += `</tbody></table></div>`;
     }
   });
-  html += `</div></div>`;
+
+  html += `</div>
+    <div style="margin-top:20px; background:#f0f0f0; padding:12px; border-radius:6px; font-size:13px; color:#555;">
+      <b>📌 Schedule Rules:</b> 
+      Snack Break: 9:30 AM – 10:00 AM &nbsp;|&nbsp; Lunch Break: 12:00 PM – 1:00 PM
+      <br>${isSHS 
+        ? 'SHS: 1.5 hrs per subject • 3–4 subjects/day • 2 meetings per week per subject (no repeat within same day)' 
+        : 'Elem/JHS: 1 hr per subject • 1 meeting per subject per day'}
+    </div>
+  </div>`;
   c.innerHTML = html;
 }
 

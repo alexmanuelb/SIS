@@ -82,7 +82,6 @@ function buildDatabase() {
         });
         insertUser.finalize();
 
-        // --- STUDENT GENERATION LOGIC ---
         const insertStudent = db.prepare(`INSERT INTO students (id, last, first, mi, address, course, yr, status, enrol, username, password, birthday, email, age, gender, guardianName, guardianContact) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
         
         const firstNamesList = ['Juan', 'Maria', 'Jose', 'Ana', 'Pedro', 'Rosa', 'Mark', 'Katie', 'Alexandra', 'Paul', 'Liza', 'Carlo', 'Mia', 'Leo', 'Ella', 'Ben', 'Sarah', 'David', 'Mary', 'James', 'John', 'Emily', 'Alan', 'Jane', 'Michael', 'Sarah', 'David', 'Jessica', 'Daniel', 'Ashley', 'Matthew', 'Amanda', 'Christopher', 'Melissa', 'Andrew', 'Stephanie', 'Joshua', 'Nicole', 'Ryan', 'Angela', 'Nicholas', 'Heather', 'Tyler', 'Amber', 'Brandon', 'Michelle', 'Zachary', 'Tiffany', 'Jacob', 'Christina'];
@@ -94,7 +93,7 @@ function buildDatabase() {
         let globalStudentCount = 0;
 
         for (let grade = 1; grade <= 12; grade++) {
-            const yearPrefix = 2027 - grade; // 2026 for G1, 2015 for G12
+            const yearPrefix = 2027 - grade;
             
             for (let sec = 1; sec <= 2; sec++) {
                 let targetCount = 30; 
@@ -184,60 +183,124 @@ function buildDatabase() {
     });
 }
 
+// ==========================================
+// ✅ NEW SCHEDULE GENERATOR (FIXED)
+// ==========================================
 function generateSchedules() {
     db.all("SELECT * FROM courses", [], (err, courses) => {
         if (err || !courses) return;
         db.run("DELETE FROM schedules", () => {
             const insertSchedule = db.prepare(`INSERT INTO schedules (courseCode, section, day, startTime, endTime) VALUES (?, ?, ?, ?, ?)`);
             
-            const groupedBySection = {};
+            // Time helpers
+            const toMin = t => { const [h,m] = t.split(':').map(Number); return h*60+m; };
+            const toTime = m => `${String(Math.floor(m/60)).padStart(2,'0')}:${String(m%60).padStart(2,'0')}`;
+            const overlaps = (a1,a2,b1,b2) => a1 < b2 && b1 < a2;
+
+            // Teacher schedule tracker
+            const teacherBusy = {};
+
+            const isTeacherFree = (teacher, day, start, end) => {
+                const s = toMin(start), e = toMin(end);
+                for (const key in teacherBusy) {
+                    const [tName, d, timeRange] = key.split('|');
+                    if (tName !== teacher || d !== day) continue;
+                    const [bs, be] = timeRange.split('-');
+                    if (overlaps(s, e, toMin(bs), toMin(be))) return false;
+                }
+                return true;
+            };
+
+            const markTeacherBusy = (teacher, day, start, end) => {
+                teacherBusy[`${teacher}|${day}|${start}-${end}`] = true;
+            };
+
+            // BREAKS (ALL departments)
+            const SNACK = { start: '09:30', end: '10:00' };
+            const LUNCH = { start: '12:00', end: '13:00' };
+
+            // Build time slots for a day, skipping breaks
+            const buildDaySlots = (startTime, endTime, duration) => {
+                const slots = [];
+                let cur = toMin(startTime);
+                const end = toMin(endTime);
+                const snackS = toMin(SNACK.start), snackE = toMin(SNACK.end);
+                const lunchS = toMin(LUNCH.start), lunchE = toMin(LUNCH.end);
+
+                while (cur + duration <= end) {
+                    let slotEnd = cur + duration;
+                    if (overlaps(cur, slotEnd, snackS, snackE)) { cur = snackE; continue; }
+                    if (overlaps(cur, slotEnd, lunchS, lunchE)) { cur = lunchE; continue; }
+                    slots.push({ start: cur, end: slotEnd });
+                    cur = slotEnd;
+                }
+                return slots;
+            };
+
+            // Group courses by grade+section
+            const grouped = {};
             courses.forEach(c => {
                 const key = `${c.gradeLevel}|${c.section}`;
-                if (!groupedBySection[key]) groupedBySection[key] = [];
-                groupedBySection[key].push(c);
+                if (!grouped[key]) grouped[key] = [];
+                grouped[key].push(c);
             });
 
-            const teacherSchedule = {}; 
+            const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
 
-            Object.keys(groupedBySection).forEach(key => {
+            Object.keys(grouped).forEach(key => {
                 const [gradeLevel, section] = key.split('|');
-                const subjectList = groupedBySection[key];
-                
-                const slots = [
-                    { start: '07:00', end: '09:00' },
-                    { start: '09:00', end: '11:00' },
-                    { start: '11:00', end: '13:00' },
-                    { start: '13:00', end: '15:00' }
-                ];
+                const isSHS = gradeLevel.includes('Grade 11') || gradeLevel.includes('Grade 12');
 
-                subjectList.forEach((sub, index) => {
-                    let assignedDays = [];
-                    if (index % 3 === 0) assignedDays = ['Monday', 'Wednesday'];
-                    else if (index % 3 === 1) assignedDays = ['Tuesday', 'Thursday'];
-                    else assignedDays = ['Wednesday', 'Friday'];
+                // Elem/JHS: 1 hr/subject, 1 meeting/day
+                // SHS: 1.5 hrs/subject, 3-4 subjects/day, 2 meetings/week
+                const duration = isSHS ? 90 : 60;
+                const maxPerDay = isSHS ? 4 : 6;
+                const meetingsPerWeek = isSHS ? 2 : 1;
 
-                    const teacher = sub.subjectTeacher || 'Unassigned';
+                let subjects = grouped[key].map(s => ({
+                    ...s,
+                    meetingsLeft: meetingsPerWeek
+                }));
 
-                    let assignedSlot = null;
-                    for (let s of slots) {
-                        let isFree = true;
-                        for (let d of assignedDays) {
-                            if (teacherSchedule[`${teacher}-${d}-${s.start}`]) { isFree = false; break; }
-                        }
-                        if (isFree) { assignedSlot = s; break; }
+                DAYS.forEach(day => {
+                    const slots = buildDaySlots('07:00', '15:00', duration);
+                    const usedSubjectsToday = new Set();
+                    let countToday = 0;
+
+                    for (const slot of slots) {
+                        if (countToday >= maxPerDay) break;
+                        if (subjects.every(s => s.meetingsLeft === 0)) break;
+
+                        const slotStart = toTime(slot.start);
+                        const slotEnd = toTime(slot.end);
+
+                        const candidate = subjects.find(sub => {
+                            if (sub.meetingsLeft <= 0) return false;
+                            if (isSHS && usedSubjectsToday.has(sub.code)) return false;
+                            const teacher = sub.subjectTeacher || 'Unassigned';
+                            return isTeacherFree(teacher, day, slotStart, slotEnd);
+                        });
+
+                        if (!candidate) continue;
+
+                        insertSchedule.run(candidate.code, section, day, slotStart, slotEnd);
+                        markTeacherBusy(candidate.subjectTeacher || 'Unassigned', day, slotStart, slotEnd);
+                        usedSubjectsToday.add(candidate.code);
+                        candidate.meetingsLeft--;
+                        countToday++;
                     }
-
-                    if (!assignedSlot) assignedSlot = slots[0]; 
-
-                    assignedDays.forEach(d => {
-                        teacherSchedule[`${teacher}-${d}-${assignedSlot.start}`] = true;
-                        insertSchedule.run(sub.code, section, d, assignedSlot.start, assignedSlot.end);
-                    });
                 });
+
+                const leftover = subjects.filter(s => s.meetingsLeft > 0);
+                if (leftover.length > 0) {
+                    console.warn(`⚠️ ${gradeLevel} Sec ${section}: ${leftover.length} subject meetings couldn't fit (teacher conflicts).`);
+                }
             });
 
             insertSchedule.finalize(() => {
-                console.log("✅ Schedules generated.");
+                db.all("SELECT COUNT(*) as c FROM schedules", [], (e, r) => {
+                    console.log(`✅ Schedules generated: ${r ? r[0].c : 0} total entries.`);
+                });
             });
         });
     });
@@ -353,7 +416,6 @@ app.delete('/api/users/:username', (req, res) => {
     });
 });
 
-// --- INI-AYOS NA /api/students ROUTE (Para sa Edit at Update) ---
 app.get('/api/students', (req, res) => db.all("SELECT * FROM students", [], (err, rows) => res.json(err ? [] : rows)));
 app.post('/api/students', (req, res) => {
     const { id, last, first, mi, address, course, yr, status, enrol, birthday, email, age, gender, guardianName, guardianContact } = req.body;
@@ -368,7 +430,6 @@ app.post('/api/students', (req, res) => {
 
     db.get("SELECT id FROM students WHERE id = ?", [id], async (err, row) => {
         if (row) {
-            // Kung EDIT, payagan lang (walang capacity check)
             db.run(`UPDATE students SET last=?, first=?, mi=?, address=?, course=?, yr=?, status=?, enrol=?, birthday=?, email=?, age=?, gender=?, guardianName=?, guardianContact=? WHERE id=?`, 
             [last, first, mi, address, course, yr, status, enrol, birthday, email, age, gender, guardianName, guardianContact, id], (e) => {
                 if (e) return res.status(400).json({ error: e.message });
@@ -376,7 +437,6 @@ app.post('/api/students', (req, res) => {
                 res.json({ message: "Updated" });
             });
         } else {
-            // Kung NEW, i-check ang capacity
             db.get(`SELECT COUNT(*) as count FROM students WHERE yr LIKE ? AND yr LIKE ?`, [`${gradeLevel}%`, `%Sec ${section}%`], (errCount, countRes) => {
                 if (errCount) return res.status(500).json({ error: "DB Error" });
 
