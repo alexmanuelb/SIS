@@ -82,10 +82,51 @@ function buildDatabase() {
         });
         insertUser.finalize();
 
+        // --- STUDENT GENERATION LOGIC (30 per year level, 27 for SHS) ---
         const insertStudent = db.prepare(`INSERT INTO students (id, last, first, mi, address, course, yr, status, enrol, username, password, birthday, email, age, gender, guardianName, guardianContact) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
-        insertStudent.run('2023-0006', 'Dela Cruz', 'Juan', 'A', 'Mariveles, Bataan', 'Elem', 'Grade 4', 'Active', 'Enrolled', 'juandc', 'juan123', '2017-05-14', 'juan@example.com', '8', 'Male', 'Maria Dela Cruz', '0917-111-2222');
-        insertStudent.run('2026-01523', 'Reyes', 'Maria', 'B', 'Limay, Bataan', 'SHS', 'Grade 11 - STEM - 1st Semester', 'Active', 'Enrolled', 'mariar', 'maria123', '2010-08-22', 'maria@example.com', '15', 'Female', 'Jose Reyes', '0918-333-4444');
-        insertStudent.run('2026-0011', 'Manuel', 'Alexandra', 'B.', 'Mariveles, Bataan', 'SHS', 'Grade 12 - STEM - 1st Semester', 'Active', 'Enrolled', 'alexandram', 'alexandra123', '2009-03-30', 'alexandra@example.com', '17', 'Female', 'Rosa Manuel', '0921-999-0000');
+        
+        const firstNames = ['Juan', 'Maria', 'Jose', 'Ana', 'Pedro', 'Rosa', 'Mark', 'Katie', 'Alexandra', 'Paul', 'Liza', 'Carlo', 'Mia', 'Leo', 'Ella', 'Ben', 'Sarah', 'David', 'Mary', 'James'];
+        const lastNames = ['Dela Cruz', 'Reyes', 'Santos', 'Manuel', 'Garcia', 'Mendoza', 'Torres', 'Flores', 'Ramos', 'Rivera', 'Cruz', 'Bautista', 'Ocampo', 'Aquino', 'Navarro', 'Villanueva', 'Gonzales', 'Perez', 'Castillo', 'Soriano'];
+
+        let globalStudentCount = 0;
+
+        for (let grade = 1; grade <= 12; grade++) {
+            let targetCount = 30; // Default 30 students
+            
+            // Kapag SHS (Grade 11 at 12), gawing 27 students
+            if (grade === 11 || grade === 12) {
+                targetCount = 27;
+            }
+
+            for (let i = 0; i < targetCount; i++) {
+                const first = firstNames[globalStudentCount % firstNames.length];
+                const last = lastNames[Math.floor(globalStudentCount / firstNames.length) % lastNames.length];
+                const sec = (i % 2 === 0) ? '1' : '2'; // Alternate sections 1 and 2
+                
+                // Gumawa ng unique ID
+                let studentId = `2026-${String(grade).padStart(2, '0')}${String(i + 1).padStart(2, '0')}`;
+                let birthday = `200${10 - grade}-05-14`; 
+                let email = `${first.toLowerCase()}.${last.toLowerCase()}${globalStudentCount}@example.com`;
+                let age = (12 - grade) + 6;
+                if(age < 5) age = 5;
+                let gender = (globalStudentCount % 2 === 0) ? 'Male' : 'Female';
+
+                let courseType = 'Elem';
+                let yrLevel = `Grade ${grade}`;
+                
+                if (grade >= 7 && grade <= 10) courseType = 'JHS';
+                if (grade >= 11) courseType = 'SHS';
+
+                if (courseType === 'SHS') {
+                    yrLevel = `Grade ${grade} - STEM - 1st Semester - Sec ${sec}`;
+                } else {
+                    yrLevel = `Grade ${grade} - Sec ${sec}`;
+                }
+
+                insertStudent.run(studentId, last, first, 'A', 'Mariveles, Bataan', courseType, yrLevel, 'Active', 'Enrolled', studentId, `${first.toLowerCase()}123`, birthday, email, age, gender, `Parent ${last}`, '0917-000-0000');
+                globalStudentCount++;
+            }
+        }
         insertStudent.finalize();
 
         const insertCourse = db.prepare(`INSERT INTO courses (code, name, gradeLevel, section, capacity, adviser, subjectTeacher, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`);
@@ -348,7 +389,6 @@ app.post('/api/students', (req, res) => {
     });
 });
 
-// UPDATE STATUS ROUTE
 app.post('/api/students/status', (req, res) => {
     const { id, status } = req.body;
     db.run(`UPDATE students SET status = ? WHERE id = ?`, [status, id], (e) => {
@@ -402,7 +442,6 @@ app.get('/api/schedules/:gradeLevel/:section', (req, res) => {
     });
 });
 
-// ATTENDANCE ROUTES (MAY AUTO-INACTIVE LOGIC)
 app.get('/api/attendance/:courseCode/:section/:date', (req, res) => db.all(`SELECT * FROM attendance WHERE courseCode = ? AND section = ? AND date = ?`, [req.params.courseCode, req.params.section, req.params.date], (err, rows) => res.json(err ? [] : rows)));
 app.post('/api/attendance', (req, res) => {
     const { courseCode, section, studentId, date, status } = req.body;
