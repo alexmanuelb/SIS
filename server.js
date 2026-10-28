@@ -105,23 +105,33 @@ function buildDatabase() {
             { level: 'Grade 12 - STEM - 2nd Semester', subjects: [['PAGS', 'Pagsulat'], ['PE12B', 'PE & Health 4'], ['ENTR', 'Entrepreneurship'], ['INQ', 'Inquiries'], ['PHY2', 'Gen Physics 2'], ['BIO2', 'Gen Biology 2'], ['STEMW', 'Work Immersion']], capacity: 40 }
         ];
 
-        let teacherIndex = 0;
+        let globalTeacherIdx = 0; // Gagamitin natin ito para tuloy-tuloy ang alternate
+
         gradeConfigs.forEach(config => {
             for (let sec = 1; sec <= 2; sec++) {
                 const sectionStr = sec.toString();
                 const gradePrefix = config.level.replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
-                const advisoryTeacher = teachers[teacherIndex % teachers.length];
-                teacherIndex++;
+                
+                // Advisory teacher
+                const advisoryTeacher = teachers[globalTeacherIdx % teachers.length];
+                globalTeacherIdx++;
 
                 config.subjects.forEach((sub, idx) => {
                     const subCode = sub[0];
                     const subName = sub[1];
                     const courseCode = `${subCode}-${gradePrefix}-${sec}`;
-                    const subjectTeacher = teachers[(teacherIndex + idx) % teachers.length];
+                    
+                    // Alternate subject teacher
+                    const subjectTeacher = teachers[(globalTeacherIdx + idx) % teachers.length];
+                    
                     insertCourse.run(courseCode, `${subName} (${config.level})`, config.level, sectionStr, config.capacity, advisoryTeacher, subjectTeacher, 'Open');
                 });
+                
+                // I-advance ang index para sa susunod na section para hindi pareho ang teachers
+                globalTeacherIdx += config.subjects.length;
             }
         });
+        
         insertCourse.finalize(() => {
             generateSchedules();
         });
@@ -188,7 +198,7 @@ function generateSchedules() {
     });
 }
 
-// --- INI-AYOS NA LOGIN ROUTE ---
+// API ROUTES
 app.post('/api/login', (req, res) => {
     const { username, password } = req.body;
     if (!username || !password) return res.status(400).json({ error: "Username and password required" });
@@ -199,17 +209,14 @@ app.post('/api/login', (req, res) => {
         if (user) {
             return res.json(user);
         } else {
-            // Kung wala sa users table, hanapin sa students table (para sa mga lumang seed students)
             db.get("SELECT * FROM students WHERE (username = ? OR id = ?) AND password = ?", [username, username, password], (err, student) => {
                 if (err) return res.status(500).json({ error: err.message });
                 if (!student) return res.status(401).json({ error: "Invalid credentials" });
                 
-                // Awtomatikong i-save sa users table para sa susunod na login
                 const fullName = `${student.first} ${student.last}`;
                 db.run(`INSERT INTO users (username, password, name, role, section, email) VALUES (?,?,?,'Student',?,?)`, 
                 [student.id, student.password, fullName, student.yr, student.email], (e) => {
                     if (e) console.error("Auto-sync error:", e);
-                    // Ibalik ang user object
                     res.json({ username: student.id, name: fullName, role: 'Student', section: student.yr });
                 });
             });
