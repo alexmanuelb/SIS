@@ -6,12 +6,10 @@ const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt
 // --- SMART MATCHING HELPER PARA SA SHS AT JHS/ELEM ---
 function isStudentInSection(studentYr, courseGradeLevel, courseSection) {
     if (!studentYr || !courseGradeLevel) return false;
-    
     const studentGrade = studentYr.split(' - ')[0].trim();
     const courseBaseGrade = courseGradeLevel.split(' - ')[0].trim();
     const secMatch = studentYr.match(/Sec(?:tion)?\s*(\d+)/i);
     const studentSec = secMatch ? secMatch[1] : '';
-    
     return studentGrade === courseBaseGrade && studentSec === courseSection.toString().trim();
 }
 
@@ -24,7 +22,6 @@ function getSectionFromYr(yrString) {
 function togglePassword() {
   const passInput = $('loginPass');
   const icon = $('toggleIcon');
-  
   if (passInput.type === 'password') {
     passInput.type = 'text';
     icon.innerHTML = `<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle>`;
@@ -34,7 +31,7 @@ function togglePassword() {
   }
 }
 
-// --- FAST LOGIN LOGIC ---
+// --- LOGIN LOGIC ---
 async function doLogin() {
   const username = $('loginUser').value.trim();
   const password = $('loginPass').value.trim();
@@ -56,10 +53,8 @@ async function doLogin() {
     }
     
     session = await res.json();
-    
     loginBtn.textContent = 'Loading data...';
     
-    // SUNOD-SUNOD NA PAG-FETCH PARA HINDI MAG-CRASH
     const termRes = await (await fetch('/api/settings/term')).json();
     db.activeTerm = termRes.term;
 
@@ -173,7 +168,6 @@ function currentStudent() {
   return db.students.find(s => s.username === session.username || s.id === session.username) || null;
 }
 
-// --- CARD LAYOUT HELPER ---
 function folderCard(title, subtitle, onclickStr) {
     return `<div style="background:white; border:1px solid #e0e0e0; border-radius:8px; padding:15px 20px; display:flex; justify-content:space-between; align-items:center; cursor:pointer; box-shadow:0 2px 5px rgba(0,0,0,0.02); transition:all 0.2s;" onmouseover="this.style.borderColor='#5c0000'; this.style.boxShadow='0 4px 10px rgba(92,0,0,0.1)'; this.style.transform='translateY(-2px)'" onmouseout="this.style.borderColor='#e0e0e0'; this.style.boxShadow='0 2px 5px rgba(0,0,0,0.02)'; this.style.transform='translateY(0)'" onclick="${onclickStr}">
         <div>
@@ -218,7 +212,6 @@ async function updateGlobalTerm() {
   alert('Global School Term updated to ' + newTerm + '. Student records and schedules will now reflect this term.');
 }
 
-// --- FACULTY DASHBOARD ---
 function renderFacultyDashboard(c) {
   const myCourses = db.courses.filter(x => x.adviser === session.name || x.subjectTeacher === session.name);
   const uniqueStudents = new Set();
@@ -251,7 +244,7 @@ function renderStudentDashboard(c) {
   setInterval(() => { if($('dash-clock')) $('dash-clock').textContent = new Date().toLocaleTimeString(); }, 1000);
 }
 
-// --- STUDENT DIRECTORY (May Grade at Section Filter + Total Count) ---
+// --- STUDENT DIRECTORY ---
 function renderActiveDirectory(c) {
   const uniqueGrades = [...new Set(db.students.map(s => s.yr.split(' - ')[0]))].filter(Boolean).sort();
   const currentGradeFilter = $('directoryGradeFilter') ? $('directoryGradeFilter').value : 'All';
@@ -262,14 +255,13 @@ function renderActiveDirectory(c) {
   if (currentGradeFilter !== 'All') active = active.filter(s => s.yr.split(' - ')[0].trim() === currentGradeFilter);
   if (currentSecFilter !== 'All') active = active.filter(s => getSectionFromYr(s.yr) === currentSecFilter);
   
-  // --- TOTAL STUDENTS COUNT ---
   const totalStudents = active.length;
   
-  // --- INI-AYOS NA EDIT BUTTON (May type="button") ---
+  // BINAGO: Gumamit ng data-id at window.editStudent(this) para iwasan ang syntax error
   let rows = active.map(s => [
       esc(s.id), esc(s.last), esc(s.first), esc(s.yr), 
       `<span class="badge ${s.status === 'Active' ? 'active' : 'inactive'}">${esc(s.status)}</span>`,
-      `<button type="button" class="btn secondary" onclick="openStudentForm('${esc(s.id)}')">Edit</button>`
+      `<button type="button" class="btn secondary" data-id="${esc(s.id)}" onclick="window.editStudent(this)">Edit</button>`
   ]);
 
   c.innerHTML = `<div class="panel">
@@ -303,6 +295,12 @@ function renderActiveDirectory(c) {
     ${simpleTable(['Student ID','Last Name','First Name','Year Level','Status','Action'], rows)}
   </div>`;
 }
+
+// BAGONG HELPER PARA SA STUDENT EDIT
+window.editStudent = function(btn) {
+  const id = btn.getAttribute('data-id');
+  if(id) openStudentForm(id);
+};
 
 function computeAge() {
   const bday = document.getElementById('f_birthday').value;
@@ -436,12 +434,21 @@ async function saveStudent(existingId) {
   $('enrollFormArea').innerHTML = ''; renderActiveDirectory($('content')); 
 }
 
+// --- FACULTY DIRECTORY ---
 function renderFacultyDirectory(c) {
   const facultyList = db.users.filter(u => u.role === 'Faculty');
+  
+  // BINAGO: Gumamit ng data-username at window.editFaculty(this)
   const rows = facultyList.map(f => {
     const advised = db.courses.filter(crs => crs.adviser === f.name).map(crs => `${crs.gradeLevel} (Sec ${crs.section})`);
     const advisoryDisplay = advised.length > 0 ? advised[0] : '<span style="color:#999;">None</span>';
-    return [`<b>${esc(f.username)}</b>`, esc(f.name), esc(f.email || 'N/A'), advisoryDisplay, `<button type="button" class="btn secondary" onclick="openEditFacultyForm('${esc(f.username)}')">Edit</button>`];
+    return [
+        `<b>${esc(f.username)}</b>`, 
+        esc(f.name), 
+        esc(f.email || 'N/A'), 
+        advisoryDisplay, 
+        `<button type="button" class="btn secondary" data-username="${esc(f.username)}" onclick="window.editFaculty(this)">Edit</button>`
+    ];
   });
 
   c.innerHTML = `<div class="panel">
@@ -453,6 +460,12 @@ function renderFacultyDirectory(c) {
     ${simpleTable(['Username', 'Full Name', 'Email', 'Advisory Class', 'Action'], rows)}
   </div>`;
 }
+
+// BAGONG HELPER PARA SA FACULTY EDIT
+window.editFaculty = function(btn) {
+  const username = btn.getAttribute('data-username');
+  if(username) openEditFacultyForm(username);
+};
 
 function openAddFacultyForm() {
   const grades = ['Grade 1', 'Grade 2', 'Grade 3', 'Grade 4', 'Grade 5', 'Grade 6', 'Grade 7', 'Grade 8', 'Grade 9', 'Grade 10', 'Grade 11 - STEM', 'Grade 11 - HUMSS', 'Grade 11 - ABM', 'Grade 12 - STEM', 'Grade 12 - HUMSS', 'Grade 12 - ABM'];
@@ -682,7 +695,7 @@ function renderUsers(c) {
   const rows = filteredUsers.map(u => [
     esc(u.username), esc(u.name), esc(u.role), esc(u.section||'—'),
     `<div style="display:flex; gap:5px;">
-        ${u.role === 'Student' ? `<button type="button" class="btn secondary" onclick="alert('Please edit student details in Student Directory')">Edit</button>` : (u.role === 'Faculty' ? `<button type="button" class="btn secondary" onclick="openEditFacultyForm('${esc(u.username)}')">Edit</button>` : '')}
+        ${u.role === 'Student' ? `<button type="button" class="btn secondary" onclick="alert('Please edit student details in Student Directory')">Edit</button>` : (u.role === 'Faculty' ? `<button type="button" class="btn secondary" data-username="${esc(u.username)}" onclick="window.editFaculty(this)">Edit</button>` : '')}
         ${u.role !== 'Admin' ? `<button type="button" class="btn" style="background:#a00;" onclick="deleteUser('${esc(u.username)}')">Delete</button>` : ''}
      </div>`
   ]);
@@ -880,7 +893,6 @@ function renderAttendance(c) {
   c.innerHTML = html;
 }
 
-// --- INI-AYOS NA LOADATTENDANCE (May Save Button) ---
 async function loadAttendance() {
   const code = $('att_course').value;
   const date = $('att_date').value;
@@ -913,7 +925,6 @@ async function loadAttendance() {
   </div>`;
 }
 
-// --- BAGONG FUNCTION PARA SA SAVE BUTTON ---
 async function saveBulkAttendance(courseCode, section, date, gradeLevel) {
   const crs = db.courses.find(x => x.code === courseCode);
   let list = db.students.filter(s => isStudentInSection(s.yr, crs.gradeLevel, crs.section));
@@ -933,8 +944,6 @@ async function saveBulkAttendance(courseCode, section, date, gradeLevel) {
   }
 
   alert(`Successfully saved attendance for ${successCount} students!`);
-  
-  // I-refresh ang history para lumabas agad ang bagong record
   showAttendanceHistory(gradeLevel, section);
 }
 
