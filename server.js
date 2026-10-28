@@ -136,7 +136,6 @@ function buildDatabase() {
     });
 }
 
-// GENERATE SCHEDULES
 function generateSchedules() {
     db.all("SELECT * FROM courses", [], (err, courses) => {
         if (err || !courses) return;
@@ -196,7 +195,6 @@ function generateSchedules() {
     });
 }
 
-// API ROUTES
 app.post('/api/login', (req, res) => {
     const { username, password } = req.body;
     if (!username || !password) return res.status(400).json({ error: "Username and password required" });
@@ -350,6 +348,15 @@ app.post('/api/students', (req, res) => {
     });
 });
 
+// UPDATE STATUS ROUTE
+app.post('/api/students/status', (req, res) => {
+    const { id, status } = req.body;
+    db.run(`UPDATE students SET status = ? WHERE id = ?`, [status, id], (e) => {
+        if(e) return res.status(500).json({ error: e.message });
+        res.json({ message: "Status updated" });
+    });
+});
+
 app.get('/api/courses', (req, res) => db.all("SELECT * FROM courses", [], (err, rows) => res.json(err ? [] : rows)));
 app.post('/api/courses', (req, res) => {
     const { code, name, gradeLevel, section, capacity, adviser, subjectTeacher, status } = req.body;
@@ -389,24 +396,32 @@ app.post('/api/grades', (req, res) => {
 
 app.get('/api/student/grades/:studentId', (req, res) => db.all("SELECT * FROM grades WHERE studentId = ?", [req.params.studentId], (err, rows) => res.json(err ? [] : rows)));
 app.get('/api/schedules', (req, res) => db.all("SELECT * FROM schedules", [], (err, rows) => res.json(err ? [] : rows)));
-
 app.get('/api/schedules/:gradeLevel/:section', (req, res) => {
     db.all(`SELECT s.*, c.name AS courseName, c.subjectTeacher AS teacherName FROM schedules s JOIN courses c ON s.courseCode = c.code WHERE c.gradeLevel = ? AND s.section = ?`, [req.params.gradeLevel, req.params.section], (err, rows) => {
         res.json(err ? [] : rows);
     });
 });
 
-// ATTENDANCE ROUTES
+// ATTENDANCE ROUTES (MAY AUTO-INACTIVE LOGIC)
 app.get('/api/attendance/:courseCode/:section/:date', (req, res) => db.all(`SELECT * FROM attendance WHERE courseCode = ? AND section = ? AND date = ?`, [req.params.courseCode, req.params.section, req.params.date], (err, rows) => res.json(err ? [] : rows)));
 app.post('/api/attendance', (req, res) => {
     const { courseCode, section, studentId, date, status } = req.body;
-    db.run(`INSERT INTO attendance (courseCode, section, studentId, date, status) VALUES (?,?,?,?,?) ON CONFLICT(courseCode, section, studentId, date) DO UPDATE SET status=excluded.status`, [courseCode, section, studentId, date, status], (e) => res.json({ message: "Recorded" }));
+    db.run(`INSERT INTO attendance (courseCode, section, studentId, date, status) VALUES (?,?,?,?,?) ON CONFLICT(courseCode, section, studentId, date) DO UPDATE SET status=excluded.status`, [courseCode, section, studentId, date, status], (e) => {
+        if(e) return res.status(500).json({ error: e.message });
+
+        if (status === 'Absent') {
+            db.get(`SELECT COUNT(*) as absences FROM attendance WHERE studentId = ? AND courseCode = ? AND status = 'Absent'`, [studentId, courseCode], (err, row) => {
+                if (row && row.absences >= 3) {
+                    db.run(`UPDATE students SET status = 'Inactive' WHERE id = ?`, [studentId]);
+                }
+            });
+        }
+        res.json({ message: "Recorded" });
+    });
 });
 
-// BAGONG ROUTE PARA SA ATTENDANCE HISTORY PER SECTION
 app.get('/api/attendance/history/:section', (req, res) => {
     const sectionStr = req.params.section;
-    // Kunin ang lahat ng attendance records para sa section na ito, i-group by date at courseCode
     db.all(`SELECT a.*, s.first, s.last, c.name as courseName, c.gradeLevel 
             FROM attendance a 
             JOIN students s ON a.studentId = s.id 

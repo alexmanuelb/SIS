@@ -10,16 +10,10 @@ function togglePassword() {
   
   if (passInput.type === 'password') {
     passInput.type = 'text';
-    icon.innerHTML = `
-      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
-      <circle cx="12" cy="12" r="3"></circle>
-    `;
+    icon.innerHTML = `<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle>`;
   } else {
     passInput.type = 'password';
-    icon.innerHTML = `
-      <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path>
-      <line x1="1" y1="1" x2="23" y2="23"></line>
-    `;
+    icon.innerHTML = `<path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path><line x1="1" y1="1" x2="23" y2="23"></line>`;
   }
 }
 
@@ -143,6 +137,17 @@ function currentStudent() {
   return db.students.find(s => s.username === session.username || s.id === session.username) || null;
 }
 
+// --- CARD LAYOUT HELPER ---
+function folderCard(title, subtitle, onclickStr) {
+    return `<div style="background:white; border:1px solid #e0e0e0; border-radius:8px; padding:15px 20px; display:flex; justify-content:space-between; align-items:center; cursor:pointer; box-shadow:0 2px 5px rgba(0,0,0,0.02); transition:all 0.2s;" onmouseover="this.style.borderColor='#5c0000'; this.style.boxShadow='0 4px 10px rgba(92,0,0,0.1)'; this.style.transform='translateY(-2px)'" onmouseout="this.style.borderColor='#e0e0e0'; this.style.boxShadow='0 2px 5px rgba(0,0,0,0.02)'; this.style.transform='translateY(0)'" onclick="${onclickStr}">
+        <div>
+            <div style="font-weight:700; color:#333; font-size:15px; margin-bottom:3px;">${title}</div>
+            <div style="font-size:13px; color:#777;">${subtitle}</div>
+        </div>
+        <div style="background:#fff0f0; color:#5c0000; width:32px; height:32px; border-radius:50%; display:flex; justify-content:center; align-items:center; font-weight:bold;">&rarr;</div>
+    </div>`;
+}
+
 function renderAdminDashboard(c) {
   const totalFaculty = db.users.filter(u => u.role === 'Faculty').length;
   c.innerHTML = `
@@ -199,7 +204,7 @@ function renderStudentDashboard(c) {
   setInterval(() => { if($('dash-clock')) $('dash-clock').textContent = new Date().toLocaleTimeString(); }, 1000);
 }
 
-// --- INI-AYOS NA STUDENT DIRECTORY EDIT BUTTON ---
+// --- STUDENT DIRECTORY (May Edit Button) ---
 function renderActiveDirectory(c) {
   const active = db.students.filter(s => s.status !== 'Archived' && s.status !== 'Graduated');
   
@@ -222,14 +227,10 @@ function renderActiveDirectory(c) {
   </div>`;
 }
 
-// Global function para siguradong nake-click
 window.editStudentBtn = function(btn) {
   const id = btn.getAttribute('data-id');
-  if(id) {
-    openStudentForm(id);
-  } else {
-    alert('Error: Student ID not found.');
-  }
+  if(id) openStudentForm(id);
+  else alert('Error: Student ID not found.');
 };
 
 function computeAge() {
@@ -261,7 +262,7 @@ function openStudentForm(id) {
   }
 
   const yearLevels = ['Grade 1', 'Grade 2', 'Grade 3', 'Grade 4', 'Grade 5', 'Grade 6', 'Grade 7', 'Grade 8', 'Grade 9', 'Grade 10', 'Grade 11', 'Grade 12'];
-  const statuses = ['Active', 'Archived', 'Graduated'];
+  const statuses = ['Active', 'Archived', 'Graduated', 'Inactive']; // Idinagdag ang Inactive
   const sections = ['1', '2'];
 
   $('enrollFormArea').innerHTML = `
@@ -709,6 +710,7 @@ async function deleteUser(username) {
   }
 }
 
+// --- UPDATED: CLASS RECORDS WITH NEW CARD DESIGN AND STATUS EDIT ---
 async function renderClassRecords(c) {
   const myCourses = db.courses.filter(x => {
     const isTeacher = x.adviser === session.name || x.subjectTeacher === session.name;
@@ -721,30 +723,79 @@ async function renderClassRecords(c) {
 
   const groups = {};
   for (const crs of myCourses) {
-    const key = crs.gradeLevel + ' | Section ' + crs.section;
+    const key = crs.gradeLevel + '|Section ' + crs.section;
     if (!groups[key]) groups[key] = [];
     groups[key].push(crs);
   }
-  let html = `<div class="panel"><h2>Class Records (${esc(db.activeTerm)})</h2><p>Click a folder to view enrolled students.</p>`;
-  for (const key of Object.keys(groups)) html += `<div class="folder" onclick="showClassFolder('${esc(key)}')"><span>📁 ${esc(key)}</span> <span>&rarr;</span></div>`;
+  
+  let html = `<div class="panel"><h2>Class Records (${esc(db.activeTerm)})</h2><p style="margin-bottom:20px; color:#666;">Select a section to view enrolled students and manage status.</p>
+    <div style="display:grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap:15px;">`;
+    
+  for (const key of Object.keys(groups)) {
+      const [gradeLevel, secName] = key.split('|');
+      const studentCount = db.students.filter(s => s.yr.includes(gradeLevel) && s.yr.includes(secName.replace('Section ', 'Sec '))).length;
+      
+      html += folderCard(`${esc(gradeLevel)}`, `${esc(secName)} • ${studentCount} Students`, `showClassFolder('${esc(gradeLevel)}', '${esc(secName)}')`);
+  }
+  
   if(Object.keys(groups).length === 0) html += `<p style="color:#999;">No classes assigned to you for ${esc(db.activeTerm)}.</p>`;
-  html += `<div id="classFolderView"></div></div>`;
+  html += `</div><div id="classFolderView" style="margin-top:20px;"></div></div>`;
   c.innerHTML = html;
 }
 
-async function showClassFolder(key) {
-  const [gradeLevel, sectionPart] = key.split(' | Section ');
-  const section = sectionPart.trim();
-  const myCourses = db.courses.filter(x => (x.adviser === session.name || x.subjectTeacher === session.name) && x.gradeLevel === gradeLevel && x.section === section);
-  const codes = myCourses.map(c => c.code);
-  let rows = [];
-  for (const s of db.students) {
-    const en = await (await fetch('/api/enrollments/' + s.id)).json();
-    if (en.some(e => codes.includes(e.courseCode))) rows.push(s);
-  }
-  $('classFolderView').innerHTML = `<div class="panel" style="margin-top:20px; border:2px solid #5c0000;"><h3>${esc(key)} — Enrolled Students</h3>${simpleTable(['ID','Name','Year'], rows.map(s => [esc(s.id), esc(s.last+', '+s.first), esc(s.yr)]))}</div>`;
+async function showClassFolder(gradeLevel, secName) {
+  const section = secName.replace('Section ', '').trim();
+  const keyStr = `${gradeLevel} | ${secName}`;
+  
+  let students = db.students.filter(s => s.yr.includes(gradeLevel) && s.yr.includes('Sec ' + section));
+  
+  // Kunin ang absences ng bawat student para sa display
+  const attendanceHistory = await (await fetch(`/api/attendance/history/${encodeURIComponent(section)}`)).json();
+
+  let rows = students.map(s => {
+      const studentAbsences = attendanceHistory.filter(a => a.studentId === s.id && a.status === 'Absent').length;
+      const statusBadge = s.status === 'Active' ? 'badge active' : 'badge inactive';
+      
+      return [
+          esc(s.id), 
+          esc(s.last+', '+s.first), 
+          esc(s.yr),
+          `<span style="color:${studentAbsences > 0 ? 'red' : 'green'}; font-weight:bold;">${studentAbsences}</span>`,
+          `<span class="${statusBadge}">${esc(s.status)}</span>`,
+          `<button class="btn secondary" style="padding:5px 10px; font-size:11px;" onclick="openEditStatusModal('${esc(s.id)}', '${esc(s.status)}')">Edit Status</button>`
+      ];
+  });
+
+  $('classFolderView').innerHTML = `<div class="panel" style="border:2px solid #5c0000;">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+        <h3 style="margin:0; color:#5c0000;">${esc(keyStr)} — Enrolled Students</h3>
+        <button class="btn secondary" onclick="$('classFolderView').innerHTML=''">Close</button>
+    </div>
+    ${simpleTable(['ID','Name','Year Level','Absences', 'Status', 'Action'], rows)}
+  </div>`;
 }
 
+async function openEditStatusModal(studentId, currentStatus) {
+    const newStatus = prompt(`Edit Status for ${studentId} (Active/Inactive/Archived):`, currentStatus);
+    if(!newStatus) return;
+    
+    if(!['Active', 'Inactive', 'Archived'].includes(newStatus)) {
+        return alert('Invalid status. Please type Active, Inactive, or Archived.');
+    }
+    
+    const res = await fetch('/api/students/status', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ id: studentId, status: newStatus }) });
+    if(res.ok) {
+        alert('Status updated successfully!');
+        db.students = await (await fetch('/api/students')).json();
+        // I-refresh ang view
+        const [gradeLevel, secName] = document.querySelector('#classFolderView h3').innerText.split(' — ')[0].split(' | ');
+        showClassFolder(gradeLevel, secName);
+    } else {
+        alert('Failed to update status.');
+    }
+}
+
+// --- UPDATED: GRADE ENTRY WITH NEW CARD DESIGN ---
 function renderGradeEntry(c) {
   const myCourses = db.courses.filter(x => {
     const isTeacher = x.adviser === session.name || x.subjectTeacher === session.name;
@@ -755,24 +806,26 @@ function renderGradeEntry(c) {
     return true;
   });
 
-  const sections = [...new Set(myCourses.map(x => x.gradeLevel + ' | Section ' + x.section))];
+  const sections = [...new Set(myCourses.map(x => x.gradeLevel + '|Section ' + x.section))];
 
-  let html = `<div class="panel"><h2>Grade Entry</h2><p>Select a section folder to view students and enter grades.</p>`;
+  let html = `<div class="panel"><h2>Grade Entry (${esc(db.activeTerm)})</h2><p style="margin-bottom:20px; color:#666;">Select a section to view students and enter grades.</p>
+    <div style="display:grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap:15px;">`;
   
   if(sections.length === 0) {
       html += `<p style="color:#999;">No classes assigned to you for ${esc(db.activeTerm)}.</p>`;
   } else {
-      sections.forEach(sec => {
-          html += `<div class="folder" onclick="showGradeEntryFolder('${esc(sec)}')"><span>📁 ${esc(sec)}</span> <span>&rarr;</span></div>`;
+      sections.forEach(secString => {
+          const [gradeLevel, secName] = secString.split('|');
+          html += folderCard(`${esc(gradeLevel)}`, esc(secName), `showGradeEntryFolder('${esc(gradeLevel)}', '${esc(secName)}')`);
       });
   }
-  html += `<div id="gradeEntryView"></div></div>`;
+  html += `</div><div id="gradeEntryView" style="margin-top:20px;"></div></div>`;
   c.innerHTML = html;
 }
 
-async function showGradeEntryFolder(key) {
-  const [gradeLevel, sectionPart] = key.split(' | Section ');
-  const section = sectionPart.trim();
+async function showGradeEntryFolder(gradeLevel, secName) {
+  const section = secName.replace('Section ', '').trim();
+  const keyStr = `${gradeLevel} | ${secName}`;
   
   const myCourses = db.courses.filter(x => (x.adviser === session.name || x.subjectTeacher === session.name) && x.gradeLevel === gradeLevel && x.section === section);
   
@@ -786,9 +839,9 @@ async function showGradeEntryFolder(key) {
   const males = students.filter(s => s.gender === 'Male').sort((a, b) => a.last.localeCompare(b.last));
   const females = students.filter(s => s.gender === 'Female').sort((a, b) => a.last.localeCompare(b.last));
 
-  let html = `<div class="panel" style="margin-top:20px; border:2px solid #5c0000;">
+  let html = `<div class="panel" style="border:2px solid #5c0000;">
     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
-      <h3 style="margin:0; color:#5c0000;">${esc(key)} — Grade Entry</h3>
+      <h3 style="margin:0; color:#5c0000;">${esc(keyStr)} — Grade Entry</h3>
       <select id="ge_course" style="padding:8px; border-radius:6px; border:1px solid #ccc; font-weight:bold;">
         ${myCourses.map(c => `<option value="${esc(c.name)}">${esc(c.name)}</option>`).join('')}
       </select>
@@ -818,8 +871,9 @@ async function showGradeEntryFolder(key) {
       </div>
     </div>
     
-    <div style="margin-top:20px; text-align:right;">
-        <button class="btn" onclick="submitBulkGrades()">Submit All Grades for ${esc(key)}</button>
+    <div style="margin-top:20px; text-align:right; display:flex; justify-content:space-between;">
+        <button class="btn secondary" onclick="$('gradeEntryView').innerHTML=''">Close</button>
+        <button class="btn" onclick="submitBulkGrades()">Submit All Grades for ${esc(keyStr)}</button>
     </div>
   </div>`;
   
@@ -851,7 +905,7 @@ async function submitBulkGrades() {
   }
 }
 
-// --- ATTENDANCE (May Filter at Maayos na History) ---
+// --- UPDATED: ATTENDANCE WITH NEW CARD DESIGN ---
 function renderAttendance(c) {
   const myCourses = db.courses.filter(x => {
     const isTeacher = x.adviser === session.name || x.subjectTeacher === session.name;
@@ -865,8 +919,8 @@ function renderAttendance(c) {
 
   const uniqueSections = [...new Set(myCourses.map(x => `${x.gradeLevel}|${x.section}`))];
 
-  let html = `<div class="panel"><h2>Attendance</h2>
-    <div class="form-panel" style="display:flex; gap:20px; align-items:flex-end; margin-bottom:20px;">
+  let html = `<div class="panel"><h2>Attendance (${esc(db.activeTerm)})</h2>
+    <div class="form-panel" style="display:flex; gap:20px; align-items:flex-end; margin-bottom:30px;">
       <div class="field" style="flex:1;"><label>Course</label><select id="att_course">${myCourses.map(x=>`<option value="${esc(x.code)}">${esc(x.name)} — Sec ${esc(x.section)}</option>`).join('')}</select></div>
       <div class="field" style="flex:1;"><label>Date</label><input type="date" id="att_date" value="${new Date().toISOString().slice(0,10)}"></div>
       <button class="btn" style="margin-bottom:2px;" onclick="loadAttendance()">Load Students</button>
@@ -874,19 +928,16 @@ function renderAttendance(c) {
     <div id="att_list" style="margin-bottom:30px;"></div>
     
     <hr style="border:0; border-top:1px solid #eaeaea; margin-bottom:20px;">
-    <h3 style="color:#5c0000; margin-bottom:15px;">Attendance Records History (${esc(db.activeTerm)})</h3>
-    <p style="color:#666; margin-bottom:15px; font-size:14px;">Click a folder below to view all submitted attendance records.</p>
-    <div style="display:grid; gap:10px;">`;
+    <h3 style="color:#5c0000; margin-bottom:15px;">Attendance History</h3>
+    <p style="color:#666; margin-bottom:20px; font-size:14px;">Select a section to view all submitted attendance records.</p>
+    <div style="display:grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap:15px;">`;
 
   if(uniqueSections.length === 0) {
       html += `<p style="color:#999;">No classes assigned to you for ${esc(db.activeTerm)}.</p>`;
   } else {
       uniqueSections.forEach(secString => {
           const [gradeLevel, section] = secString.split('|');
-          html += `<div class="folder" onclick="showAttendanceHistory('${esc(gradeLevel)}', '${esc(section)}')">
-            <span>📁 ${esc(gradeLevel)} | Section ${esc(section)}</span> 
-            <span>&rarr;</span>
-          </div>`;
+          html += folderCard(`${esc(gradeLevel)}`, `Section ${esc(section)}`, `showAttendanceHistory('${esc(gradeLevel)}', '${esc(section)}')`);
       });
   }
   html += `</div><div id="attendance_history_view" style="margin-top:20px;"></div></div>`;
@@ -905,11 +956,12 @@ async function loadAttendance() {
   }
   const existing = await (await fetch(`/api/attendance/${code}/${crs.section}/${date}`)).json();
   const map = {}; existing.forEach(e => map[e.studentId] = e.status);
-  $('att_list').innerHTML = `<h4 style="margin-bottom:10px;">Taking Attendance: ${esc(crs.name)} (${esc(date)})</h4>
-  <table><thead><tr><th>Student Name</th><th>Status</th></tr></thead><tbody>
-    ${list.map(s => `<tr><td>${esc(s.last+', '+s.first)}</td><td><select onchange="markAttendance('${code}','${esc(crs.section)}','${esc(s.id)}','${date}', this.value)" style="padding:8px; border-radius:4px; border:1px solid #ccc;">
+  $('att_list').innerHTML = `<div class="panel" style="background:#f9f9f9; border:1px solid #ddd; padding:20px;">
+  <h4 style="margin-bottom:15px; color:#5c0000;">Taking Attendance: ${esc(crs.name)} (${esc(date)})</h4>
+  <table style="width:100%;"><thead><tr><th>Student Name</th><th>Status</th></tr></thead><tbody>
+    ${list.map(s => `<tr><td style="padding:10px; border-bottom:1px solid #eee;">${esc(s.last+', '+s.first)}</td><td style="padding:10px; border-bottom:1px solid #eee;"><select onchange="markAttendance('${code}','${esc(crs.section)}','${esc(s.id)}','${date}', this.value)" style="padding:8px; border-radius:4px; border:1px solid #ccc;">
       <option value="Present" ${map[s.id]==='Present'?'selected':''}>Present</option><option value="Absent" ${map[s.id]==='Absent'?'selected':''}>Absent</option><option value="Late" ${map[s.id]==='Late'?'selected':''}>Late</option>
-    </select></td></tr>`).join('')}</tbody></table>`;
+    </select></td></tr>`).join('')}</tbody></table></div>`;
 }
 
 async function markAttendance(courseCode, section, studentId, date, status) {
