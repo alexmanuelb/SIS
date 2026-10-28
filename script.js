@@ -7,21 +7,14 @@ const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt
 function isStudentInSection(studentYr, courseGradeLevel, courseSection) {
     if (!studentYr || !courseGradeLevel) return false;
     
-    // Kunin ang Grade Level ng student (e.g., "Grade 11")
     const studentGrade = studentYr.split(' - ')[0].trim();
-    
-    // Kunin ang Grade Level ng course (e.g., "Grade 11" from "Grade 11 - STEM - 1st Semester")
     const courseBaseGrade = courseGradeLevel.split(' - ')[0].trim();
-    
-    // Kunin ang Section ng student (e.g., "1")
     const secMatch = studentYr.match(/Sec(?:tion)?\s*(\d+)/i);
     const studentSec = secMatch ? secMatch[1] : '';
     
-    // Match: Same Grade Level ba sila? At same Section?
     return studentGrade === courseBaseGrade && studentSec === courseSection.toString().trim();
 }
 
-// --- HELPER PARA MAKUHA ANG SECTION MULA SA YR STRING ---
 function getSectionFromYr(yrString) {
     const secMatch = yrString.match(/Sec(?:tion)?\s*(\d+)/i);
     return secMatch ? secMatch[1] : '';
@@ -41,19 +34,32 @@ function togglePassword() {
   }
 }
 
+// --- FAST LOGIN LOGIC ---
 async function doLogin() {
   const username = $('loginUser').value.trim();
   const password = $('loginPass').value.trim();
   if (!username || !password) return alert('Enter username and password');
   
-  fetch('/api/login', {
-    method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ username, password })
-  }).then(res => res.json().then(data => ({ status: res.status, data })))
-  .then(async ({ status, data }) => {
-    if (status !== 200) return alert(data.error);
-    session = data;
+  const loginBtn = document.querySelector('.login-btn');
+  loginBtn.textContent = 'Logging in...';
+  loginBtn.disabled = true;
+
+  try {
+    const res = await fetch('/api/login', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, password })
+    });
     
+    if (res.status !== 200) {
+      const data = await res.json();
+      throw new Error(data.error);
+    }
+    
+    session = await res.json();
+    
+    loginBtn.textContent = 'Loading data...';
+    
+    // SUNOD-SUNOD NA PAG-FETCH PARA HINDI MAG-CRASH
     const termRes = await (await fetch('/api/settings/term')).json();
     db.activeTerm = termRes.term;
 
@@ -85,7 +91,13 @@ async function doLogin() {
     else navigate('studentDashboard');
     
     setInterval(() => { $('clock').textContent = new Date().toLocaleTimeString(); }, 1000);
-  }).catch(e => alert('Login failed.'));
+    
+  } catch (error) {
+    alert(error.message || 'Login failed.');
+  } finally {
+    loginBtn.textContent = 'Log In \u2192';
+    loginBtn.disabled = false;
+  }
 }
 
 function doLogout() {
@@ -209,14 +221,11 @@ async function updateGlobalTerm() {
 // --- FACULTY DASHBOARD ---
 function renderFacultyDashboard(c) {
   const myCourses = db.courses.filter(x => x.adviser === session.name || x.subjectTeacher === session.name);
-  
   const uniqueStudents = new Set();
-  
   myCourses.forEach(crs => {
       const enrolled = db.students.filter(s => isStudentInSection(s.yr, crs.gradeLevel, crs.section));
       enrolled.forEach(s => uniqueStudents.add(s.id));
   });
-
   const totalStudentsHandled = uniqueStudents.size;
 
   c.innerHTML = `
@@ -245,29 +254,16 @@ function renderStudentDashboard(c) {
 // --- STUDENT DIRECTORY (May Grade at Section Filter) ---
 function renderActiveDirectory(c) {
   const uniqueGrades = [...new Set(db.students.map(s => s.yr.split(' - ')[0]))].filter(Boolean).sort();
-  
   const currentGradeFilter = $('directoryGradeFilter') ? $('directoryGradeFilter').value : 'All';
   const currentSecFilter = $('directorySecFilter') ? $('directorySecFilter').value : 'All';
 
   let active = db.students.filter(s => s.status !== 'Archived' && s.status !== 'Graduated');
   
-  if (currentGradeFilter !== 'All') {
-      active = active.filter(s => s.yr.split(' - ')[0].trim() === currentGradeFilter);
-  }
-
-  if (currentSecFilter !== 'All') {
-      active = active.filter(s => {
-          const secMatch = s.yr.match(/Sec(?:tion)?\s*(\d+)/i);
-          const studentSec = secMatch ? secMatch[1] : '';
-          return studentSec === currentSecFilter;
-      });
-  }
+  if (currentGradeFilter !== 'All') active = active.filter(s => s.yr.split(' - ')[0].trim() === currentGradeFilter);
+  if (currentSecFilter !== 'All') active = active.filter(s => getSectionFromYr(s.yr) === currentSecFilter);
   
   let rows = active.map(s => [
-      esc(s.id), 
-      esc(s.last), 
-      esc(s.first), 
-      esc(s.yr), 
+      esc(s.id), esc(s.last), esc(s.first), esc(s.yr), 
       `<span class="badge ${s.status === 'Active' ? 'active' : 'inactive'}">${esc(s.status)}</span>`,
       `<button class="btn secondary" data-id="${esc(s.id)}" onclick="window.editStudentBtn(this)">Edit</button>`
   ]);
@@ -286,7 +282,6 @@ function renderActiveDirectory(c) {
             ${uniqueGrades.map(g => `<option value="${g}" ${currentGradeFilter === g ? 'selected' : ''}>${g}</option>`).join('')}
           </select>
       </div>
-
       <div style="display:flex; align-items:center; gap:10px;">
           <label style="font-weight:bold; color:#5c0000;">Filter by Section:</label>
           <select id="directorySecFilter" onchange="renderActiveDirectory($('content'))" style="padding: 10px; border-radius: 6px; border: 1px solid #ccc; width: 150px; font-size:14px;">
@@ -296,7 +291,6 @@ function renderActiveDirectory(c) {
           </select>
       </div>
     </div>
-
     <div id="enrollFormArea"></div>
     ${simpleTable(['Student ID','Last Name','First Name','Year Level','Status','Action'], rows)}
   </div>`;
@@ -420,34 +414,20 @@ async function saveStudent(existingId) {
   }
 
   const rec = { 
-    id: $('f_id').value, 
-    last: $('f_last').value, 
-    first: first, 
-    mi: $('f_mi').value, 
-    course: course, 
-    yr: yr, 
-    status: $('f_status').value, 
-    enrol: 'Enrolled', 
-    email: email,
-    birthday: $('f_birthday').value,
-    age: $('f_age').value,
-    gender: $('f_gender').value,
-    address: $('f_address').value,
-    guardianName: $('f_guardianName').value,
-    guardianContact: $('f_guardianContact').value
+    id: $('f_id').value, last: $('f_last').value, first: first, mi: $('f_mi').value, 
+    course: course, yr: yr, status: $('f_status').value, enrol: 'Enrolled', email: email,
+    birthday: $('f_birthday').value, age: $('f_age').value, gender: $('f_gender').value,
+    address: $('f_address').value, guardianName: $('f_guardianName').value, guardianContact: $('f_guardianContact').value
   };
   
   const res = await fetch('/api/students', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(rec) });
   
-  // I-check kung may error (e.g., Section is Full)
   if(!res.ok) {
       const errorData = await res.json();
       return alert(errorData.error || 'Error saving');
   }
   
-  if (!existingId && email) {
-    alert('Student added! An email containing their login credentials has been sent to ' + email);
-  }
+  if (!existingId && email) alert('Student added! An email containing their login credentials has been sent to ' + email);
 
   db.students = await (await fetch('/api/students')).json();
   db.users = await (await fetch('/api/users')).json();
@@ -483,9 +463,7 @@ function openAddFacultyForm() {
       <h3 style="color:#5c0000; margin-bottom:15px;">Add New Teacher</h3>
       <div class="form-grid">
         <div class="field" style="grid-column: span 2;"><label>Full Name (e.g., T. John Doe)</label><input id="t_name" onkeyup="generateFacultyCredentials()"></div>
-        
         <div class="field" style="grid-column: span 2;"><label>Email Address (for credentials)</label><input id="t_email" type="email" placeholder="teacher@gmail.com"></div>
-
         <div class="field"><label>Department</label><input id="t_dept" placeholder="e.g., Math Dept"></div>
         <div class="field"><label>Advisory Class</label>
           <select id="t_advisory">
@@ -505,40 +483,25 @@ function generateFacultyCredentials() {
   const parts = name.split(' ');
   const firstName = parts[0].toLowerCase();
   const lastName = parts.length > 1 ? parts[parts.length - 1].toLowerCase() : '';
-
   window._generatedUser = `t.${firstName}${lastName}`;
   window._generatedPass = `${firstName}123`;
-  
   const emailInput = $('t_email');
-  if (emailInput && !emailInput.value) {
-      emailInput.value = `t${firstName}${lastName}@gmail.com`;
-  }
+  if (emailInput && !emailInput.value) emailInput.value = `t${firstName}${lastName}@gmail.com`;
 }
 
 async function saveFaculty() {
   const username = window._generatedUser || '';
   const password = window._generatedPass || '';
-  
-  const rec = { 
-    username: username, 
-    password: password, 
-    name: $('t_name').value.trim(), 
-    role: 'Faculty', 
-    section: $('t_dept').value.trim(),
-    email: $('t_email').value.trim()
-  };
+  const rec = { username, password, name: $('t_name').value.trim(), role: 'Faculty', section: $('t_dept').value.trim(), email: $('t_email').value.trim() };
   const advisory = $('t_advisory').value;
 
   if(!rec.username || !rec.password || !rec.name) return alert('Please enter a valid Full Name first');
-  
   const res = await fetch('/api/faculty', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(rec) });
   if(!res.ok) return alert('Username already exists');
 
   if (advisory) {
     const [gradePart, sectionPart] = advisory.split(' - Section ');
-    const grade = gradePart.trim();
-    const sec = sectionPart.trim();
-    const coursesToUpdate = db.courses.filter(c => c.gradeLevel === grade && c.section === sec);
+    const coursesToUpdate = db.courses.filter(c => c.gradeLevel === gradePart.trim() && c.section === sectionPart.trim());
     for(const crs of coursesToUpdate) {
         await fetch('/api/courses', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...crs, adviser: rec.name }) });
     }
@@ -548,21 +511,15 @@ async function saveFaculty() {
   db.courses = await (await fetch('/api/courses')).json();
   $('facultyFormArea').innerHTML = '';
   renderFacultyDirectory($('content'));
-  
-  if (rec.email) {
-      alert('Teacher created! Login credentials have been sent to ' + rec.email);
-  } else {
-      alert('Teacher created!');
-  }
+  if (rec.email) alert('Teacher created! Login credentials have been sent to ' + rec.email);
+  else alert('Teacher created!');
 }
 
 function openEditFacultyForm(username) {
   const user = db.users.find(u => u.username === username);
   if(!user) return alert('User not found');
-  
   const currentAdvisory = db.courses.filter(crs => crs.adviser === user.name).map(crs => `${crs.gradeLevel} - Section ${crs.section}`);
   const currentAdvisoryStr = currentAdvisory.length > 0 ? currentAdvisory[0] : "";
-  
   const grades = ['Grade 1', 'Grade 2', 'Grade 3', 'Grade 4', 'Grade 5', 'Grade 6', 'Grade 7', 'Grade 8', 'Grade 9', 'Grade 10', 'Grade 11 - STEM', 'Grade 11 - HUMSS', 'Grade 11 - ABM', 'Grade 12 - STEM', 'Grade 12 - HUMSS', 'Grade 12 - ABM'];
   const sections = ['1', '2'];
   let uniqueSections = [];
@@ -605,9 +562,7 @@ async function updateFaculty(username) {
 
   if (newAdvisory) {
     const [gradePart, sectionPart] = newAdvisory.split(' - Section ');
-    const grade = gradePart.trim();
-    const sec = sectionPart.trim();
-    const newCourses = db.courses.filter(c => c.gradeLevel === grade && c.section === sec);
+    const newCourses = db.courses.filter(c => c.gradeLevel === gradePart.trim() && c.section === sectionPart.trim());
     for(const c of newCourses) {
         await fetch('/api/courses', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...c, adviser: newName }) });
     }
@@ -631,7 +586,6 @@ function renderCourses(c) {
         <button class="btn secondary" onclick="openAddSectionForm()">+ Add New Section</button>
       </div>
     </div>
-    
     <div class="form-panel" style="margin-bottom: 20px; background: #f9eaea; border-left: 4px solid #5c0000;">
       <label style="font-weight:bold; color:#5c0000; margin-bottom:5px; display:block;">Filter by Grade Level / Track:</label>
       <select id="courseFilter" onchange="renderCoursesTable()" style="padding: 10px; border-radius: 6px; border: 1px solid #ccc; width: 100%; max-width: 300px; font-size:14px;">
@@ -639,7 +593,6 @@ function renderCourses(c) {
         ${grades.map(g => `<option value="${g}">${g}</option>`).join('')}
       </select>
     </div>
-
     <div id="courseFormArea"></div>
     <div id="courseTableContainer"></div>
   </div>`;
@@ -649,7 +602,6 @@ function renderCourses(c) {
 function renderCoursesTable() {
   const filter = $('courseFilter') ? $('courseFilter').value : 'All';
   const filtered = filter === 'All' ? db.courses : db.courses.filter(c => c.gradeLevel === filter);
-
   $('courseTableContainer').innerHTML = simpleTable(['Code','Name','Grade Level','Section','Adviser','Subject Teacher'],
     filtered.map(x => [esc(x.code), esc(x.name), esc(x.gradeLevel), esc(x.section), esc(x.adviser), esc(x.subjectTeacher)])
   );
@@ -663,9 +615,7 @@ function openAddCourseForm() {
       <div class="form-grid">
         <div class="field"><label>Course Code</label><input id="c_code" placeholder="e.g., MATH7-3"></div>
         <div class="field"><label>Course Name</label><input id="c_name" placeholder="e.g., Mathematics 7"></div>
-        <div class="field"><label>Grade Level / Track</label>
-          <select id="c_grade">${grades.map(g => `<option value="${g}">${g}</option>`).join('')}</select>
-        </div>
+        <div class="field"><label>Grade Level / Track</label><select id="c_grade">${grades.map(g => `<option value="${g}">${g}</option>`).join('')}</select></div>
         <div class="field"><label>Section</label><input id="c_section" placeholder="e.g., 3"></div>
         <div class="field" style="grid-column: span 2;"><label>Subject Teacher</label><input id="c_subjectTeacher" placeholder="e.g., T. Jose Rizal"></div>
       </div>
@@ -675,16 +625,7 @@ function openAddCourseForm() {
 }
 
 async function saveNewCourse() {
-  const rec = { 
-    code: $('c_code').value, 
-    name: $('c_name').value, 
-    gradeLevel: $('c_grade').value, 
-    section: $('c_section').value, 
-    adviser: '', 
-    subjectTeacher: $('c_subjectTeacher').value,
-    capacity: 30, 
-    status: 'Open' 
-  };
+  const rec = { code: $('c_code').value, name: $('c_name').value, gradeLevel: $('c_grade').value, section: $('c_section').value, adviser: '', subjectTeacher: $('c_subjectTeacher').value, capacity: 30, status: 'Open' };
   await fetch('/api/courses', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(rec) });
   db.courses = await (await fetch('/api/courses')).json();
   $('courseFormArea').innerHTML = '';
@@ -698,9 +639,7 @@ function openAddSectionForm() {
     <div class="form-panel" style="border-left: 4px solid #5c0000;">
       <h3 style="color:#5c0000; margin-bottom:15px;">Add New Section</h3>
       <div class="form-grid">
-        <div class="field"><label>Grade Level / Track</label>
-          <select id="s_grade">${grades.map(g => `<option value="${g}">${g}</option>`).join('')}</select>
-        </div>
+        <div class="field"><label>Grade Level / Track</label><select id="s_grade">${grades.map(g => `<option value="${g}">${g}</option>`).join('')}</select></div>
         <div class="field"><label>New Section Name</label><input id="s_section" placeholder="e.g., 3"></div>
         <div class="field" style="grid-column: span 2;"><label>Advisory Teacher</label><input id="s_adviser" placeholder="e.g., T. Maria Clara"></div>
       </div>
@@ -713,20 +652,14 @@ async function saveNewSection() {
   const grade = $('s_grade').value.trim();
   const newSec = $('s_section').value.trim();
   const newAdviser = $('s_adviser').value.trim();
-
   if(!grade || !newSec || !newAdviser) return alert('Fill in all fields');
-
   const templates = db.courses.filter(c => c.gradeLevel === grade && c.section === '1');
   if(templates.length === 0) return alert('No courses found for Section 1 to copy.');
 
   for(const t of templates) {
     const newCode = t.code.replace(/-1$/, '-' + newSec);
-    await fetch('/api/courses', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ code: newCode, name: t.name, gradeLevel: t.gradeLevel, section: newSec, capacity: t.capacity, adviser: newAdviser, subjectTeacher: t.subjectTeacher, status: 'Open' })
-    });
+    await fetch('/api/courses', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ code: newCode, name: t.name, gradeLevel: t.gradeLevel, section: newSec, capacity: t.capacity, adviser: newAdviser, subjectTeacher: t.subjectTeacher, status: 'Open' }) });
   }
-  
   db.courses = await (await fetch('/api/courses')).json();
   $('courseFormArea').innerHTML = '';
   renderCourses($('content'));
@@ -736,7 +669,6 @@ async function saveNewSection() {
 function renderUsers(c) {
   let filterVal = 'All';
   if($('userFilter')) filterVal = $('userFilter').value;
-
   let filteredUsers = db.users;
   if(filterVal !== 'All') {
       filteredUsers = db.users.filter(u => {
@@ -746,10 +678,7 @@ function renderUsers(c) {
   }
 
   const rows = filteredUsers.map(u => [
-    esc(u.username), 
-    esc(u.name), 
-    esc(u.role), 
-    esc(u.section||'—'),
+    esc(u.username), esc(u.name), esc(u.role), esc(u.section||'—'),
     `<div style="display:flex; gap:5px;">
         ${u.role === 'Student' ? `<button class="btn secondary" onclick="alert('Please edit student details in Student Directory')">Edit</button>` : (u.role === 'Faculty' ? `<button class="btn secondary" onclick="openEditFacultyForm('${esc(u.username)}')">Edit</button>` : '')}
         ${u.role !== 'Admin' ? `<button type="button" class="btn" style="background:#a00;" onclick="deleteUser('${esc(u.username)}')">Delete</button>` : ''}
@@ -759,7 +688,6 @@ function renderUsers(c) {
   c.innerHTML = `<div class="panel">
     <h2>Users & Access</h2>
     <p style="margin-bottom:15px; color:#666;">Manage system accounts.</p>
-    
     <div class="form-panel" style="margin-bottom: 20px; background: #f9eaea; border-left: 4px solid #5c0000; display:flex; align-items:center; gap:20px;">
       <label style="font-weight:bold; color:#5c0000;">Filter by Role:</label>
       <select id="userFilter" onchange="renderUsers($('content'))" style="padding: 10px; border-radius: 6px; border: 1px solid #ccc; width: 100%; max-width: 300px; font-size:14px;">
@@ -769,18 +697,15 @@ function renderUsers(c) {
         <option value="Students" ${filterVal === 'Students' ? 'selected' : ''}>Students</option>
       </select>
     </div>
-
     ${simpleTable(['Username','Name','Role','Section','Action'], rows)}
   </div>`;
 }
 
 async function deleteUser(username) {
   if(!confirm(`Are you sure you want to delete user ${username}? This will also remove their student record if applicable.`)) return;
-  
   try {
       const res = await fetch('/api/users/' + username, { method: 'DELETE' });
       if(!res.ok) throw new Error('Failed to delete');
-      
       alert('User deleted!');
       db.users = await (await fetch('/api/users')).json();
       db.students = await (await fetch('/api/students')).json();
@@ -790,14 +715,11 @@ async function deleteUser(username) {
   }
 }
 
-// --- INI-AYOS NA CLASS RECORDS (Smart Match) ---
 async function renderClassRecords(c) {
   const myCourses = db.courses.filter(x => {
     const isTeacher = x.adviser === session.name || x.subjectTeacher === session.name;
     if (!isTeacher) return false;
-    if (x.gradeLevel.includes('Grade 11') || x.gradeLevel.includes('Grade 12')) {
-        return x.gradeLevel.includes(db.activeTerm);
-    }
+    if (x.gradeLevel.includes('Grade 11') || x.gradeLevel.includes('Grade 12')) return x.gradeLevel.includes(db.activeTerm);
     return true;
   });
 
@@ -814,10 +736,7 @@ async function renderClassRecords(c) {
   for (const key of Object.keys(groups)) {
       const [gradeLevel, secName] = key.split('|');
       const sectionNumber = secName.replace('Section ', '').trim();
-      
-      // SMART MATCH: Gamitin ang helper function
       const studentCount = db.students.filter(s => isStudentInSection(s.yr, gradeLevel, sectionNumber)).length;
-      
       html += folderCard(`${esc(gradeLevel)}`, `${esc(secName)} • ${studentCount} Students`, `showClassFolder('${esc(gradeLevel)}', '${esc(secName)}')`);
   }
   
@@ -829,24 +748,13 @@ async function renderClassRecords(c) {
 async function showClassFolder(gradeLevel, secName) {
   const section = secName.replace('Section ', '').trim();
   const keyStr = `${gradeLevel} | ${secName}`;
-  
-  // SMART MATCH: Gamitin ang helper function
   let students = db.students.filter(s => isStudentInSection(s.yr, gradeLevel, section));
-  
   const attendanceHistory = await (await fetch(`/api/attendance/history/${encodeURIComponent(section)}`)).json();
 
   let rows = students.map(s => {
       const studentAbsences = attendanceHistory.filter(a => a.studentId === s.id && a.status === 'Absent').length;
       const statusBadge = s.status === 'Active' ? 'badge active' : 'badge inactive';
-      
-      return [
-          esc(s.id), 
-          esc(s.last+', '+s.first), 
-          esc(s.yr),
-          `<span style="color:${studentAbsences > 0 ? 'red' : 'green'}; font-weight:bold;">${studentAbsences}</span>`,
-          `<span class="${statusBadge}">${esc(s.status)}</span>`,
-          `<button class="btn secondary" style="padding:5px 10px; font-size:11px;" onclick="openEditStatusModal('${esc(s.id)}', '${esc(s.status)}')">Edit Status</button>`
-      ];
+      return [esc(s.id), esc(s.last+', '+s.first), esc(s.yr), `<span style="color:${studentAbsences > 0 ? 'red' : 'green'}; font-weight:bold;">${studentAbsences}</span>`, `<span class="${statusBadge}">${esc(s.status)}</span>`, `<button class="btn secondary" style="padding:5px 10px; font-size:11px;" onclick="openEditStatusModal('${esc(s.id)}', '${esc(s.status)}')">Edit Status</button>`];
   });
 
   $('classFolderView').innerHTML = `<div class="panel" style="border:2px solid #5c0000;">
@@ -861,34 +769,23 @@ async function showClassFolder(gradeLevel, secName) {
 async function openEditStatusModal(studentId, currentStatus) {
     const newStatus = prompt(`Edit Status for ${studentId} (Active/Inactive/Archived):`, currentStatus);
     if(!newStatus) return;
-    
-    if(!['Active', 'Inactive', 'Archived'].includes(newStatus)) {
-        return alert('Invalid status. Please type Active, Inactive, or Archived.');
-    }
+    if(!['Active', 'Inactive', 'Archived'].includes(newStatus)) return alert('Invalid status. Please type Active, Inactive, or Archived.');
     
     const res = await fetch('/api/students/status', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ id: studentId, status: newStatus }) });
     if(res.ok) {
         alert('Status updated successfully!');
         db.students = await (await fetch('/api/students')).json();
-        
         const titleStr = document.querySelector('#classFolderView h3').innerText; 
         const parts = titleStr.split(' — ')[0].split(' | ');
-        const gradeLevel = parts[0];
-        const secName = parts[1];
-        
-        showClassFolder(gradeLevel, secName);
-    } else {
-        alert('Failed to update status.');
-    }
+        showClassFolder(parts[0], parts[1]);
+    } else alert('Failed to update status.');
 }
 
 function renderGradeEntry(c) {
   const myCourses = db.courses.filter(x => {
     const isTeacher = x.adviser === session.name || x.subjectTeacher === session.name;
     if (!isTeacher) return false;
-    if (x.gradeLevel.includes('Grade 11') || x.gradeLevel.includes('Grade 12')) {
-        return x.gradeLevel.includes(db.activeTerm);
-    }
+    if (x.gradeLevel.includes('Grade 11') || x.gradeLevel.includes('Grade 12')) return x.gradeLevel.includes(db.activeTerm);
     return true;
   });
 
@@ -896,15 +793,8 @@ function renderGradeEntry(c) {
 
   let html = `<div class="panel"><h2>Grade Entry (${esc(db.activeTerm)})</h2><p style="margin-bottom:20px; color:#666;">Select a section to view students and enter grades.</p>
     <div style="display:grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap:15px;">`;
-  
-  if(sections.length === 0) {
-      html += `<p style="color:#999;">No classes assigned to you for ${esc(db.activeTerm)}.</p>`;
-  } else {
-      sections.forEach(secString => {
-          const [gradeLevel, secName] = secString.split('|');
-          html += folderCard(`${esc(gradeLevel)}`, esc(secName), `showGradeEntryFolder('${esc(gradeLevel)}', '${esc(secName)}')`);
-      });
-  }
+  if(sections.length === 0) html += `<p style="color:#999;">No classes assigned to you for ${esc(db.activeTerm)}.</p>`;
+  else sections.forEach(secString => { const [gradeLevel, secName] = secString.split('|'); html += folderCard(`${esc(gradeLevel)}`, esc(secName), `showGradeEntryFolder('${esc(gradeLevel)}', '${esc(secName)}')`); });
   html += `</div><div id="gradeEntryView" style="margin-top:20px;"></div></div>`;
   c.innerHTML = html;
 }
@@ -912,12 +802,8 @@ function renderGradeEntry(c) {
 async function showGradeEntryFolder(gradeLevel, secName) {
   const section = secName.replace('Section ', '').trim();
   const keyStr = `${gradeLevel} | ${secName}`;
-  
   const myCourses = db.courses.filter(x => (x.adviser === session.name || x.subjectTeacher === session.name) && x.gradeLevel === gradeLevel && x.section === section);
-  
-  // SMART MATCH
   let students = db.students.filter(s => isStudentInSection(s.yr, gradeLevel, section));
-
   const males = students.filter(s => s.gender === 'Male').sort((a, b) => a.last.localeCompare(b.last));
   const females = students.filter(s => s.gender === 'Female').sort((a, b) => a.last.localeCompare(b.last));
 
@@ -928,37 +814,19 @@ async function showGradeEntryFolder(gradeLevel, secName) {
         ${myCourses.map(c => `<option value="${esc(c.name)}">${esc(c.name)}</option>`).join('')}
       </select>
     </div>
-    
     <div style="display:grid; grid-template-columns: 1fr 1fr; gap:20px;">
-      <div>
-        <h4 style="color:#333; border-bottom:2px solid #ccc; padding-bottom:5px; margin-bottom:10px;">Male Students</h4>
-        ${males.length === 0 ? '<p style="color:#999;">No male students</p>' : `
-        <table style="width:100%; font-size:14px;">
-          <thead><tr style="background:#f0f0f0;"><th style="padding:8px; text-align:left;">Name</th><th style="padding:8px; text-align:left;">Grade</th></tr></thead>
-          <tbody>
-            ${males.map(s => `<tr><td style="padding:8px; border-bottom:1px solid #eee;">${esc(s.last)}, ${esc(s.first)}</td><td style="padding:8px; border-bottom:1px solid #eee;"><input type="number" step="0.25" min="1" max="5" placeholder="1.0" style="width:80px; padding:5px;" id="grade_${s.id}"></td></tr>`).join('')}
-          </tbody>
-        </table>`}
+      <div><h4 style="color:#333; border-bottom:2px solid #ccc; padding-bottom:5px; margin-bottom:10px;">Male Students</h4>
+        ${males.length === 0 ? '<p style="color:#999;">No male students</p>' : `<table style="width:100%; font-size:14px;"><thead><tr style="background:#f0f0f0;"><th style="padding:8px; text-align:left;">Name</th><th style="padding:8px; text-align:left;">Grade</th></tr></thead><tbody>${males.map(s => `<tr><td style="padding:8px; border-bottom:1px solid #eee;">${esc(s.last)}, ${esc(s.first)}</td><td style="padding:8px; border-bottom:1px solid #eee;"><input type="number" step="0.25" min="1" max="5" placeholder="1.0" style="width:80px; padding:5px;" id="grade_${s.id}"></td></tr>`).join('')}</tbody></table>`}
       </div>
-      
-      <div>
-        <h4 style="color:#333; border-bottom:2px solid #ccc; padding-bottom:5px; margin-bottom:10px;">Female Students</h4>
-        ${females.length === 0 ? '<p style="color:#999;">No female students</p>' : `
-        <table style="width:100%; font-size:14px;">
-          <thead><tr style="background:#f0f0f0;"><th style="padding:8px; text-align:left;">Name</th><th style="padding:8px; text-align:left;">Grade</th></tr></thead>
-          <tbody>
-            ${females.map(s => `<tr><td style="padding:8px; border-bottom:1px solid #eee;">${esc(s.last)}, ${esc(s.first)}</td><td style="padding:8px; border-bottom:1px solid #eee;"><input type="number" step="0.25" min="1" max="5" placeholder="1.0" style="width:80px; padding:5px;" id="grade_${s.id}"></td></tr>`).join('')}
-          </tbody>
-        </table>`}
+      <div><h4 style="color:#333; border-bottom:2px solid #ccc; padding-bottom:5px; margin-bottom:10px;">Female Students</h4>
+        ${females.length === 0 ? '<p style="color:#999;">No female students</p>' : `<table style="width:100%; font-size:14px;"><thead><tr style="background:#f0f0f0;"><th style="padding:8px; text-align:left;">Name</th><th style="padding:8px; text-align:left;">Grade</th></tr></thead><tbody>${females.map(s => `<tr><td style="padding:8px; border-bottom:1px solid #eee;">${esc(s.last)}, ${esc(s.first)}</td><td style="padding:8px; border-bottom:1px solid #eee;"><input type="number" step="0.25" min="1" max="5" placeholder="1.0" style="width:80px; padding:5px;" id="grade_${s.id}"></td></tr>`).join('')}</tbody></table>`}
       </div>
     </div>
-    
     <div style="margin-top:20px; text-align:right; display:flex; justify-content:space-between;">
         <button class="btn secondary" onclick="$('gradeEntryView').innerHTML=''">Close</button>
         <button class="btn" onclick="submitBulkGrades()">Submit All Grades for ${esc(keyStr)}</button>
     </div>
   </div>`;
-  
   $('gradeEntryView').innerHTML = html;
   window._currentGradeSectionStudents = students;
 }
@@ -967,7 +835,6 @@ async function submitBulkGrades() {
   const courseName = $('ge_course').value;
   const students = window._currentGradeSectionStudents || [];
   let successCount = 0;
-  
   for(const s of students) {
       const input = $(`grade_${s.id}`);
       if(input && input.value.trim() !== "") {
@@ -979,22 +846,15 @@ async function submitBulkGrades() {
           }
       }
   }
-  
-  if(successCount > 0) {
-      alert(`Successfully submitted ${successCount} grades for ${courseName}.`);
-  } else {
-      alert('No grades entered.');
-  }
+  if(successCount > 0) alert(`Successfully submitted ${successCount} grades for ${courseName}.`);
+  else alert('No grades entered.');
 }
 
 function renderAttendance(c) {
   const myCourses = db.courses.filter(x => {
     const isTeacher = x.adviser === session.name || x.subjectTeacher === session.name;
     if (!isTeacher) return false;
-    
-    if (x.gradeLevel.includes('Grade 11') || x.gradeLevel.includes('Grade 12')) {
-        return x.gradeLevel.includes(db.activeTerm);
-    }
+    if (x.gradeLevel.includes('Grade 11') || x.gradeLevel.includes('Grade 12')) return x.gradeLevel.includes(db.activeTerm);
     return true;
   });
 
@@ -1007,20 +867,13 @@ function renderAttendance(c) {
       <button class="btn" style="margin-bottom:2px;" onclick="loadAttendance()">Load Students</button>
     </div>
     <div id="att_list" style="margin-bottom:30px;"></div>
-    
     <hr style="border:0; border-top:1px solid #eaeaea; margin-bottom:20px;">
     <h3 style="color:#5c0000; margin-bottom:15px;">Attendance History</h3>
     <p style="color:#666; margin-bottom:20px; font-size:14px;">Select a section to view all submitted attendance records.</p>
     <div style="display:grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap:15px;">`;
 
-  if(uniqueSections.length === 0) {
-      html += `<p style="color:#999;">No classes assigned to you for ${esc(db.activeTerm)}.</p>`;
-  } else {
-      uniqueSections.forEach(secString => {
-          const [gradeLevel, section] = secString.split('|');
-          html += folderCard(`${esc(gradeLevel)}`, `Section ${esc(section)}`, `showAttendanceHistory('${esc(gradeLevel)}', '${esc(section)}')`);
-      });
-  }
+  if(uniqueSections.length === 0) html += `<p style="color:#999;">No classes assigned to you for ${esc(db.activeTerm)}.</p>`;
+  else uniqueSections.forEach(secString => { const [gradeLevel, section] = secString.split('|'); html += folderCard(`${esc(gradeLevel)}`, `Section ${esc(section)}`, `showAttendanceHistory('${esc(gradeLevel)}', '${esc(section)}')`); });
   html += `</div><div id="attendance_history_view" style="margin-top:20px;"></div></div>`;
   c.innerHTML = html;
 }
@@ -1065,7 +918,6 @@ async function showAttendanceHistory(gradeLevel, section) {
   });
 
   const sortedDates = Object.keys(groupedByDate).sort().reverse();
-
   let html = `<div class="panel" style="border:2px solid #5c0000;">
       <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
         <h3 style="color:#5c0000; margin:0;">History: ${esc(gradeLevel)} | Section ${esc(section)}</h3>
@@ -1075,7 +927,6 @@ async function showAttendanceHistory(gradeLevel, section) {
 
   sortedDates.forEach(date => {
       const dailyRecords = groupedByDate[date];
-
       const groupedBySubject = {};
       dailyRecords.forEach(r => {
           if (!groupedBySubject[r.courseName]) groupedBySubject[r.courseName] = [];
@@ -1088,7 +939,6 @@ async function showAttendanceHistory(gradeLevel, section) {
 
       Object.keys(groupedBySubject).forEach(subject => {
           const subjectRecords = groupedBySubject[subject];
-          
           html += `<div style="background:white; padding:15px; border-radius:6px; box-shadow:0 2px 4px rgba(0,0,0,0.05);">
               <h5 style="margin-bottom:10px; color:#5c0000; border-bottom:1px solid #eee; padding-bottom:5px;">${esc(subject)}</h5>
               <table style="width:100%; font-size:13px;">
@@ -1105,36 +955,25 @@ async function showAttendanceHistory(gradeLevel, section) {
                   <td style="padding:8px; font-weight:bold; color:${color};">${esc(r.status)}</td>
               </tr>`;
           });
-
           html += `</tbody></table></div>`;
       });
-
       html += `</div></div>`;
   });
-
   html += `</div></div>`;
   $('attendance_history_view').innerHTML = html;
 }
 
 function renderRegistration(c) {
   const s = currentStudent();
-  
   const studentYear = s.yr.split('-')[0].trim(); 
   const studentTrack = s.yr.includes('STEM') ? 'STEM' : s.yr.includes('HUMSS') ? 'HUMSS' : s.yr.includes('ABM') ? 'ABM' : '';
   const studentSem = s.yr.includes('2nd Semester') ? '2nd Semester' : '1st Semester';
-  
   let studentSec = '1'; 
-  if (s.yr.includes('Sec ')) {
-      studentSec = s.yr.split('Sec ')[1].trim();
-  }
+  if (s.yr.includes('Sec ')) studentSec = s.yr.split('Sec ')[1].trim();
 
   const mySubjects = db.courses.filter(cr => {
     if (s.course === 'SHS') {
-      return cr.gradeLevel.includes(studentYear) && 
-             cr.gradeLevel.includes(studentTrack) && 
-             cr.gradeLevel.includes(db.activeTerm) && 
-             cr.section === studentSec && 
-             cr.status === 'Open';
+      return cr.gradeLevel.includes(studentYear) && cr.gradeLevel.includes(studentTrack) && cr.gradeLevel.includes(db.activeTerm) && cr.section === studentSec && cr.status === 'Open';
     } else {
       return cr.gradeLevel.startsWith(studentYear) && cr.section === studentSec && cr.status === 'Open';
     }
@@ -1148,18 +987,14 @@ function renderRegistration(c) {
 
 async function renderSchedule(c) {
   const s = currentStudent();
-  
   let studentYear = s.yr.split('-')[0].trim(); 
   let queryYr = s.yr;
   if (s.course === 'SHS') {
      const studentTrack = s.yr.includes('STEM') ? 'STEM' : s.yr.includes('HUMSS') ? 'HUMSS' : s.yr.includes('ABM') ? 'ABM' : '';
      queryYr = `${studentYear} - ${studentTrack} - ${db.activeTerm}`;
   }
-  
   let studentSec = '1'; 
-  if (s.yr.includes('Sec ')) {
-      studentSec = s.yr.split('Sec ')[1].trim();
-  }
+  if (s.yr.includes('Sec ')) studentSec = s.yr.split('Sec ')[1].trim();
 
   const sched = await (await fetch(`/api/schedules/${encodeURIComponent(queryYr)}/${studentSec}`)).json();
   
@@ -1184,7 +1019,6 @@ async function renderSchedule(c) {
             <th style="padding:8px; text-align:left;">TEACHER</th>
           </tr></thead>
           <tbody>`;
-      
       daySched.forEach(item => {
         html += `<tr style="border-bottom:1px solid #eee;">
           <td style="padding:10px; font-weight:bold; color:#5c0000; font-size:13px;">${item.startTime} - ${item.endTime}</td>
@@ -1195,14 +1029,12 @@ async function renderSchedule(c) {
       html += `</tbody></table></div>`;
     }
   });
-
   html += `</div></div>`;
   c.innerHTML = html;
 }
 
 async function renderProfileGrades(c) {
   const s = currentStudent();
-  
   const studentYear = s.yr.split('-')[0].trim(); 
   const studentTrack = s.yr.includes('STEM') ? 'STEM' : s.yr.includes('HUMSS') ? 'HUMSS' : s.yr.includes('ABM') ? 'ABM' : '';
   let studentSec = '1';
@@ -1210,17 +1042,13 @@ async function renderProfileGrades(c) {
 
   const mySubjects = db.courses.filter(cr => {
     if (s.course === 'SHS') {
-      return cr.gradeLevel.includes(studentYear) && 
-             cr.gradeLevel.includes(studentTrack) && 
-             cr.gradeLevel.includes(db.activeTerm) && 
-             cr.section === studentSec;
+      return cr.gradeLevel.includes(studentYear) && cr.gradeLevel.includes(studentTrack) && cr.gradeLevel.includes(db.activeTerm) && cr.section === studentSec;
     } else {
       return cr.gradeLevel.startsWith(studentYear) && cr.section === studentSec;
     }
   });
 
   const grades = await (await fetch('/api/student/grades/' + s.id)).json();
-  
   const rows = mySubjects.map(sub => {
     const gradeRec = grades.find(g => g.courseName === sub.name);
     const gradeVal = gradeRec ? gradeRec.grade : '--';
@@ -1259,7 +1087,6 @@ function renderStudentProfile(c) {
   c.innerHTML = `
     <div class="panel">
       <h2 style="border-bottom: 2px solid #5c0000; padding-bottom:10px; margin-bottom:20px;">Student Profile</h2>
-      
       <div style="display:flex; align-items:center; gap:20px; margin-bottom:30px;">
         <div style="width:80px; height:80px; background:#5c0000; color:white; border-radius:50%; display:flex; justify-content:center; align-items:center; font-size:32px; font-weight:bold;">
           ${esc(s.first.charAt(0))}${esc(s.last.charAt(0))}
@@ -1269,49 +1096,15 @@ function renderStudentProfile(c) {
           <p style="color:#666; font-size:15px;">${esc(s.yr)}</p>
         </div>
       </div>
-
       <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(250px, 1fr)); gap:20px;">
-        
-        <div style="background:#f9f9f9; padding:15px; border-radius:8px; border-left:4px solid #5c0000;">
-          <small style="color:#888; font-weight:bold; text-transform:uppercase;">Student No.</small>
-          <div style="font-size:16px; font-weight:600; margin-top:5px;">${esc(s.id)}</div>
-        </div>
-
-        <div style="background:#f9f9f9; padding:15px; border-radius:8px; border-left:4px solid #5c0000;">
-          <small style="color:#888; font-weight:bold; text-transform:uppercase;">Email Address</small>
-          <div style="font-size:16px; font-weight:600; margin-top:5px;">${esc(s.email || 'N/A')}</div>
-        </div>
-
-        <div style="background:#f9f9f9; padding:15px; border-radius:8px; border-left:4px solid #5c0000;">
-          <small style="color:#888; font-weight:bold; text-transform:uppercase;">Birthday</small>
-          <div style="font-size:16px; font-weight:600; margin-top:5px;">${esc(s.birthday || 'N/A')}</div>
-        </div>
-
-        <div style="background:#f9f9f9; padding:15px; border-radius:8px; border-left:4px solid #5c0000;">
-          <small style="color:#888; font-weight:bold; text-transform:uppercase;">Age</small>
-          <div style="font-size:16px; font-weight:600; margin-top:5px;">${esc(s.age || 'N/A')}</div>
-        </div>
-
-        <div style="background:#f9f9f9; padding:15px; border-radius:8px; border-left:4px solid #5c0000;">
-          <small style="color:#888; font-weight:bold; text-transform:uppercase;">Gender</small>
-          <div style="font-size:16px; font-weight:600; margin-top:5px;">${esc(s.gender || 'N/A')}</div>
-        </div>
-
-        <div style="background:#f9f9f9; padding:15px; border-radius:8px; border-left:4px solid #5c0000;">
-          <small style="color:#888; font-weight:bold; text-transform:uppercase;">Address</small>
-          <div style="font-size:16px; font-weight:600; margin-top:5px;">${esc(s.address || 'N/A')}</div>
-        </div>
-
-        <div style="background:#f9f9f9; padding:15px; border-radius:8px; border-left:4px solid #5c0000;">
-          <small style="color:#888; font-weight:bold; text-transform:uppercase;">Guardian Name</small>
-          <div style="font-size:16px; font-weight:600; margin-top:5px;">${esc(s.guardianName || 'N/A')}</div>
-        </div>
-
-        <div style="background:#f9f9f9; padding:15px; border-radius:8px; border-left:4px solid #5c0000;">
-          <small style="color:#888; font-weight:bold; text-transform:uppercase;">Guardian Contact</small>
-          <div style="font-size:16px; font-weight:600; margin-top:5px;">${esc(s.guardianContact || 'N/A')}</div>
-        </div>
-
+        <div style="background:#f9f9f9; padding:15px; border-radius:8px; border-left:4px solid #5c0000;"><small style="color:#888; font-weight:bold; text-transform:uppercase;">Student No.</small><div style="font-size:16px; font-weight:600; margin-top:5px;">${esc(s.id)}</div></div>
+        <div style="background:#f9f9f9; padding:15px; border-radius:8px; border-left:4px solid #5c0000;"><small style="color:#888; font-weight:bold; text-transform:uppercase;">Email Address</small><div style="font-size:16px; font-weight:600; margin-top:5px;">${esc(s.email || 'N/A')}</div></div>
+        <div style="background:#f9f9f9; padding:15px; border-radius:8px; border-left:4px solid #5c0000;"><small style="color:#888; font-weight:bold; text-transform:uppercase;">Birthday</small><div style="font-size:16px; font-weight:600; margin-top:5px;">${esc(s.birthday || 'N/A')}</div></div>
+        <div style="background:#f9f9f9; padding:15px; border-radius:8px; border-left:4px solid #5c0000;"><small style="color:#888; font-weight:bold; text-transform:uppercase;">Age</small><div style="font-size:16px; font-weight:600; margin-top:5px;">${esc(s.age || 'N/A')}</div></div>
+        <div style="background:#f9f9f9; padding:15px; border-radius:8px; border-left:4px solid #5c0000;"><small style="color:#888; font-weight:bold; text-transform:uppercase;">Gender</small><div style="font-size:16px; font-weight:600; margin-top:5px;">${esc(s.gender || 'N/A')}</div></div>
+        <div style="background:#f9f9f9; padding:15px; border-radius:8px; border-left:4px solid #5c0000;"><small style="color:#888; font-weight:bold; text-transform:uppercase;">Address</small><div style="font-size:16px; font-weight:600; margin-top:5px;">${esc(s.address || 'N/A')}</div></div>
+        <div style="background:#f9f9f9; padding:15px; border-radius:8px; border-left:4px solid #5c0000;"><small style="color:#888; font-weight:bold; text-transform:uppercase;">Guardian Name</small><div style="font-size:16px; font-weight:600; margin-top:5px;">${esc(s.guardianName || 'N/A')}</div></div>
+        <div style="background:#f9f9f9; padding:15px; border-radius:8px; border-left:4px solid #5c0000;"><small style="color:#888; font-weight:bold; text-transform:uppercase;">Guardian Contact</small><div style="font-size:16px; font-weight:600; margin-top:5px;">${esc(s.guardianContact || 'N/A')}</div></div>
       </div>
     </div>`;
 }
