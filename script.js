@@ -799,7 +799,7 @@ async function saveFaculty() {
   else alert('Teacher created!');
 }
 
-// --- COURSES ---
+// --- COURSES (MAY EDIT BUTTON NA) ---
 function renderCourses(c) {
   const grades = ['Grade 1', 'Grade 2', 'Grade 3', 'Grade 4', 'Grade 5', 'Grade 6', 'Grade 7', 'Grade 8', 'Grade 9', 'Grade 10', 'Grade 11 - STEM - 1st Semester', 'Grade 11 - STEM - 2nd Semester', 'Grade 11 - HUMSS - 1st Semester', 'Grade 11 - HUMSS - 2nd Semester', 'Grade 11 - ABM - 1st Semester', 'Grade 11 - ABM - 2nd Semester', 'Grade 12 - STEM - 1st Semester', 'Grade 12 - STEM - 2nd Semester', 'Grade 12 - HUMSS - 1st Semester', 'Grade 12 - HUMSS - 2nd Semester', 'Grade 12 - ABM - 1st Semester', 'Grade 12 - ABM - 2nd Semester'];
   
@@ -807,6 +807,7 @@ function renderCourses(c) {
     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
       <h2 style="margin:0;">Course & Section Management</h2>
       <div style="display:flex; gap:10px;">
+        <button type="button" class="btn" onclick="openTopEditCourseForm()">✏️ Edit Course</button>
         <button type="button" class="btn" onclick="openAddCourseForm()">+ Add New Course</button>
         <button type="button" class="btn secondary" onclick="openAddSectionForm()">+ Add New Section</button>
       </div>
@@ -830,6 +831,69 @@ function renderCoursesTable() {
   $('courseTableContainer').innerHTML = simpleTable(['Code','Name','Grade Level','Section','Adviser','Subject Teacher'],
     filtered.map(x => [esc(x.code), esc(x.name), esc(x.gradeLevel), esc(x.section), esc(x.adviser), esc(x.subjectTeacher)])
   );
+}
+
+// ✅ BAGONG FUNCTION: Edit Course Form
+function openTopEditCourseForm() {
+    $('courseFormArea').innerHTML = `
+        <div class="form-panel" style="border-left: 4px solid #5c0000; background: #fffdfd;">
+            <h3 style="color:#5c0000; margin-bottom:15px;">Edit Course via Course Code</h3>
+            <div style="display:flex; gap:10px; align-items:flex-end; margin-bottom:15px;">
+                <div class="field" style="flex:1;">
+                    <label>Enter Course Code (e.g., LANG-GRADE1-1)</label>
+                    <input id="top_edit_course_code" placeholder="Type Course Code here...">
+                </div>
+                <button type="button" class="btn" onclick="loadCourseForTopEdit()">Load Course</button>
+                <button type="button" class="btn secondary" onclick="$('courseFormArea').innerHTML=''">Cancel</button>
+            </div>
+            <div id="top_edit_course_fields"></div>
+        </div>
+    `;
+}
+
+function loadCourseForTopEdit() {
+    const code = $('top_edit_course_code').value.trim();
+    const c = db.courses.find(x => x.code === code);
+    
+    if (!c) return alert('Course Code not found.');
+
+    $('top_edit_course_fields').innerHTML = `
+        <div class="form-grid" style="margin-top:20px; border-top:1px dashed #ccc; padding-top:20px;">
+            <div class="field"><label>Course Code</label><input value="${esc(c.code)}" readonly style="background:#e9ecef;"></div>
+            <div class="field"><label>Course Name</label><input id="te_c_name" value="${esc(c.name)}"></div>
+            <div class="field"><label>Grade Level</label><input value="${esc(c.gradeLevel)}" readonly style="background:#e9ecef;"></div>
+            <div class="field"><label>Section</label><input value="${esc(c.section)}" readonly style="background:#e9ecef;"></div>
+            <div class="field"><label>Adviser</label><input id="te_c_adviser" value="${esc(c.adviser)}"></div>
+            <div class="field"><label>Subject Teacher</label><input id="te_c_subjectTeacher" value="${esc(c.subjectTeacher)}"></div>
+        </div>
+        <button type="button" class="btn" style="margin-top:15px;" onclick="saveTopEditCourse('${esc(c.code)}')">Save Changes</button>
+    `;
+}
+
+async function saveTopEditCourse(code) {
+    const name = $('te_c_name').value;
+    const adviser = $('te_c_adviser').value;
+    const subjectTeacher = $('te_c_subjectTeacher').value;
+
+    const c = db.courses.find(x => x.code === code);
+    if(!c) return;
+
+    const rec = { 
+        ...c, 
+        name: name,
+        adviser: adviser,
+        subjectTeacher: subjectTeacher
+    };
+
+    const res = await fetch('/api/courses', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(rec) });
+    if(res.ok) {
+        alert('Course updated successfully!');
+        db.courses = await (await fetch('/api/courses')).json();
+        $('courseFormArea').innerHTML = '';
+        renderCourses($('content'));
+    } else {
+        alert('Failed to update course.');
+    }
 }
 
 function openAddCourseForm() {
